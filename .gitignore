@@ -15,7 +15,8 @@ dist/
 
 # OS / editors
 .DS_Store
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 .idea/
 
 # Project runtime
