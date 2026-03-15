@@ -57,6 +57,8 @@ Technical household member who installs, configures, and maintains the device.
 - As an administrator, I want to configure slideshow timing and display behavior from a simple web page.
 - As an administrator, I want to upload, remove, and organize pictures stored on the frame.
 - As an administrator, I want to see sync and device health information.
+- As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
+- As an administrator, I want the admin UI to require a local sign-in without affecting the public slideshow display.
 
 ### Sources
 - As a household member, I want to select an album source and have pictures appear automatically on the frame.
@@ -74,6 +76,9 @@ Technical household member who installs, configures, and maintains the device.
 - Playback should use preloaded assets and never intentionally blank the screen during normal image-to-image transitions.
 
 ### Local Web UI
+- First-run setup page
+- Login page
+- Protected admin shell
 - Settings page
 - Sources page
 - Albums page
@@ -95,6 +100,7 @@ Technical household member who installs, configures, and maintains the device.
 
 ### Persistence
 - Store settings, metadata, sync state, and source mappings in DecentDB.
+- Store bootstrap state and single-admin credentials in DecentDB.
 - Store image binaries and resized variants on local disk.
 
 ## Quality Attributes
@@ -128,6 +134,8 @@ Technical household member who installs, configures, and maintains the device.
 ## Success Criteria
 - Device boots to slideshow after power cycle.
 - Admin can change settings and manage local images via browser on LAN.
+- Fresh installs guide the administrator through first-run setup before normal login.
+- Admin routes require local authentication while `/display` remains usable without sign-in.
 - Cached playback continues if remote source is unavailable.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
 - Transitions feel smooth and continuous, with no obvious black flash between images.

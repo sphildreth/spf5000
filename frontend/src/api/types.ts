@@ -198,6 +198,28 @@ export interface DisplayPlaylist {
   items: PlaylistItem[]
 }
 
+export interface AuthUser {
+  username: string
+}
+
+export interface AuthSessionResponse {
+  auth_available: boolean
+  bootstrapped: boolean
+  authenticated: boolean
+  user: AuthUser | null
+}
+
+export interface SetupRequest {
+  username: string
+  password: string
+  confirm_password: string
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
 export function asRecord(value: unknown): JsonRecord | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as JsonRecord
@@ -245,4 +267,17 @@ export function asFitMode(value: unknown, fallback: FitMode = 'contain'): FitMod
 
 export function playbackModeFromShuffle(shuffleEnabled: boolean): PlaybackMode {
   return shuffleEnabled ? 'shuffle' : 'sequential'
+}
+
+export function normalizeAuthSessionResponse(value: unknown): AuthSessionResponse {
+  const record = asRecord(value)
+  const userRecord = asRecord(record?.user)
+  const username = asOptionalString(userRecord?.username)
+
+  return {
+    auth_available: asBoolean(record?.auth_available, true),
+    bootstrapped: asBoolean(record?.bootstrapped, false),
+    authenticated: asBoolean(record?.authenticated, false),
+    user: username ? { username } : null,
+  }
 }

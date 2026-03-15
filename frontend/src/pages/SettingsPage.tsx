@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { getSettings, updateSettings } from '../api/settings'
 import type { FrameSettings } from '../api/types'
@@ -176,9 +177,9 @@ export function SettingsPage() {
             <p className="card-muted">
               Playback behavior is surfaced separately so the admin UI can keep device sizing and slideshow tuning easy to find.
             </p>
-            <a href="/display-settings" className="button button--ghost">
+            <Link to="/admin/display-settings" className="button button--ghost">
               Open display settings
-            </a>
+            </Link>
           </Card>
         </div>
       ) : null}

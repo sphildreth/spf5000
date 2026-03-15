@@ -6,26 +6,31 @@ SPF5000 V1 consists of:
 
 - a Python FastAPI backend
 - a React + TypeScript + Vite frontend
+- a minimal `spf5000.toml` runtime config for host/port/paths/logging/session secret
 - DecentDB for metadata, settings, display profiles, and import job history
+- DecentDB-backed bootstrap state plus a single local admin user
 - filesystem-backed originals and generated image variants
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
-The architecture follows the accepted ADR set in `design/adr/0001` through `0008`.
+The architecture follows the accepted ADR set in `design/adr/0001` through `0009`.
 
 ## Implemented architecture
 
 ### Backend responsibilities
 
 - bootstrap runtime directories and DecentDB schema at startup
-- expose REST endpoints for health, status, settings, sources, collections, assets, imports, and display state
+- load startup/runtime settings from `spf5000.toml`
+- expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, imports, and display state
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
 - manage local import, duplicate detection, original-file storage, and derivative generation
+- protect admin APIs with signed session cookies while keeping display APIs public
 - serve built frontend assets from `frontend/dist` when available
 
 ### Frontend responsibilities
 
 - provide a browser-based admin shell for configuration and diagnostics
+- provide `/setup` and `/login` flows before the protected `/admin` shell
 - provide a dedicated fullscreen `/display` route with no admin chrome
 - consume backend API endpoints through typed helpers under `frontend/src/api/`
 - keep display playback independent from the admin shell layout
@@ -33,6 +38,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0008
 ### Persistence split
 
 - DecentDB stores structured state and metadata
+- DecentDB also stores bootstrap state and the single local admin record
 - the filesystem stores original image binaries, generated display derivatives, generated thumbnails, staging data, and fallback assets
 
 ## Runtime model on Raspberry Pi
@@ -41,9 +47,9 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0008
 
 1. Raspberry Pi OS boots into a lightweight graphical session.
 2. The SPF5000 backend starts locally.
-3. Backend startup initializes logging, directories, the DecentDB schema, and default records.
+3. Backend startup reads `spf5000.toml`, initializes logging, directories, the DecentDB schema, and default records.
 4. Chromium opens the local `/display` route in kiosk/fullscreen mode.
-5. Administrators use a browser on the LAN to access the admin UI.
+5. Administrators use a browser on the LAN to access `/setup`, `/login`, and `/admin`.
 
 ### Backend startup behavior
 
@@ -53,9 +59,20 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0008
 - initialize storage directories
 - create the fallback idle asset
 - create missing DecentDB tables and indexes
-- ensure default settings, the default local source, the default collection, and the default display profile exist
+- ensure default settings, the default local source, the default collection, the default display profile, and auth/bootstrap tables exist
 
 If the DecentDB binding is unavailable, the app preserves the existing `NullConnection` fallback path instead of crashing during import time.
+
+## Runtime configuration
+
+`spf5000.toml` is intentionally limited to startup/runtime concerns:
+
+- bind host and port
+- runtime storage paths
+- log level
+- optional session-cookie signing secret
+
+Application settings such as slideshow timing, transition behavior, selected collection, bootstrap completion, and admin users remain in DecentDB.
 
 ## Filesystem layout
 
@@ -155,6 +172,22 @@ Persisted slideshow behavior, including:
 - idle message
 - playlist refresh interval seconds
 
+### `admin_users`
+
+The single local admin record, including:
+
+- username
+- password hash
+- enabled flag
+- last login timestamp
+
+### `system_state`
+
+Small key/value runtime metadata such as:
+
+- bootstrap completion marker
+- other system-level state that should stay in DecentDB
+
 ## Local provider and import flow
 
 ### Provider boundary
@@ -210,6 +243,9 @@ V1 supports these end-to-end settings:
 
 The React admin shell currently includes:
 
+- `/setup` for first-run bootstrap when no admin exists
+- `/login` for returning administrators
+- `/admin` as the protected shell root
 - `Dashboard` for system/library status
 - `Settings` for device and derivative defaults
 - `Library` for browsing imported assets and variants
@@ -219,50 +255,64 @@ The React admin shell currently includes:
 
 Frontend API access stays under `frontend/src/api/` and uses relative `/api/...` paths so the Vite proxy works in development and the same routes work when FastAPI serves the production build.
 
+Admin routing behavior:
+
+- `/` redirects to `/setup`, `/login`, or `/admin` based on session/bootstrap state
+- `/admin/*` requires an authenticated admin session
+- `/setup` becomes unavailable once an enabled admin exists
+- `/display` remains intentionally public and independent from the admin shell
+
 ## Implemented API surface
 
 ### Health and status
 
 - `GET /api/health`
-- `GET /api/status`
-- `GET /api/system/status`
+- `GET /api/status` (authenticated admin)
+- `GET /api/system/status` (authenticated admin)
+
+### Setup and auth
+
+- `POST /api/setup`
+- `GET /api/auth/session`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 
 ### Settings
 
-- `GET /api/settings`
-- `PUT /api/settings`
+- `GET /api/settings` (authenticated admin)
+- `PUT /api/settings` (authenticated admin)
 
 ### Collections
 
-- `GET /api/collections`
-- `GET /api/collections/{collection_id}`
-- `POST /api/collections`
-- `PUT /api/collections/{collection_id}`
+- `GET /api/collections` (authenticated admin)
+- `GET /api/collections/{collection_id}` (authenticated admin)
+- `POST /api/collections` (authenticated admin)
+- `PUT /api/collections/{collection_id}` (authenticated admin)
 
 ### Assets
 
-- `GET /api/assets`
-- `GET /api/assets/{asset_id}`
+- `GET /api/assets` (authenticated admin)
+- `GET /api/assets/{asset_id}` (authenticated admin)
 - `GET /api/assets/{asset_id}/variants/{kind}`
 
 ### Sources and import
 
-- `GET /api/sources`
-- `PUT /api/sources/{source_id}`
-- `POST /api/import/local/scan`
-- `POST /api/import/local/run`
+- `GET /api/sources` (authenticated admin)
+- `PUT /api/sources/{source_id}` (authenticated admin)
+- `POST /api/import/local/scan` (authenticated admin)
+- `POST /api/import/local/run` (authenticated admin)
 
 ### Display
 
-- `GET /api/display/config`
-- `PUT /api/display/config`
+- `GET /api/display/config` (authenticated admin)
+- `PUT /api/display/config` (authenticated admin)
 - `GET /api/display/playlist`
 
 ## Development and deployment model
 
 ### Development
 
-- backend on port `8000`
+- backend launched with `cd backend && .venv/bin/python -m app`
 - frontend Vite dev server on port `5173`
 - Vite proxies `/api` to the backend
 
@@ -271,6 +321,7 @@ Frontend API access stays under `frontend/src/api/` and uses relative `/api/...`
 - build frontend assets into `frontend/dist`
 - let FastAPI serve `frontend/dist`
 - run the backend locally on the Pi
+- provide a stable `spf5000.toml` (or `SPF5000_CONFIG`) for runtime deployment settings
 - point Chromium kiosk mode at `http://127.0.0.1:8000/display`
 
 ## Validation status
@@ -284,4 +335,4 @@ The current implementation has been validated with:
 
 - only the local-files provider is implemented
 - uploads, cloud providers, and destructive library management are not part of this pass
-- v1 assumes a trusted LAN and does not implement authentication
+- v1 supports only a single local admin account with cookie-backed sessions

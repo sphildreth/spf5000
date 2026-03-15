@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
-import { getDefaultDisplayConfig, getDisplayConfig, getDisplayPlaylist } from '../api/display'
+import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
 import type { DisplayConfig, DisplayPlaylist, PlaylistItem } from '../api/types'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
@@ -195,7 +195,8 @@ export function DisplayPage() {
           setLoading(true)
         }
 
-        const [nextConfig, nextPlaylist] = await Promise.all([getDisplayConfig(), getDisplayPlaylist()])
+        const nextPlaylist = await getDisplayPlaylist()
+        const nextConfig = nextPlaylist.profile
         configRef.current = nextConfig
         playlistRef.current = nextPlaylist
         setConfig(nextConfig)

@@ -24,6 +24,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const response = await fetch(path, {
     ...options,
+    credentials: 'include',
     headers,
     body: hasBody ? JSON.stringify(options.body) : undefined,
   })
@@ -61,4 +62,8 @@ export function apiPost<TRequest, TResponse>(path: string, body: TRequest): Prom
 
 export function apiPut<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
   return request<TResponse>(path, { method: 'PUT', body })
+}
+
+export function apiPostEmpty<TResponse>(path: string): Promise<TResponse> {
+  return request<TResponse>(path, { method: 'POST' })
 }

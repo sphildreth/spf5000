@@ -1,15 +1,25 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+
+import { useSession } from '../context/SessionContext'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', end: true },
-  { to: '/settings', label: 'Settings' },
-  { to: '/library', label: 'Library' },
-  { to: '/collections', label: 'Collections' },
-  { to: '/sources', label: 'Sources' },
-  { to: '/display-settings', label: 'Display' },
+  { to: '/admin', label: 'Dashboard', end: true },
+  { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin/library', label: 'Library' },
+  { to: '/admin/collections', label: 'Collections' },
+  { to: '/admin/sources', label: 'Sources' },
+  { to: '/admin/display-settings', label: 'Display' },
 ]
 
 export function AdminLayout() {
+  const { state, logout } = useSession()
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login')
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -36,6 +46,13 @@ export function AdminLayout() {
           <a href="/display" className="button button--ghost sidebar-display-link">
             Open display surface
           </a>
+
+          <div className="sidebar-session">
+            <p className="sidebar-username">{state.user?.username ?? 'Admin session'}</p>
+            <button type="button" className="button button--ghost sidebar-logout-btn" onClick={() => void handleLogout()}>
+              Log out
+            </button>
+          </div>
         </div>
       </aside>
 
