@@ -20,7 +20,8 @@ SPF5000 is an offline-first, LAN-manageable digital picture frame stack for Rasp
 - `backend/` - FastAPI app, DecentDB bootstrap, repositories, services, providers, and tests
 - `frontend/` - React + TypeScript + Vite admin and display UI
 - `design/` - PRD, SPEC, ADR index, and accepted ADRs
-- `scripts/` - convenience development/build helpers
+- `deploy/` - Pi deployment templates for `systemd`, Chromium autostart, and runtime config examples
+- `scripts/` - convenience development/build helpers plus Pi install, uninstall, and doctor scripts
 
 ## Quick start
 
@@ -71,7 +72,7 @@ npm run build
 
 SPF5000 keeps startup/runtime concerns in `spf5000.toml` and keeps application settings, bootstrap state, and admin user records in DecentDB.
 
-The checked-in `spf5000.toml` demonstrates the supported structure:
+The checked-in `spf5000.toml` demonstrates the supported structure for development, and `deploy/config/spf5000.toml.example` shows the recommended Pi appliance layout:
 
 ```toml
 [server]
@@ -161,6 +162,23 @@ Example kiosk launch target:
 ```bash
 chromium --kiosk --app=http://127.0.0.1:8000/display
 ```
+
+For Raspberry Pi OS Desktop, the repository now includes a first-pass appliance installer toolchain:
+
+```bash
+sudo ./scripts/install-pi.sh --user pi
+sudo ./scripts/doctor.sh --user pi
+```
+
+The installer provisions apt packages, `backend/.venv`, `frontend/dist`, a runtime config under `/var/lib/spf5000`, the `spf5000.service` unit, and the Chromium autostart entry for the selected user. It defaults to `--host 0.0.0.0` so the admin UI stays reachable on the LAN while Chromium still targets the local `/display` route.
+
+To remove the appliance wiring without deleting photos or database state:
+
+```bash
+sudo ./scripts/uninstall-pi.sh --user pi
+```
+
+See `docs/PI_SETUP_GUIDE.md` for the Pi OS prep steps and `docs/INSTALLER.md` for the installer workflow, managed files, and troubleshooting commands.
 
 ## Notes and current limits
 

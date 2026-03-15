@@ -1,0 +1,23 @@
+# SPF5000 Pi runtime config example
+#
+# Keep startup/runtime settings here. Slideshow timing, display behavior, collections,
+# bootstrap state, and the local admin account all live in DecentDB instead.
+
+[server]
+host = "0.0.0.0"
+port = 8000
+debug = false
+
+[logging]
+level = "INFO"
+
+[security]
+# Generate a stable secret with:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+session_secret = "replace-with-a-long-random-string"
+
+[paths]
+data_dir = "/var/lib/spf5000"
+cache_dir = "/var/cache/spf5000"
+log_dir = "/var/cache/spf5000/logs"
+database_path = "/var/lib/spf5000/spf5000.ddb"

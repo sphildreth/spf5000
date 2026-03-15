@@ -324,6 +324,16 @@ Admin routing behavior:
 - provide a stable `spf5000.toml` (or `SPF5000_CONFIG`) for runtime deployment settings
 - point Chromium kiosk mode at `http://127.0.0.1:8000/display`
 
+### Pi appliance provisioning
+
+- `scripts/install-pi.sh` is the first-pass Pi-specific installer for Raspberry Pi OS Desktop
+- the installer assumes an existing SPF5000 checkout, creates or refreshes `backend/.venv`, validates the DecentDB Python binding, builds `frontend/dist`, generates a runtime `spf5000.toml`, installs the `systemd` unit, and installs the Chromium autostart entry for the selected non-root user
+- default Pi runtime paths are `/opt/spf5000`, `/var/lib/spf5000`, `/var/cache/spf5000`, and `/var/lib/spf5000/spf5000.toml`
+- the generated `systemd` unit runs `cd backend && .venv/bin/python -m app` with `SPF5000_CONFIG` pointing at the generated runtime config
+- the generated Chromium autostart entry launches the local `/display` route in kiosk mode after a short startup delay
+- `scripts/uninstall-pi.sh` removes the service and kiosk autostart while preserving config, database, cache, and imported assets by default
+- `scripts/doctor.sh` checks runtime prerequisites, service state, filesystem paths, local health endpoints, and kiosk wiring
+
 ## Validation status
 
 The current implementation has been validated with:

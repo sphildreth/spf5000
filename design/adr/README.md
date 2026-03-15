@@ -9,3 +9,4 @@
 - 0007 Use browser kiosk runtime on the Pi
 - 0008 Use dual-layer slideshow renderer with slide transition
 - 0009 Use runtime config and single-admin bootstrap auth
+- 0010 Use Pi-specific appliance installer toolchain

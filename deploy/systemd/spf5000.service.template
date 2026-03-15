@@ -1,0 +1,18 @@
+[Unit]
+Description=SPF5000 backend service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__RUNTIME_USER__
+Group=__RUNTIME_GROUP__
+WorkingDirectory=__BACKEND_DIR__
+Environment=SPF5000_CONFIG=__CONFIG_PATH__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__PYTHON_BIN__ -m app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
