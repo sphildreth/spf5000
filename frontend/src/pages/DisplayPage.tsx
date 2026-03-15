@@ -92,6 +92,8 @@ export function DisplayPage() {
     ],
     [],
   )
+  // Allow `/display?demo=boot` to showcase the branded boot screen without
+  // depending on live playlist timing or backend availability.
   const showBootDemo = useMemo(() => new URLSearchParams(location.search).get('demo') === 'boot', [location.search])
   const demoMessage = useBootScreenDemo(showBootDemo, demoFrames)
 
@@ -375,17 +377,31 @@ export function DisplayPage() {
 
   useEffect(() => {
     document.body.classList.add('display-body')
+    if (showBootDemo) {
+      clearTimers()
+      setLoading(false)
+      setError(null)
+      return () => {
+        document.body.classList.remove('display-body')
+        clearTimers()
+      }
+    }
+
     void syncDisplayData(true)
 
     return () => {
       document.body.classList.remove('display-body')
       clearTimers()
     }
-  }, [clearTimers, syncDisplayData])
+  }, [clearTimers, showBootDemo, syncDisplayData])
 
   // Evaluate sleep schedule using the kiosk browser's local device time so the
   // display can enter and leave sleep mode without waiting for a playlist refresh.
   useEffect(() => {
+    if (showBootDemo) {
+      return
+    }
+
     const checkSleep = () => {
       updateSleepState(playlistRef.current.sleep_schedule)
     }
@@ -393,9 +409,13 @@ export function DisplayPage() {
     checkSleep()
     const timer = window.setInterval(checkSleep, 1_000)
     return () => window.clearInterval(timer)
-  }, [updateSleepState])
+  }, [showBootDemo, updateSleepState])
 
   useEffect(() => {
+    if (showBootDemo) {
+      return
+    }
+
     const intervalMs = Math.max(config.refresh_interval_seconds, 15) * 1000
     const timer = window.setInterval(() => {
       void syncDisplayData(false)
@@ -404,7 +424,7 @@ export function DisplayPage() {
     return () => {
       window.clearInterval(timer)
     }
-  }, [config.refresh_interval_seconds, syncDisplayData])
+  }, [config.refresh_interval_seconds, showBootDemo, syncDisplayData])
 
   const showIdle = playlist.items.length === 0 || !layers.some((layer) => layer.item)
 

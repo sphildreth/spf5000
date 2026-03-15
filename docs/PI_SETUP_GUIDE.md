@@ -11,6 +11,9 @@ The operating-system prep is still manual, but the repetitive application wiring
 For installer-specific flags and managed file locations, see `docs/INSTALLER.md`.
 
 ## TLDR;
+
+Do this:
+
 ```bash
 sudo raspi-config
 sudo raspi-config nonint do_blanking 1
@@ -27,6 +30,13 @@ sudo ./scripts/doctor.sh --user pi
 
 sudo reboot
 ```
+
+Then from another machine do this:
+```text
+http://<pi-hostname-or-ip>:8000/setup
+```
+
+
 
 ## 1. Goal
 

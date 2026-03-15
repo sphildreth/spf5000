@@ -608,6 +608,7 @@ textarea {
   gap: 0.45rem;
   padding: 0 0.75rem;
   text-align: center;
+  font-family: Orbitron, Rajdhani, Arial, sans-serif;
   color: rgba(242, 248, 255, 0.96);
   text-shadow:
     0 0 0.35rem rgba(255, 255, 255, 0.3),
@@ -646,18 +647,28 @@ textarea {
   overflow-wrap: anywhere;
   font-size: clamp(1.75rem, 3.15vw, 3.25rem);
   line-height: 1.06;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .display-boot-detail {
   font-size: clamp(0.92rem, 1.45vw, 1.28rem);
   line-height: 1.42;
+  font-family: Rajdhani, Arial, sans-serif;
+  font-weight: 600;
   color: rgba(241, 248, 255, 0.88);
 }
 
 .display-boot-secondary {
   font-size: clamp(0.8rem, 1.2vw, 1rem);
   line-height: 1.4;
-  color: rgba(207, 229, 246, 0.72);
+  font-family: Rajdhani, Arial, sans-serif;
+  font-weight: 600;
+  color: rgba(128, 246, 255, 0.9);
+  text-shadow:
+    0 0 0.45rem rgba(184, 255, 255, 0.32),
+    0 0 1rem rgba(67, 226, 255, 0.28);
 }
 
 /* Solid black overlay enforced during scheduled sleep window.
