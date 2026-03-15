@@ -53,11 +53,9 @@ _server = _toml.get("server", {})
 _paths = _toml.get("paths", {})
 _logging = _toml.get("logging", {})
 _security = _toml.get("security", {})
-_display = _toml.get("display", {})
-
 _data_dir_default = _resolve_path(_paths.get("data_dir"), BACKEND_DIR / "data")
 _cache_dir_default = _resolve_path(_paths.get("cache_dir"), BACKEND_DIR / "cache")
-_log_dir_default = BACKEND_DIR / "logs"
+_log_dir_default = _resolve_path(_paths.get("log_dir"), BACKEND_DIR / "logs")
 _database_path_default = _resolve_path(_paths.get("database_path"), _data_dir_default / "spf5000.ddb")
 
 
@@ -82,8 +80,8 @@ class Settings(BaseSettings):
     frontend_dist_dir: Path = REPO_ROOT / "frontend" / "dist"
     legacy_frontend_dist_dir: Path = REPO_ROOT / "frontend_dist"
 
-    display_max_width: int = int(_display.get("max_width", 1920))
-    display_max_height: int = int(_display.get("max_height", 1080))
+    display_max_width: int = 1920
+    display_max_height: int = 1080
     thumbnail_max_size: int = 400
     jpeg_quality: int = 90
     playlist_sample_size: int = 20

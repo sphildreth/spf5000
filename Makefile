@@ -1,10 +1,10 @@
 .PHONY: backend frontend test
 
 backend:
-	cd backend && python -m app
+	cd backend && .venv/bin/python -m app
 
 frontend:
 	cd frontend && npm run dev
 
 test:
-	cd backend && pytest
+	cd backend && .venv/bin/python -m pytest

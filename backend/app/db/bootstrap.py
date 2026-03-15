@@ -189,6 +189,7 @@ def initialize_storage() -> None:
         settings.data_dir,
         settings.cache_dir,
         settings.log_dir,
+        settings.database_path.parent,
         settings.storage_dir,
         settings.originals_dir,
         settings.display_variants_dir,

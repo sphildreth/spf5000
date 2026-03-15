@@ -10,9 +10,12 @@ LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 
 
 def _resolve_log_level() -> int:
-    if settings.debug:
-        return logging.DEBUG
-    return getattr(logging, settings.log_level.upper(), logging.INFO)
+    configured = getattr(logging, settings.log_level.upper(), None)
+    if isinstance(configured, int):
+        if settings.debug and configured == logging.INFO:
+            return logging.DEBUG
+        return configured
+    return logging.DEBUG if settings.debug else logging.INFO
 
 
 def configure_logging() -> None:

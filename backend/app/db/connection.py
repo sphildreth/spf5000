@@ -59,6 +59,7 @@ def get_connection() -> Iterator[Any]:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.cache_dir.mkdir(parents=True, exist_ok=True)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
+    settings.database_path.parent.mkdir(parents=True, exist_ok=True)
 
     if decentdb is None:
         conn = NullConnection()
