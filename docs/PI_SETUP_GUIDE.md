@@ -10,6 +10,24 @@ The operating-system prep is still manual, but the repetitive application wiring
 
 For installer-specific flags and managed file locations, see `docs/INSTALLER.md`.
 
+## TLDR;
+```bash
+sudo raspi-config
+sudo raspi-config nonint do_blanking 1
+
+sudo mkdir -p /opt
+cd /opt
+sudo git clone https://github.com/sphildreth/spf5000.git
+sudo git clone <your DecentDB repo URL> decentdb
+sudo chown -R pi:pi /opt/spf5000 /opt/decentdb
+
+cd /opt/spf5000
+sudo ./scripts/install-pi.sh --user pi
+sudo ./scripts/doctor.sh --user pi
+
+sudo reboot
+```
+
 ## 1. Goal
 
 The target end state is:
