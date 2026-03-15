@@ -1,24 +1,47 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { getCollections } from '../api/collections'
 import { getDisplayConfig, updateDisplayConfig } from '../api/display'
-import type { DisplayConfigUpdateRequest } from '../api/types'
+import type { DisplayConfig, DisplayConfigUpdateRequest } from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { toTitleCase } from '../utils/format'
 
+interface DisplaySettingsData {
+  config: DisplayConfig
+  collections: Awaited<ReturnType<typeof getCollections>>
+}
+
 export function DisplaySettingsPage() {
-  const { data, loading, error, reload, setData } = useAsyncData(getDisplayConfig, [])
-  const [draft, setDraft] = useState<DisplayConfigUpdateRequest | null>(null)
+  const { data, loading, error, reload, setData } = useAsyncData<DisplaySettingsData>(
+    async () => {
+      const [config, collections] = await Promise.all([getDisplayConfig(), getCollections()])
+      return { config, collections }
+    },
+    [],
+  )
+  const [draft, setDraft] = useState<DisplayConfig | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (data) {
-      setDraft(data)
+      setDraft(data.config)
     }
   }, [data])
+
+  const selectedCollectionName = useMemo(() => {
+    if (!draft?.selected_collection_id) {
+      return 'All active photos'
+    }
+
+    return (
+      data?.collections.find((collection) => collection.id === draft.selected_collection_id)?.name ??
+      draft.selected_collection_id
+    )
+  }, [data, draft])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -29,8 +52,19 @@ export function DisplaySettingsPage() {
     try {
       setSaveError(null)
       setSaved(false)
-      const updated = await updateDisplayConfig(draft)
-      setData(updated)
+      const request: DisplayConfigUpdateRequest = {
+        name: draft.name.trim(),
+        selected_collection_id: draft.selected_collection_id,
+        slideshow_interval_seconds: draft.slideshow_interval_seconds,
+        transition_mode: draft.transition_mode,
+        transition_duration_ms: draft.transition_duration_ms,
+        fit_mode: draft.fit_mode,
+        shuffle_enabled: draft.shuffle_enabled,
+        idle_message: draft.idle_message,
+        refresh_interval_seconds: draft.refresh_interval_seconds,
+      }
+      const updated = await updateDisplayConfig(request)
+      setData((current) => (current ? { ...current, config: updated } : current))
       setDraft(updated)
       setSaved(true)
     } catch (caught) {
@@ -65,18 +99,58 @@ export function DisplaySettingsPage() {
           <Card title="Slideshow behavior" eyebrow="/display config">
             <form className="form-grid" onSubmit={(event) => void handleSubmit(event)}>
               <label>
-                <span>Dwell time (seconds)</span>
+                <span>Profile name</span>
                 <input
-                  type="number"
-                  min={5}
-                  step={1}
-                  value={draft.interval_seconds}
+                  type="text"
+                  value={draft.name}
                   onChange={(event) =>
                     setDraft((current) =>
                       current
                         ? {
                             ...current,
-                            interval_seconds: Number(event.target.value),
+                            name: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>Selected collection</span>
+                <select
+                  value={draft.selected_collection_id ?? ''}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            selected_collection_id: event.target.value || null,
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  <option value="">All active photos</option>
+                  {(data?.collections ?? []).map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {collection.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Dwell time (seconds)</span>
+                <input
+                  type="number"
+                  min={5}
+                  step={1}
+                  value={draft.slideshow_interval_seconds}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            slideshow_interval_seconds: Number(event.target.value),
                           }
                         : current,
                     )
@@ -87,7 +161,7 @@ export function DisplaySettingsPage() {
                 <span>Transition duration (ms)</span>
                 <input
                   type="number"
-                  min={200}
+                  min={100}
                   step={100}
                   value={draft.transition_duration_ms}
                   onChange={(event) =>
@@ -111,7 +185,7 @@ export function DisplaySettingsPage() {
                       current
                         ? {
                             ...current,
-                            fit_mode: event.target.value as DisplayConfigUpdateRequest['fit_mode'],
+                            fit_mode: event.target.value as DisplayConfig['fit_mode'],
                           }
                         : current,
                     )
@@ -122,22 +196,22 @@ export function DisplaySettingsPage() {
                 </select>
               </label>
               <label>
-                <span>Playback mode</span>
+                <span>Transition mode</span>
                 <select
-                  value={draft.playback_mode}
+                  value={draft.transition_mode}
                   onChange={(event) =>
                     setDraft((current) =>
                       current
                         ? {
                             ...current,
-                            playback_mode: event.target.value as DisplayConfigUpdateRequest['playback_mode'],
+                            transition_mode: event.target.value,
                           }
                         : current,
                     )
                   }
                 >
-                  <option value="sequential">Sequential</option>
-                  <option value="shuffle">Shuffle</option>
+                  <option value="slide">Slide (left to right)</option>
+                  <option value="cut">Cut</option>
                 </select>
               </label>
               <label>
@@ -159,22 +233,22 @@ export function DisplaySettingsPage() {
                   }
                 />
               </label>
-              <label>
-                <span>Transition mode</span>
+              <label className="checkbox-field">
                 <input
-                  type="text"
-                  value={draft.transition_mode}
+                  type="checkbox"
+                  checked={draft.shuffle_enabled}
                   onChange={(event) =>
                     setDraft((current) =>
                       current
                         ? {
                             ...current,
-                            transition_mode: event.target.value,
+                            shuffle_enabled: event.target.checked,
                           }
                         : current,
                     )
                   }
                 />
+                <span>Shuffle playlist order</span>
               </label>
               <label className="field-span-full">
                 <span>Idle message</span>
@@ -205,7 +279,11 @@ export function DisplaySettingsPage() {
             <dl className="detail-list">
               <div>
                 <dt>Playback mode</dt>
-                <dd>{toTitleCase(draft.playback_mode)}</dd>
+                <dd>{draft.shuffle_enabled ? 'Shuffle' : 'Sequential'}</dd>
+              </div>
+              <div>
+                <dt>Collection</dt>
+                <dd>{selectedCollectionName}</dd>
               </div>
               <div>
                 <dt>Fit</dt>
@@ -216,7 +294,7 @@ export function DisplaySettingsPage() {
                 <dd>{toTitleCase(draft.transition_mode)}</dd>
               </div>
               <div>
-                <dt>Refresh cadence</dt>
+                <dt>Playlist refresh</dt>
                 <dd>{draft.refresh_interval_seconds} seconds</dd>
               </div>
             </dl>

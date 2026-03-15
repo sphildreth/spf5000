@@ -42,7 +42,7 @@ export function SettingsPage() {
     <div className="page-stack">
       <PageHeader
         title="Settings"
-        description="Core frame defaults exposed through /api/settings. Keep this page small and practical."
+        description="Device settings used for future imports, generated derivatives, and the frame identity shown in the admin UI."
         actions={
           <button type="button" className="button button--ghost" onClick={() => void reload()}>
             Reload
@@ -54,100 +54,133 @@ export function SettingsPage() {
       {error ? <StatusNotice variant="error" title="Could not load settings" detail={error} /> : null}
 
       {draft ? (
-        <Card title="Playback defaults" eyebrow="Frame settings">
-          <form className="form-grid" onSubmit={(event) => void handleSubmit(event)}>
-            <label>
-              <span>Slideshow interval (seconds)</span>
-              <input
-                type="number"
-                min={5}
-                step={1}
-                value={draft.slideshow_interval_seconds}
-                onChange={(event) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          slideshow_interval_seconds: Number(event.target.value),
-                        }
-                      : current,
-                  )
-                }
-              />
-            </label>
+        <div className="two-column-grid">
+          <Card title="Device defaults" eyebrow="Frame settings">
+            <form className="form-grid" onSubmit={(event) => void handleSubmit(event)}>
+              <label>
+                <span>Frame name</span>
+                <input
+                  type="text"
+                  value={draft.frame_name}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            frame_name: event.target.value,
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
 
-            <label>
-              <span>Transition mode</span>
-              <select
-                value={draft.transition_mode}
-                onChange={(event) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          transition_mode: event.target.value,
-                        }
-                      : current,
-                  )
-                }
-              >
-                <option value="slide">Slide</option>
-                <option value="fade">Fade</option>
-              </select>
-            </label>
+              <label>
+                <span>Display derivative width (px)</span>
+                <input
+                  type="number"
+                  min={320}
+                  step={10}
+                  value={draft.display_variant_width}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            display_variant_width: Number(event.target.value),
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
 
-            <label>
-              <span>Fit mode</span>
-              <select
-                value={draft.fit_mode}
-                onChange={(event) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          fit_mode: event.target.value as FrameSettings['fit_mode'],
-                        }
-                      : current,
-                  )
-                }
-              >
-                <option value="contain">Contain</option>
-                <option value="cover">Cover</option>
-              </select>
-            </label>
+              <label>
+                <span>Display derivative height (px)</span>
+                <input
+                  type="number"
+                  min={240}
+                  step={10}
+                  value={draft.display_variant_height}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            display_variant_height: Number(event.target.value),
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
 
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={draft.shuffle_enabled}
-                onChange={(event) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          shuffle_enabled: event.target.checked,
-                        }
-                      : current,
-                  )
-                }
-              />
-              <span>Shuffle playlist order</span>
-            </label>
+              <label>
+                <span>Thumbnail size (px)</span>
+                <input
+                  type="number"
+                  min={64}
+                  step={8}
+                  value={draft.thumbnail_max_size}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            thumbnail_max_size: Number(event.target.value),
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </label>
 
-            <div className="form-actions">
-              <button type="submit" className="button" disabled={saveState === 'saving'}>
-                {saveState === 'saving' ? 'Saving…' : 'Save settings'}
-              </button>
-            </div>
-          </form>
+              <div className="form-actions">
+                <button type="submit" className="button" disabled={saveState === 'saving'}>
+                  {saveState === 'saving' ? 'Saving…' : 'Save settings'}
+                </button>
+              </div>
+            </form>
 
-          {saveState === 'saved' ? (
-            <StatusNotice variant="success" title="Settings saved" detail="The frame defaults have been updated." />
-          ) : null}
-          {saveState === 'error' ? (
-            <StatusNotice variant="error" title="Could not save settings" detail={saveError ?? undefined} />
-          ) : null}
-        </Card>
+            {saveState === 'saved' ? (
+              <StatusNotice variant="success" title="Settings saved" detail="Future imports will use the updated derivative sizes." />
+            ) : null}
+            {saveState === 'error' ? (
+              <StatusNotice variant="error" title="Could not save settings" detail={saveError ?? undefined} />
+            ) : null}
+          </Card>
+
+          <Card title="Stored playback defaults" eyebrow="Also available on /display-settings">
+            <dl className="detail-list">
+              <div>
+                <dt>Dwell time</dt>
+                <dd>{draft.slideshow_interval_seconds} seconds</dd>
+              </div>
+              <div>
+                <dt>Transition</dt>
+                <dd>{draft.transition_mode}</dd>
+              </div>
+              <div>
+                <dt>Duration</dt>
+                <dd>{draft.transition_duration_ms} ms</dd>
+              </div>
+              <div>
+                <dt>Fit mode</dt>
+                <dd>{draft.fit_mode}</dd>
+              </div>
+              <div>
+                <dt>Shuffle</dt>
+                <dd>{draft.shuffle_enabled ? 'Enabled' : 'Disabled'}</dd>
+              </div>
+            </dl>
+            <p className="card-muted">
+              Playback behavior is surfaced separately so the admin UI can keep device sizing and slideshow tuning easy to find.
+            </p>
+            <a href="/display-settings" className="button button--ghost">
+              Open display settings
+            </a>
+          </Card>
+        </div>
       ) : null}
     </div>
   )

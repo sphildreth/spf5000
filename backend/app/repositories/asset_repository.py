@@ -15,21 +15,21 @@ class AssetRepository:
             if collection_id:
                 cursor = conn.execute(
                     """
-                    select a.*
-                    from assets a
-                    join collection_assets ca on ca.asset_id = a.id
-                    where ca.collection_id = ? and a.is_active = 1
-                    order by lower(a.filename) asc, a.imported_at asc, a.id asc
+                    select *
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and is_active = 1
+                    order by lower(filename) asc, imported_at asc, id asc
                     """,
                     (collection_id,),
                 )
             else:
                 cursor = conn.execute(
                     """
-                    select a.*
-                    from assets a
-                    where a.is_active = 1
-                    order by a.imported_at desc, a.id desc
+                    select *
+                    from assets
+                    where is_active = 1
+                    order by imported_at desc, id desc
                     """
                 )
             assets = [self._to_model(row) for row in rows_to_dicts(cursor, cursor.fetchall())]
@@ -107,13 +107,18 @@ class AssetRepository:
                     ),
                 )
             for index, collection_id in enumerate(asset.collection_ids):
-                conn.execute(
-                    """
-                    insert or ignore into collection_assets (collection_id, asset_id, sort_order, added_at)
-                    values (?, ?, ?, ?)
-                    """,
-                    (collection_id, asset.id, index, asset.created_at),
-                )
+                existing = conn.execute(
+                    "select asset_id from collection_assets where collection_id = ? and asset_id = ?",
+                    (collection_id, asset.id),
+                ).fetchone()
+                if existing is None:
+                    conn.execute(
+                        """
+                        insert into collection_assets (collection_id, asset_id, sort_order, added_at)
+                        values (?, ?, ?, ?)
+                        """,
+                        (collection_id, asset.id, index, asset.created_at),
+                    )
         return self.get_asset(asset.id) or asset
 
     def add_asset_to_collection(self, asset_id: str, collection_id: str) -> None:

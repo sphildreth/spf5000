@@ -20,7 +20,8 @@ export function LibraryPage() {
     }
 
     return assets.filter((asset) => {
-      const haystack = [asset.title, asset.filename, asset.source_name, ...asset.collection_names]
+      const names = asset.collection_names.length > 0 ? asset.collection_names : asset.collection_ids
+      const haystack = [asset.title, asset.filename, asset.source_name, ...names]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -66,44 +67,47 @@ export function LibraryPage() {
         ) : null}
 
         <div className="asset-grid">
-          {filteredAssets.map((asset) => (
-            <article key={asset.id} className="asset-card">
-              <div className="asset-preview">
-                {asset.thumbnail_url || asset.image_url ? (
-                  <img src={asset.thumbnail_url ?? asset.image_url} alt={asset.title} loading="lazy" />
-                ) : (
-                  <div className="asset-preview-placeholder">No preview</div>
-                )}
-              </div>
-              <div className="asset-card-body">
-                <div>
-                  <h3>{asset.title}</h3>
-                  <p>{asset.filename}</p>
+          {filteredAssets.map((asset) => {
+            const collectionLabels = asset.collection_names.length > 0 ? asset.collection_names : asset.collection_ids
+            return (
+              <article key={asset.id} className="asset-card">
+                <div className="asset-preview">
+                  {asset.thumbnail_url || asset.image_url ? (
+                    <img src={asset.thumbnail_url ?? asset.image_url} alt={asset.title} loading="lazy" />
+                  ) : (
+                    <div className="asset-preview-placeholder">No preview</div>
+                  )}
                 </div>
-                <dl className="detail-list detail-list--compact">
+                <div className="asset-card-body">
                   <div>
-                    <dt>Dimensions</dt>
-                    <dd>{formatDimensions(asset.width, asset.height)}</dd>
+                    <h3>{asset.title}</h3>
+                    <p>{asset.filename}</p>
                   </div>
-                  <div>
-                    <dt>Source</dt>
-                    <dd>{asset.source_name ?? asset.source_id ?? '—'}</dd>
+                  <dl className="detail-list detail-list--compact">
+                    <div>
+                      <dt>Dimensions</dt>
+                      <dd>{formatDimensions(asset.width, asset.height)}</dd>
+                    </div>
+                    <div>
+                      <dt>Source</dt>
+                      <dd>{asset.source_name ?? asset.source_id ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Updated</dt>
+                      <dd>{formatDateTime(asset.updated_at ?? asset.imported_at)}</dd>
+                    </div>
+                  </dl>
+                  <div className="inline-list">
+                    {collectionLabels.map((name) => (
+                      <span key={name} className="pill pill--muted">
+                        {name}
+                      </span>
+                    ))}
                   </div>
-                  <div>
-                    <dt>Updated</dt>
-                    <dd>{formatDateTime(asset.updated_at ?? asset.created_at)}</dd>
-                  </div>
-                </dl>
-                <div className="inline-list">
-                  {asset.collection_names.map((name) => (
-                    <span key={name} className="pill pill--muted">
-                      {name}
-                    </span>
-                  ))}
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            )
+          })}
         </div>
       </Card>
     </div>

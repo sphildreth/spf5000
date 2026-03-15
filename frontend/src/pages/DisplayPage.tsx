@@ -15,9 +15,18 @@ const INITIAL_LAYERS: DisplayLayer[] = [
   { item: null, stage: 'hidden' },
 ]
 
+const EMPTY_PLAYLIST: DisplayPlaylist = {
+  collection_id: null,
+  collection_name: null,
+  shuffle_enabled: false,
+  playlist_revision: 'empty',
+  profile: getDefaultDisplayConfig(),
+  items: [],
+}
+
 export function DisplayPage() {
   const [config, setConfig] = useState<DisplayConfig>(getDefaultDisplayConfig())
-  const [playlist, setPlaylist] = useState<DisplayPlaylist>({ items: [] })
+  const [playlist, setPlaylist] = useState<DisplayPlaylist>(EMPTY_PLAYLIST)
   const [layers, setLayers] = useState<DisplayLayer[]>(INITIAL_LAYERS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,77 +65,74 @@ export function DisplayPage() {
     }
   }, [])
 
-  const transitionToItem = useCallback(
-    async (nextIndex: number) => {
-      const items = playlistRef.current.items
-      const nextItem = items[nextIndex]
-      if (!nextItem || transitionRef.current) {
-        return
-      }
+  const transitionToItem = useCallback(async (nextIndex: number) => {
+    const items = playlistRef.current.items
+    const nextItem = items[nextIndex]
+    if (!nextItem || transitionRef.current) {
+      return
+    }
 
-      try {
-        await preloadImage(nextItem.image_url)
-      } catch {
-        scheduleAdvance(5000)
-        return
-      }
+    try {
+      await preloadImage(nextItem.display_url)
+    } catch {
+      scheduleAdvance(5000)
+      return
+    }
 
-      const currentLayerIndex = activeLayerRef.current
-      const incomingLayerIndex = currentLayerIndex === 0 ? 1 : 0
-      transitionRef.current = true
+    const currentLayerIndex = activeLayerRef.current
+    const incomingLayerIndex = currentLayerIndex === 0 ? 1 : 0
+    transitionRef.current = true
+
+    setLayers((current) =>
+      current.map((layer, index) => {
+        if (index === incomingLayerIndex) {
+          return { item: nextItem, stage: 'prepped' }
+        }
+
+        if (index === currentLayerIndex) {
+          return { ...layer, stage: 'visible' }
+        }
+
+        return layer
+      }),
+    )
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        setLayers((current) =>
+          current.map((layer, index) => {
+            if (index === incomingLayerIndex) {
+              return { ...layer, stage: 'incoming' }
+            }
+
+            if (index === currentLayerIndex) {
+              return { ...layer, stage: 'outgoing' }
+            }
+
+            return layer
+          }),
+        )
+      })
+    })
+
+    finalizeTimerRef.current = window.setTimeout(() => {
+      activeLayerRef.current = incomingLayerIndex
+      currentIndexRef.current = nextIndex
+      transitionRef.current = false
 
       setLayers((current) =>
         current.map((layer, index) => {
           if (index === incomingLayerIndex) {
-            return { item: nextItem, stage: 'prepped' }
-          }
-
-          if (index === currentLayerIndex) {
             return { ...layer, stage: 'visible' }
           }
 
-          return layer
+          return { ...layer, stage: 'hidden' }
         }),
       )
 
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          setLayers((current) =>
-            current.map((layer, index) => {
-              if (index === incomingLayerIndex) {
-                return { ...layer, stage: 'incoming' }
-              }
-
-              if (index === currentLayerIndex) {
-                return { ...layer, stage: 'outgoing' }
-              }
-
-              return layer
-            }),
-          )
-        })
-      })
-
-      finalizeTimerRef.current = window.setTimeout(() => {
-        activeLayerRef.current = incomingLayerIndex
-        currentIndexRef.current = nextIndex
-        transitionRef.current = false
-
-        setLayers((current) =>
-          current.map((layer, index) => {
-            if (index === incomingLayerIndex) {
-              return { ...layer, stage: 'visible' }
-            }
-
-            return { ...layer, stage: 'hidden' }
-          }),
-        )
-
-        scheduleAdvance(configRef.current.interval_seconds * 1000)
-      }, configRef.current.transition_duration_ms + 80)
-    },
-    [],
-  )
+      scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
+    }, configRef.current.transition_duration_ms + 80)
+  }, [])
 
   const scheduleAdvance = useCallback(
     (delayMs: number) => {
@@ -141,21 +147,16 @@ export function DisplayPage() {
   const advanceToNext = useCallback(async () => {
     const items = playlistRef.current.items
     if (items.length <= 1) {
-      scheduleAdvance(configRef.current.interval_seconds * 1000)
+      scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
       return
     }
 
-    const nextIndex = selectNextIndex(
-      currentIndexRef.current,
-      items.length,
-      playlistRef.current.playback_mode ?? configRef.current.playback_mode,
-    )
-
+    const nextIndex = selectNextIndex(currentIndexRef.current, items.length)
     await transitionToItem(nextIndex)
   }, [scheduleAdvance, transitionToItem])
 
   const bootPlaylist = useCallback(
-    async (nextPlaylist: DisplayPlaylist) => {
+    async (nextPlaylist: DisplayPlaylist, nextConfig: DisplayConfig) => {
       const firstItem = nextPlaylist.items[0]
       if (!firstItem) {
         startedRef.current = false
@@ -167,7 +168,7 @@ export function DisplayPage() {
       }
 
       try {
-        await preloadImage(firstItem.image_url)
+        await preloadImage(firstItem.display_url)
         activeLayerRef.current = 0
         currentIndexRef.current = 0
         startedRef.current = true
@@ -178,7 +179,7 @@ export function DisplayPage() {
         ])
         setLoading(false)
         setError(null)
-        scheduleAdvance(configRef.current.interval_seconds * 1000)
+        scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
       } catch (caught) {
         setLoading(false)
         setError(caught instanceof Error ? caught.message : 'Unable to prepare slideshow.')
@@ -195,22 +196,23 @@ export function DisplayPage() {
         }
 
         const [nextConfig, nextPlaylist] = await Promise.all([getDisplayConfig(), getDisplayPlaylist()])
+        configRef.current = nextConfig
+        playlistRef.current = nextPlaylist
         setConfig(nextConfig)
         setPlaylist(nextPlaylist)
 
-        const currentItemId = layersRef.current[activeLayerRef.current]?.item?.id
-        const currentIndex = currentItemId
-          ? nextPlaylist.items.findIndex((item) => item.id === currentItemId)
-          : -1
+        const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id
+        const currentIndex = currentItemId ? nextPlaylist.items.findIndex((item) => item.asset_id === currentItemId) : -1
 
         if (!startedRef.current || currentIndex === -1) {
-          await bootPlaylist(nextPlaylist)
+          await bootPlaylist(nextPlaylist, nextConfig)
           return
         }
 
         currentIndexRef.current = currentIndex
         setError(null)
         setLoading(false)
+        scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
       } catch (caught) {
         setLoading(false)
         if (!startedRef.current) {
@@ -218,7 +220,7 @@ export function DisplayPage() {
         }
       }
     },
-    [bootPlaylist],
+    [bootPlaylist, scheduleAdvance],
   )
 
   useEffect(() => {
@@ -279,7 +281,7 @@ export function DisplayPage() {
           >
             {layer.item ? (
               <figure className="display-media">
-                <img src={layer.item.image_url} alt={layer.item.title} draggable={false} />
+                <img src={layer.item.display_url} alt={layer.item.filename} draggable={false} />
               </figure>
             ) : null}
           </div>
@@ -299,17 +301,9 @@ export function DisplayPage() {
   )
 }
 
-function selectNextIndex(currentIndex: number, length: number, playbackMode: DisplayConfig['playback_mode']): number {
+function selectNextIndex(currentIndex: number, length: number): number {
   if (length <= 1) {
     return 0
-  }
-
-  if (playbackMode === 'shuffle') {
-    let nextIndex = currentIndex
-    while (nextIndex === currentIndex) {
-      nextIndex = Math.floor(Math.random() * length)
-    }
-    return nextIndex
   }
 
   return (currentIndex + 1) % length

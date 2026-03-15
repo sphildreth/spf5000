@@ -1,7 +1,11 @@
-fastapi==0.116.1
-uvicorn[standard]==0.35.0
-pydantic==2.11.7
-pydantic-settings==2.10.1
-python-multipart==0.0.20
-decentdb>=1.7.0
-Pillow==11.3.0
+# Install the DecentDB Python binding separately from a checkout or other supported source.
+# Example:
+#   python -m pip install -e /path/to/decentdb/bindings/python
+fastapi==0.135.1
+uvicorn[standard]==0.41.0
+pydantic==2.12.5
+pydantic-settings==2.13.1
+python-multipart==0.0.22
+Pillow==12.1.1
+httpx==0.28.1
+pytest==9.0.2

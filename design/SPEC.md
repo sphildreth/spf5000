@@ -1,225 +1,287 @@
 # Technical Specification
 
 ## Overview
-SPF5000 consists of a Python FastAPI backend, a React + TypeScript + Vite frontend, local image cache storage, and DecentDB for metadata/state persistence.
 
-## High-Level Architecture
+SPF5000 V1 consists of:
 
-### Backend Responsibilities
-- expose REST API for administration and display state
-- manage providers and sync orchestration
-- manage local image catalog and metadata
-- persist settings and sync state in DecentDB
-- serve built frontend assets if deployed as single service
+- a Python FastAPI backend
+- a React + TypeScript + Vite frontend
+- DecentDB for metadata, settings, display profiles, and import job history
+- filesystem-backed originals and generated image variants
+- a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
-### Frontend Responsibilities
-- admin UI for settings, sources, albums, and media management
-- display UI for fullscreen slideshow playback
-- consume backend API over local network
+The architecture follows the accepted ADR set in `design/adr/0001` through `0008`.
 
-### Persistence Responsibilities
-- DecentDB stores structured metadata
-- filesystem stores image binaries and generated variants
+## Implemented architecture
 
-## Proposed Directory Layout
+### Backend responsibilities
+
+- bootstrap runtime directories and DecentDB schema at startup
+- expose REST endpoints for health, status, settings, sources, collections, assets, imports, and display state
+- keep routes thin and place orchestration in services
+- persist state through explicit repository SQL over the DecentDB DB-API binding
+- manage local import, duplicate detection, original-file storage, and derivative generation
+- serve built frontend assets from `frontend/dist` when available
+
+### Frontend responsibilities
+
+- provide a browser-based admin shell for configuration and diagnostics
+- provide a dedicated fullscreen `/display` route with no admin chrome
+- consume backend API endpoints through typed helpers under `frontend/src/api/`
+- keep display playback independent from the admin shell layout
+
+### Persistence split
+
+- DecentDB stores structured state and metadata
+- the filesystem stores original image binaries, generated display derivatives, generated thumbnails, staging data, and fallback assets
+
+## Runtime model on Raspberry Pi
+
+### Startup flow
+
+1. Raspberry Pi OS boots into a lightweight graphical session.
+2. The SPF5000 backend starts locally.
+3. Backend startup initializes logging, directories, the DecentDB schema, and default records.
+4. Chromium opens the local `/display` route in kiosk/fullscreen mode.
+5. Administrators use a browser on the LAN to access the admin UI.
+
+### Backend startup behavior
+
+`backend/app/main.py` uses a FastAPI lifespan hook to:
+
+- configure logging
+- initialize storage directories
+- create the fallback idle asset
+- create missing DecentDB tables and indexes
+- ensure default settings, the default local source, the default collection, and the default display profile exist
+
+If the DecentDB binding is unavailable, the app preserves the existing `NullConnection` fallback path instead of crashing during import time.
+
+## Filesystem layout
+
+Default backend-managed paths:
 
 ```text
-backend/
-  app/
-    api/
-    core/
-    db/
-    models/
-    repositories/
-    schemas/
-    services/
-    providers/
-    main.py
-frontend/
-  src/
-    api/
-    components/
-    features/
-    layouts/
-    pages/
-    styles/
-design/
-  adr/
+backend/data/
+  spf5000.ddb
+  fallback/
+    empty-display.jpg
+  sources/
+    local-files/
+      import/
+  staging/
+    imports/
+  storage/
+    originals/
+    variants/
+      display/
+      thumbnails/
 ```
 
-## Runtime Model on Raspberry Pi
+### Storage rules
 
-### Startup Flow
-1. Raspberry Pi OS boots into a lightweight graphical session.
-2. The Pi auto-logs into the dedicated local session.
-3. A systemd service starts the SPF5000 FastAPI backend.
-4. Chromium launches in kiosk mode and opens the local display route.
-5. The display route begins slideshow playback from the locally cached playlist.
-6. Administration is performed remotely from another device on the LAN.
+- imported originals are copied into managed storage
+- display playback uses generated display derivatives rather than full originals
+- admin pages use generated thumbnail derivatives
+- deterministic filenames/paths are derived from asset metadata and checksums
 
-### Why Browser Kiosk
-The production display runtime is browser-based rather than console-rendered. This allows:
+## Data model
 
-- a dedicated fullscreen slideshow route
-- smooth CSS-driven transitions
-- easy future overlay support
-- a single frontend technology stack for both display and admin experiences
-- rapid iteration with normal web tooling
+The V1 schema bootstraps these primary tables:
 
-## Display Rendering Strategy
+### `settings`
 
-### Display Route
-- `/display` is a dedicated fullscreen slideshow page with no admin chrome.
-- The display route consumes a local playlist API and renders from locally cached image derivatives.
-- The display route should remain usable even if the admin route is unavailable.
+Key/value device settings, including:
 
-### Transition Strategy
-The v1 slideshow renderer uses a dual-layer approach:
+- `frame_name`
+- `display_variant_width`
+- `display_variant_height`
+- `thumbnail_max_size`
+- `slideshow_interval_seconds`
+- `transition_mode`
+- `transition_duration_ms`
+- `fit_mode`
+- `shuffle_enabled`
+- `selected_collection_id`
+- `active_display_profile_id`
 
-- two absolutely positioned image layers are maintained at all times
-- one visible layer shows the current image
+### `sources`
+
+Configured provider sources. V1 seeds a default `local_files` source with the managed import path.
+
+### `collections`
+
+Logical groupings of imported assets. V1 seeds a default collection used by import and display flows.
+
+### `assets`
+
+Canonical imported image records, including:
+
+- source ownership
+- filename/original filename
+- checksum
+- dimensions and file size
+- imported-from path
+- managed original path
+- metadata JSON
+- imported timestamps
+- active flag
+
+### `asset_variants`
+
+Generated derivatives keyed by asset and kind. V1 creates:
+
+- `display`
+- `thumbnail`
+
+### `collection_assets`
+
+Join table mapping assets into collections with stable sort order.
+
+### `import_jobs`
+
+Scan/import job history with discovered/imported/duplicate/skipped/error counters plus sample filenames and completion status.
+
+### `display_profiles`
+
+Persisted slideshow behavior, including:
+
+- selected collection
+- slideshow interval seconds
+- transition mode
+- transition duration milliseconds
+- fit mode
+- shuffle flag
+- idle message
+- playlist refresh interval seconds
+
+## Local provider and import flow
+
+### Provider boundary
+
+Providers implement the protocol in `backend/app/providers/base.py`. V1 includes `LocalFilesProvider` only, while preserving the abstraction boundary for future providers.
+
+### Local import workflow
+
+1. `POST /api/import/local/scan` scans the configured import directory recursively.
+2. Supported image extensions are filtered using backend config.
+3. `POST /api/import/local/run` imports discovered images.
+4. SHA-256 checksum comparison prevents duplicate asset creation.
+5. Managed original files are written to the filesystem.
+6. Pillow extracts image metadata and generates display/thumbnail derivatives.
+7. DecentDB records the asset, variants, collection membership, and job history.
+
+Import failures do not stop the display route from continuing to run with the existing library.
+
+## Display rendering strategy
+
+### Route separation
+
+- `/display` is intentionally independent from the admin shell
+- the display route renders on a black background with a hidden cursor
+- the display route shows a calm idle state when no assets are available
+
+### Dual-layer renderer
+
+The slideshow uses two persistent absolutely positioned layers:
+
+- one visible layer presents the current image
 - one hidden layer preloads and decodes the next image
-- the transition begins only after the next image is ready
-- the next image enters with a left-to-right slide motion while the current image exits without exposing a full black background
+- motion begins only after the next image is ready
+- the outgoing slide moves to the right while the incoming slide enters from the left
+- the backing black background never becomes the intended transition state
 
-### Anti-Flicker Rules
-- never intentionally blank the screen between normal image transitions
-- preload and decode the next image before transition start
-- use display-sized cached variants rather than full originals during playback
-- keep layout stable during transitions to avoid reflow flashes
-- use a black background only as a persistent backing layer, not as a transitional state
+This preserves the ADR 0008 requirement to avoid a visible full-black frame between slides.
 
-## Data Model
+### Display settings
 
-### settings
-Stores device-wide settings such as slideshow interval, fit mode, transition mode, transition duration, source selection defaults, sleep hours, and display preferences.
+V1 supports these end-to-end settings:
 
-### photo_sources
-Stores configured source providers such as local disk, Google Photos Ambient, NAS import, or future providers.
+- display duration in seconds
+- transition duration in milliseconds
+- transition type (`slide` today)
+- fit mode (`contain` or `cover`)
+- shuffle enabled/disabled
+- selected collection
+- idle message
+- playlist refresh interval seconds
 
-### albums
-Stores logical display groups and mappings to provider collections.
+## Admin UI
 
-### assets
-Stores metadata about each known image.
+The React admin shell currently includes:
 
-Suggested columns:
-- id
-- source_id
-- album_id
-- provider_asset_id
-- filename
-- mime_type
-- width
-- height
-- checksum_sha256
-- origin_type
-- local_original_path
-- local_display_path
-- created_utc
-- updated_utc
-- is_active
+- `Dashboard` for system/library status
+- `Settings` for device and derivative defaults
+- `Library` for browsing imported assets and variants
+- `Collections` for collection management
+- `Sources` for local source configuration plus scan/import actions
+- `Display Settings` for slideshow behavior
 
-### sync_jobs
-Stores sync runs, state, duration, and outcomes.
+Frontend API access stays under `frontend/src/api/` and uses relative `/api/...` paths so the Vite proxy works in development and the same routes work when FastAPI serves the production build.
 
-### sync_events
-Stores detailed sync log items suitable for UI diagnostics.
+## Implemented API surface
 
-## Backend Modules
+### Health and status
 
-### `core/config.py`
-Application settings using `pydantic-settings`.
-
-### `db/connection.py`
-DecentDB connection factory and repository transaction helper.
-
-### `repositories/`
-Thin persistence layer with explicit SQL.
-
-### `services/`
-Business logic and orchestration.
-
-### `providers/`
-Source integrations implementing a common interface.
-
-## API Surface (initial)
-
-### Health
 - `GET /api/health`
+- `GET /api/status`
 - `GET /api/system/status`
 
 ### Settings
+
 - `GET /api/settings`
 - `PUT /api/settings`
 
-### Media
-- `GET /api/media`
-- `POST /api/media/upload`
-- `DELETE /api/media/{id}`
+### Collections
 
-### Albums
-- `GET /api/albums`
-- `POST /api/albums`
-- `PUT /api/albums/{id}`
-- `DELETE /api/albums/{id}`
+- `GET /api/collections`
+- `GET /api/collections/{collection_id}`
+- `POST /api/collections`
+- `PUT /api/collections/{collection_id}`
 
-### Sources
+### Assets
+
+- `GET /api/assets`
+- `GET /api/assets/{asset_id}`
+- `GET /api/assets/{asset_id}/variants/{kind}`
+
+### Sources and import
+
 - `GET /api/sources`
-- `POST /api/sources`
-- `POST /api/sources/{id}/sync`
+- `PUT /api/sources/{source_id}`
+- `POST /api/import/local/scan`
+- `POST /api/import/local/run`
 
 ### Display
-- `GET /api/display/playlist`
+
 - `GET /api/display/config`
+- `PUT /api/display/config`
+- `GET /api/display/playlist`
 
-## Provider Interface
-
-```python
-class PhotoProvider(Protocol):
-    def provider_name(self) -> str: ...
-    def health_check(self) -> dict: ...
-    def list_collections(self) -> list[dict]: ...
-    def sync_collection(self, collection_id: str) -> dict: ...
-```
-
-## Frontend Structure
-
-### Display App
-- fullscreen slideshow route
-- playlist refresh on interval or revision change
-- dual-layer renderer with horizontal slide transition
-- minimal UI chrome
-
-### Admin App
-- dashboard shell
-- settings editor
-- source status cards
-- album/media management pages
-
-## Deployment Model
+## Development and deployment model
 
 ### Development
-- FastAPI runs separately on port 8000
-- Vite dev server runs separately on port 5173
+
+- backend on port `8000`
+- frontend Vite dev server on port `5173`
+- Vite proxies `/api` to the backend
 
 ### Production
-- frontend built into static assets
-- FastAPI serves built frontend from `frontend/dist`
-- systemd unit starts backend on boot
-- Chromium opens fullscreen display page on local HDMI session
 
-## Logging and Diagnostics
-- structured backend logs to stdout and rotating file
-- sync event history persisted in DecentDB
-- basic status endpoint for UI and future watchdogs
+- build frontend assets into `frontend/dist`
+- let FastAPI serve `frontend/dist`
+- run the backend locally on the Pi
+- point Chromium kiosk mode at `http://127.0.0.1:8000/display`
 
-## Security
-- v1 assumes trusted LAN administration
-- admin token or simple local auth may be added later
-- no public internet exposure required for core operation
+## Validation status
 
-## Open Questions
-- exact Google Photos Ambient onboarding sequence
-- whether image resizing should be synchronous, background worker, or first-view lazy generation
-- whether a future native renderer is ever worth the complexity compared with the kiosk browser approach
+The current implementation has been validated with:
+
+- `cd backend && .venv/bin/python -m pytest`
+- `cd frontend && npm run build`
+
+## Current limits
+
+- only the local-files provider is implemented
+- uploads, cloud providers, and destructive library management are not part of this pass
+- v1 assumes a trusted LAN and does not implement authentication

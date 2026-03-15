@@ -27,125 +27,128 @@ DEFAULT_SETTINGS = {
     "active_display_profile_id": DEFAULT_DISPLAY_PROFILE_ID,
 }
 
-SCHEMA_STATEMENTS = [
-    """
-    create table if not exists settings (
-        key text primary key,
-        value text not null,
-        updated_at text not null
-    )
+TABLE_STATEMENTS = {
+    "settings": """
+        create table settings (
+            key text primary key,
+            value text not null,
+            updated_at text not null
+        )
     """,
-    """
-    create table if not exists sources (
-        id text primary key,
-        name text not null,
-        provider_type text not null,
-        import_path text not null,
-        enabled integer not null default 1,
-        created_at text not null,
-        updated_at text not null,
-        last_scan_at text,
-        last_import_at text
-    )
+    "sources": """
+        create table sources (
+            id text primary key,
+            name text not null,
+            provider_type text not null,
+            import_path text not null,
+            enabled integer not null default 1,
+            created_at text not null,
+            updated_at text not null,
+            last_scan_at text,
+            last_import_at text
+        )
     """,
-    """
-    create table if not exists collections (
-        id text primary key,
-        name text not null,
-        description text not null,
-        source_id text,
-        is_default integer not null default 0,
-        is_active integer not null default 1,
-        created_at text not null,
-        updated_at text not null
-    )
+    "collections": """
+        create table collections (
+            id text primary key,
+            name text not null,
+            description text not null,
+            source_id text,
+            is_default integer not null default 0,
+            is_active integer not null default 1,
+            created_at text not null,
+            updated_at text not null
+        )
     """,
-    """
-    create table if not exists assets (
-        id text primary key,
-        source_id text not null,
-        checksum_sha256 text not null unique,
-        filename text not null,
-        original_filename text not null,
-        original_extension text not null,
-        mime_type text not null,
-        width integer not null,
-        height integer not null,
-        size_bytes integer not null,
-        imported_from_path text not null,
-        local_original_path text not null,
-        metadata_json text not null default '{}',
-        created_at text not null,
-        updated_at text not null,
-        imported_at text not null,
-        is_active integer not null default 1
-    )
+    "assets": """
+        create table assets (
+            id text primary key,
+            source_id text not null,
+            checksum_sha256 text not null unique,
+            filename text not null,
+            original_filename text not null,
+            original_extension text not null,
+            mime_type text not null,
+            width integer not null,
+            height integer not null,
+            size_bytes integer not null,
+            imported_from_path text not null,
+            local_original_path text not null,
+            metadata_json text not null default '{}',
+            created_at text not null,
+            updated_at text not null,
+            imported_at text not null,
+            is_active integer not null default 1
+        )
     """,
-    """
-    create table if not exists asset_variants (
-        id text primary key,
-        asset_id text not null,
-        kind text not null,
-        local_path text not null,
-        mime_type text not null,
-        width integer not null,
-        height integer not null,
-        size_bytes integer not null,
-        created_at text not null,
-        unique(asset_id, kind)
-    )
+    "asset_variants": """
+        create table asset_variants (
+            id text primary key,
+            asset_id text not null,
+            kind text not null,
+            local_path text not null,
+            mime_type text not null,
+            width integer not null,
+            height integer not null,
+            size_bytes integer not null,
+            created_at text not null,
+            unique(asset_id, kind)
+        )
     """,
-    """
-    create table if not exists collection_assets (
-        collection_id text not null,
-        asset_id text not null,
-        sort_order integer not null default 0,
-        added_at text not null,
-        primary key (collection_id, asset_id)
-    )
+    "collection_assets": """
+        create table collection_assets (
+            collection_id text not null,
+            asset_id text not null,
+            sort_order integer not null default 0,
+            added_at text not null,
+            primary key (collection_id, asset_id)
+        )
     """,
-    """
-    create table if not exists import_jobs (
-        id text primary key,
-        job_type text not null,
-        status text not null,
-        source_id text,
-        collection_id text,
-        import_path text not null,
-        discovered_count integer not null default 0,
-        imported_count integer not null default 0,
-        duplicate_count integer not null default 0,
-        skipped_count integer not null default 0,
-        error_count integer not null default 0,
-        sample_filenames text not null default '[]',
-        message text not null default '',
-        started_at text not null,
-        completed_at text
-    )
+    "import_jobs": """
+        create table import_jobs (
+            id text primary key,
+            job_type text not null,
+            status text not null,
+            source_id text,
+            collection_id text,
+            import_path text not null,
+            discovered_count integer not null default 0,
+            imported_count integer not null default 0,
+            duplicate_count integer not null default 0,
+            skipped_count integer not null default 0,
+            error_count integer not null default 0,
+            sample_filenames text not null default '[]',
+            message text not null default '',
+            started_at text not null,
+            completed_at text
+        )
     """,
-    """
-    create table if not exists display_profiles (
-        id text primary key,
-        name text not null,
-        selected_collection_id text,
-        slideshow_interval_seconds integer not null,
-        transition_mode text not null,
-        transition_duration_ms integer not null,
-        fit_mode text not null,
-        shuffle_enabled integer not null,
-        idle_message text not null default '',
-        refresh_interval_seconds integer not null default 60,
-        is_default integer not null default 0,
-        created_at text not null,
-        updated_at text not null
-    )
+    "display_profiles": """
+        create table display_profiles (
+            id text primary key,
+            name text not null,
+            selected_collection_id text,
+            slideshow_interval_seconds integer not null,
+            transition_mode text not null,
+            transition_duration_ms integer not null,
+            fit_mode text not null,
+            shuffle_enabled integer not null,
+            idle_message text not null default '',
+            refresh_interval_seconds integer not null default 60,
+            is_default integer not null default 0,
+            created_at text not null,
+            updated_at text not null
+        )
     """,
-    "create index if not exists idx_assets_source_id on assets (source_id)",
-    "create index if not exists idx_assets_imported_at on assets (imported_at)",
-    "create index if not exists idx_collection_assets_asset_id on collection_assets (asset_id)",
-    "create index if not exists idx_asset_variants_asset_kind on asset_variants (asset_id, kind)",
-    "create index if not exists idx_import_jobs_source_id on import_jobs (source_id)",
-]
+}
+
+INDEX_STATEMENTS = {
+    "idx_assets_source_id": "create index idx_assets_source_id on assets (source_id)",
+    "idx_assets_imported_at": "create index idx_assets_imported_at on assets (imported_at)",
+    "idx_collection_assets_asset_id": "create index idx_collection_assets_asset_id on collection_assets (asset_id)",
+    "idx_asset_variants_asset_kind": "create index idx_asset_variants_asset_kind on asset_variants (asset_id, kind)",
+    "idx_import_jobs_source_id": "create index idx_import_jobs_source_id on import_jobs (source_id)",
+}
 
 
 def utc_now() -> str:
@@ -193,8 +196,15 @@ def bootstrap_database() -> None:
             LOGGER.warning("DecentDB unavailable; running with NullConnection fallback")
             return
 
-        for statement in SCHEMA_STATEMENTS:
-            conn.execute(statement)
+        existing_tables = set(conn.list_tables())
+        for table_name, statement in TABLE_STATEMENTS.items():
+            if table_name not in existing_tables:
+                conn.execute(statement)
+
+        existing_indexes = {str(index["name"]) for index in conn.list_indexes()}
+        for index_name, statement in INDEX_STATEMENTS.items():
+            if index_name not in existing_indexes:
+                conn.execute(statement)
 
         _ensure_column(
             conn,

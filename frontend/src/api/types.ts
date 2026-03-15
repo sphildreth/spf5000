@@ -4,10 +4,35 @@ export type PlaybackMode = 'shuffle' | 'sequential'
 export type JsonRecord = Record<string, unknown>
 
 export interface FrameSettings {
+  frame_name: string
+  display_variant_width: number
+  display_variant_height: number
+  thumbnail_max_size: number
   slideshow_interval_seconds: number
   transition_mode: string
+  transition_duration_ms: number
   fit_mode: FitMode
   shuffle_enabled: boolean
+  selected_collection_id: string
+  active_display_profile_id: string
+}
+
+export interface ImportJobSummary {
+  id: string
+  job_type: string
+  status: string
+  source_id: string | null
+  collection_id: string | null
+  import_path: string
+  discovered_count: number
+  imported_count: number
+  duplicate_count: number
+  skipped_count: number
+  error_count: number
+  sample_filenames: string[]
+  message: string
+  started_at: string
+  completed_at: string | null
 }
 
 export interface SystemStatus {
@@ -16,12 +41,36 @@ export interface SystemStatus {
   status: string
   hostname?: string
   version?: string
-  uptime_seconds?: number
-  asset_count?: number
-  collection_count?: number
-  source_count?: number
+  asset_count: number
+  collection_count: number
+  source_count: number
   last_sync_at?: string | null
   warnings: string[]
+  database?: {
+    available: boolean
+    path: string
+    mode: string
+  }
+  storage?: {
+    data_dir: string
+    originals_dir: string
+    display_variants_dir: string
+    thumbnails_dir: string
+    local_import_dir: string
+    fallback_asset_url: string
+  }
+  active_display_profile?: {
+    id: string
+    name: string
+    selected_collection_id: string | null
+    shuffle_enabled: boolean
+  }
+  active_collection?: {
+    id: string
+    name: string
+    asset_count: number
+  } | null
+  latest_import_job?: ImportJobSummary | null
 }
 
 export interface AssetSummary {
@@ -37,7 +86,7 @@ export interface AssetSummary {
   source_name?: string
   collection_ids: string[]
   collection_names: string[]
-  created_at?: string | null
+  imported_at?: string | null
   updated_at?: string | null
 }
 
@@ -45,8 +94,9 @@ export interface CollectionSummary {
   id: string
   name: string
   description?: string
-  asset_count?: number
+  source_id?: string
   source_ids: string[]
+  asset_count?: number
   updated_at?: string | null
   is_active: boolean
 }
@@ -54,89 +104,98 @@ export interface CollectionSummary {
 export interface CollectionUpsertRequest {
   name: string
   description?: string
+  source_id?: string | null
   is_active: boolean
 }
 
 export interface SourceSummary {
   id: string
   name: string
-  kind: string
-  status: string
+  provider_type: string
+  import_path: string
   enabled: boolean
-  path?: string
-  asset_count?: number
+  created_at: string
+  updated_at: string
   last_scan_at?: string | null
   last_import_at?: string | null
-  detail?: string
+  asset_count: number
 }
 
-export interface CreateSourceRequest {
-  name: string
-  kind: string
-  path: string
+export interface SourceUpdateRequest {
+  name?: string
+  import_path?: string
+  enabled?: boolean
 }
 
 export interface LocalImportScanRequest {
-  path: string
-  recursive: boolean
+  source_id: string
+  max_samples: number
 }
 
 export interface LocalImportScanResult {
+  job: ImportJobSummary
+  import_path: string
   discovered_count: number
-  skipped_count: number
-  directories: string[]
-  sample_files: string[]
-  warnings: string[]
+  ignored_count: number
+  sample_filenames: string[]
 }
 
 export interface LocalImportRunRequest {
-  path: string
-  recursive: boolean
-  collection_id?: string
+  source_id: string
+  collection_id: string
+  max_samples: number
 }
 
-export interface LocalImportRunResult {
-  imported_count: number
-  duplicate_count: number
-  failed_count: number
-  collection_id?: string
-  warnings: string[]
-}
+export type LocalImportRunResult = ImportJobSummary
 
 export interface DisplayConfig {
-  interval_seconds: number
+  id: string
+  name: string
+  selected_collection_id: string | null
+  slideshow_interval_seconds: number
+  transition_mode: string
   transition_duration_ms: number
   fit_mode: FitMode
-  playback_mode: PlaybackMode
-  transition_mode: string
+  shuffle_enabled: boolean
   idle_message: string
   refresh_interval_seconds: number
+  is_default: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface DisplayConfigUpdateRequest {
-  interval_seconds: number
-  transition_duration_ms: number
-  fit_mode: FitMode
-  playback_mode: PlaybackMode
-  transition_mode: string
-  idle_message: string
-  refresh_interval_seconds: number
+  name?: string
+  selected_collection_id?: string | null
+  slideshow_interval_seconds?: number
+  transition_mode?: string
+  transition_duration_ms?: number
+  fit_mode?: FitMode
+  shuffle_enabled?: boolean
+  idle_message?: string
+  refresh_interval_seconds?: number
 }
 
 export interface PlaylistItem {
-  id: string
-  title: string
-  image_url: string
-  width?: number
-  height?: number
+  asset_id: string
+  filename: string
+  display_url: string
+  thumbnail_url: string
+  width: number
+  height: number
+  checksum_sha256: string
+  mime_type: string
   collection_name?: string
   source_name?: string
 }
 
 export interface DisplayPlaylist {
+  collection_id: string | null
+  collection_name: string | null
+  shuffle_enabled: boolean
+  playlist_revision: string
+  profile: DisplayConfig
   items: PlaylistItem[]
-  revision?: string
-  playback_mode?: PlaybackMode
 }
 
 export function asRecord(value: unknown): JsonRecord | null {
@@ -184,13 +243,6 @@ export function asFitMode(value: unknown, fallback: FitMode = 'contain'): FitMod
   return value === 'cover' ? 'cover' : fallback
 }
 
-export function asPlaybackMode(value: unknown, fallback: PlaybackMode = 'sequential'): PlaybackMode {
-  return value === 'shuffle' ? 'shuffle' : fallback
-}
-
-export function asOptionalPlaybackMode(value: unknown): PlaybackMode | undefined {
-  if (value === 'shuffle' || value === 'sequential') {
-    return value
-  }
-  return undefined
+export function playbackModeFromShuffle(shuffleEnabled: boolean): PlaybackMode {
+  return shuffleEnabled ? 'shuffle' : 'sequential'
 }

@@ -1,22 +1,13 @@
-import { apiGet, apiPost } from './http'
-import {
-  asArray,
-  asBoolean,
-  asOptionalNumber,
-  asOptionalString,
-  asRecord,
-  asString,
-  type CreateSourceRequest,
-  type SourceSummary,
-} from './types'
+import { apiGet, apiPut } from './http'
+import { asArray, asBoolean, asNumber, asOptionalString, asRecord, asString, type SourceSummary, type SourceUpdateRequest } from './types'
 
 export async function getSources(): Promise<SourceSummary[]> {
   const payload = await apiGet<unknown>('/api/sources')
   return asArray(payload, normalizeSource)
 }
 
-export async function createSource(request: CreateSourceRequest): Promise<SourceSummary> {
-  const payload = await apiPost<CreateSourceRequest, unknown>('/api/sources', request)
+export async function updateSource(id: string, request: SourceUpdateRequest): Promise<SourceSummary> {
+  const payload = await apiPut<SourceUpdateRequest, unknown>(`/api/sources/${id}`, request)
   return normalizeSource(payload, 0)
 }
 
@@ -26,13 +17,13 @@ function normalizeSource(item: unknown, index: number): SourceSummary {
   return {
     id: asOptionalString(record?.id) ?? `${index}`,
     name: asString(record?.name, `Source ${index + 1}`),
-    kind: asString(record?.kind, 'local'),
-    status: asString(record?.status, 'ready'),
+    provider_type: asString(record?.provider_type, 'local_files'),
+    import_path: asString(record?.import_path, ''),
     enabled: asBoolean(record?.enabled, true),
-    path: asOptionalString(record?.path),
-    asset_count: asOptionalNumber(record?.asset_count),
+    created_at: asString(record?.created_at, ''),
+    updated_at: asString(record?.updated_at, ''),
     last_scan_at: asOptionalString(record?.last_scan_at) ?? null,
     last_import_at: asOptionalString(record?.last_import_at) ?? null,
-    detail: asOptionalString(record?.detail),
+    asset_count: asNumber(record?.asset_count, 0),
   }
 }

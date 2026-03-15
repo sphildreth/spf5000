@@ -46,32 +46,43 @@ export function DashboardPage() {
     return [
       {
         label: 'Assets',
-        value: formatNumber(data.status.asset_count ?? data.assets.length),
+        value: formatNumber(data.status.asset_count),
         detail: 'Photos ready for playback',
       },
       {
         label: 'Collections',
-        value: formatNumber(data.status.collection_count ?? data.collections.length),
+        value: formatNumber(data.status.collection_count),
         detail: 'Display groupings configured',
       },
       {
         label: 'Sources',
-        value: formatNumber(data.status.source_count ?? data.sources.length),
-        detail: 'Import and provider entries',
+        value: formatNumber(data.status.source_count),
+        detail: 'Import sources available',
       },
       {
         label: 'Playback',
-        value: data.displayConfig.playback_mode === 'shuffle' ? 'Shuffle' : 'Sequential',
-        detail: `${data.displayConfig.interval_seconds}s dwell · ${data.displayConfig.fit_mode}`,
+        value: data.displayConfig.shuffle_enabled ? 'Shuffle' : 'Sequential',
+        detail: `${data.displayConfig.slideshow_interval_seconds}s dwell · ${data.displayConfig.fit_mode}`,
       },
     ]
+  }, [data])
+
+  const selectedCollectionName = useMemo(() => {
+    if (!data?.displayConfig.selected_collection_id) {
+      return 'All active photos'
+    }
+
+    return (
+      data.collections.find((collection) => collection.id === data.displayConfig.selected_collection_id)?.name ??
+      data.displayConfig.selected_collection_id
+    )
   }, [data])
 
   return (
     <div className="page-stack">
       <PageHeader
         title="Dashboard"
-        description="Status, counts, and the key playback settings that matter most day to day."
+        description="Status, counts, and the slideshow defaults that matter most during everyday use."
         actions={
           <button type="button" className="button button--ghost" onClick={() => void reload()}>
             Refresh
@@ -95,8 +106,12 @@ export function DashboardPage() {
           </div>
 
           <div className="two-column-grid">
-            <Card title="Frame status" eyebrow="System">
+            <Card title="Frame status" eyebrow="System overview">
               <dl className="detail-list">
+                <div>
+                  <dt>Frame name</dt>
+                  <dd>{data.settings.frame_name}</dd>
+                </div>
                 <div>
                   <dt>Application</dt>
                   <dd>{data.status.app}</dd>
@@ -104,7 +119,7 @@ export function DashboardPage() {
                 <div>
                   <dt>State</dt>
                   <dd>
-                    <span className={`pill pill--${data.status.ok ? 'ok' : 'warning'}`}>
+                    <span className={`pill pill--${data.status.status === 'ready' ? 'ok' : 'warning'}`}>
                       {toTitleCase(data.status.status)}
                     </span>
                   </dd>
@@ -118,7 +133,7 @@ export function DashboardPage() {
                   <dd>{data.status.version ?? '—'}</dd>
                 </div>
                 <div>
-                  <dt>Last sync</dt>
+                  <dt>Last import</dt>
                   <dd>{formatDateTime(data.status.last_sync_at)}</dd>
                 </div>
               </dl>
@@ -131,46 +146,52 @@ export function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <p className="card-muted">No system warnings reported.</p>
+                <p className="card-muted">No warnings reported by the backend.</p>
               )}
             </Card>
 
-            <Card title="Current playback defaults" eyebrow="Display">
+            <Card title="Current playback defaults" eyebrow="Display profile">
               <dl className="detail-list">
                 <div>
                   <dt>Dwell time</dt>
-                  <dd>{data.settings.slideshow_interval_seconds} seconds</dd>
+                  <dd>{data.displayConfig.slideshow_interval_seconds} seconds</dd>
                 </div>
                 <div>
                   <dt>Transition</dt>
-                  <dd>{toTitleCase(data.settings.transition_mode)}</dd>
+                  <dd>{toTitleCase(data.displayConfig.transition_mode)}</dd>
+                </div>
+                <div>
+                  <dt>Transition duration</dt>
+                  <dd>{data.displayConfig.transition_duration_ms} ms</dd>
                 </div>
                 <div>
                   <dt>Fit mode</dt>
                   <dd>{toTitleCase(data.displayConfig.fit_mode)}</dd>
                 </div>
                 <div>
-                  <dt>Transition duration</dt>
-                  <dd>{data.displayConfig.transition_duration_ms} ms</dd>
+                  <dt>Collection</dt>
+                  <dd>{selectedCollectionName}</dd>
                 </div>
               </dl>
               <p className="card-muted">
-                The display route stays separate from the admin shell and uses a dual-layer slide renderer.
+                The display route stays separate from the admin shell and advances through a preloaded dual-layer renderer.
               </p>
             </Card>
           </div>
 
           <div className="two-column-grid">
-            <Card title="Sources" eyebrow="Connected">
+            <Card title="Sources" eyebrow="Import paths">
               {data.sources.length > 0 ? (
                 <ul className="simple-list">
                   {data.sources.map((source) => (
                     <li key={source.id}>
                       <div>
                         <strong>{source.name}</strong>
-                        <p>{source.path ?? source.kind}</p>
+                        <p>{source.import_path || source.provider_type}</p>
                       </div>
-                      <span className={`pill pill--${source.enabled ? 'ok' : 'muted'}`}>{source.status}</span>
+                      <span className={`pill pill--${source.enabled ? 'ok' : 'muted'}`}>
+                        {source.enabled ? 'Enabled' : 'Disabled'}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -178,7 +199,7 @@ export function DashboardPage() {
                 <StatusNotice
                   variant="empty"
                   title="No sources configured"
-                  detail="Add a local source to begin importing photos onto the frame."
+                  detail="Configure a local source to begin importing photos onto the frame."
                 />
               )}
             </Card>

@@ -1,15 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { getCollections } from '../api/collections'
 import { runLocalImport, scanLocalSource } from '../api/import'
-import { createSource, getSources } from '../api/sources'
-import type {
-  CreateSourceRequest,
-  LocalImportRunRequest,
-  LocalImportRunResult,
-  LocalImportScanRequest,
-  LocalImportScanResult,
-} from '../api/types'
+import { getSources, updateSource } from '../api/sources'
+import type { LocalImportRunRequest, LocalImportRunResult, LocalImportScanRequest, LocalImportScanResult, SourceSummary, SourceUpdateRequest } from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -21,21 +15,17 @@ interface SourcesData {
   collections: Awaited<ReturnType<typeof getCollections>>
 }
 
-const defaultSource: CreateSourceRequest = {
-  name: '',
-  kind: 'local',
-  path: '/srv/photos',
+type DraftMap = Record<string, Required<Pick<SourceUpdateRequest, 'name' | 'import_path' | 'enabled'>>>
+
+const emptyScanRequest: LocalImportScanRequest = {
+  source_id: '',
+  max_samples: 10,
 }
 
-const defaultScanRequest: LocalImportScanRequest = {
-  path: '/srv/photos',
-  recursive: true,
-}
-
-const defaultRunRequest: LocalImportRunRequest = {
-  path: '/srv/photos',
-  recursive: true,
+const emptyRunRequest: LocalImportRunRequest = {
+  source_id: '',
   collection_id: '',
+  max_samples: 10,
 }
 
 export function SourcesPage() {
@@ -47,43 +37,66 @@ export function SourcesPage() {
     [],
   )
 
-  const [sourceDraft, setSourceDraft] = useState<CreateSourceRequest>(defaultSource)
-  const [scanRequest, setScanRequest] = useState<LocalImportScanRequest>(defaultScanRequest)
-  const [runRequest, setRunRequest] = useState<LocalImportRunRequest>(defaultRunRequest)
+  const [drafts, setDrafts] = useState<DraftMap>({})
+  const [scanRequest, setScanRequest] = useState<LocalImportScanRequest>(emptyScanRequest)
+  const [runRequest, setRunRequest] = useState<LocalImportRunRequest>(emptyRunRequest)
   const [scanResult, setScanResult] = useState<LocalImportScanResult | null>(null)
   const [runResult, setRunResult] = useState<LocalImportRunResult | null>(null)
-  const [busyAction, setBusyAction] = useState<'create' | 'scan' | 'run' | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<'save' | 'scan' | 'run' | null>(null)
 
-  const collectionOptions = useMemo(() => data?.collections ?? [], [data])
+  useEffect(() => {
+    if (!data) {
+      return
+    }
 
-  async function handleCreateSource(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!sourceDraft.name.trim() || !sourceDraft.path.trim()) {
+    setDrafts(
+      Object.fromEntries(
+        data.sources.map((source) => [
+          source.id,
+          {
+            name: source.name,
+            import_path: source.import_path,
+            enabled: source.enabled,
+          },
+        ]),
+      ),
+    )
+
+    setScanRequest((current) => ({
+      source_id: current.source_id || data.sources[0]?.id || '',
+      max_samples: current.max_samples || 10,
+    }))
+
+    setRunRequest((current) => ({
+      source_id: current.source_id || data.sources[0]?.id || '',
+      collection_id: current.collection_id || data.collections[0]?.id || 'default-collection',
+      max_samples: current.max_samples || 10,
+    }))
+  }, [data])
+
+  async function handleSaveSource(source: SourceSummary) {
+    const draft = drafts[source.id]
+    if (!draft) {
       return
     }
 
     try {
-      setBusyAction('create')
+      setBusyAction('save')
       setActionError(null)
-      const created = await createSource({
-        ...sourceDraft,
-        name: sourceDraft.name.trim(),
-        path: sourceDraft.path.trim(),
-      })
+      const updated = await updateSource(source.id, draft)
       setData((current) =>
         current
           ? {
               ...current,
-              sources: [created, ...current.sources],
+              sources: current.sources.map((item) => (item.id === updated.id ? updated : item)),
             }
           : current,
       )
-      setFeedback(`Added source ${created.name}.`)
-      setSourceDraft(defaultSource)
+      setFeedback(`Saved ${updated.name}.`)
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Could not create source.')
+      setActionError(caught instanceof Error ? caught.message : 'Could not save source settings.')
     } finally {
       setBusyAction(null)
     }
@@ -98,8 +111,9 @@ export function SourcesPage() {
       const result = await scanLocalSource(scanRequest)
       setScanResult(result)
       setFeedback('Scan complete.')
+      void reload()
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Could not scan local source.')
+      setActionError(caught instanceof Error ? caught.message : 'Could not scan the local source.')
     } finally {
       setBusyAction(null)
     }
@@ -111,14 +125,12 @@ export function SourcesPage() {
     try {
       setBusyAction('run')
       setActionError(null)
-      const result = await runLocalImport({
-        ...runRequest,
-        collection_id: runRequest.collection_id || undefined,
-      })
+      const result = await runLocalImport(runRequest)
       setRunResult(result)
-      setFeedback('Import run complete.')
+      setFeedback('Import complete.')
+      void reload()
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : 'Could not run import.')
+      setActionError(caught instanceof Error ? caught.message : 'Could not run the local import.')
     } finally {
       setBusyAction(null)
     }
@@ -128,7 +140,7 @@ export function SourcesPage() {
     <div className="page-stack">
       <PageHeader
         title="Sources & local import"
-        description="Manage source definitions, scan a directory, and run the local importer without leaving the admin UI."
+        description="Manage the local-files source, scan its configured directory, and import images into a collection for playback."
         actions={
           <button type="button" className="button button--ghost" onClick={() => void reload()}>
             Refresh
@@ -141,176 +153,78 @@ export function SourcesPage() {
       {loading ? <StatusNotice variant="loading" title="Loading sources…" /> : null}
       {error ? <StatusNotice variant="error" title="Could not load source data" detail={error} /> : null}
 
-      <div className="three-column-grid">
-        <Card title="Add source" eyebrow="Definition">
-          <form className="form-grid" onSubmit={(event) => void handleCreateSource(event)}>
-            <label>
-              <span>Name</span>
-              <input
-                type="text"
-                value={sourceDraft.name}
-                onChange={(event) => setSourceDraft((current) => ({ ...current, name: event.target.value }))}
-              />
-            </label>
-            <label>
-              <span>Kind</span>
-              <select
-                value={sourceDraft.kind}
-                onChange={(event) => setSourceDraft((current) => ({ ...current, kind: event.target.value }))}
+      {!loading && !error && (data?.sources.length ?? 0) === 0 ? (
+        <StatusNotice
+          variant="empty"
+          title="No sources configured"
+          detail="The backend should bootstrap a default local-files source automatically."
+        />
+      ) : null}
+
+      <div className="card-grid">
+        {(data?.sources ?? []).map((source) => {
+          const draft = drafts[source.id]
+          if (!draft) {
+            return null
+          }
+
+          return (
+            <Card key={source.id} title={source.name} eyebrow={source.provider_type}>
+              <form
+                className="form-grid"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void handleSaveSource(source)
+                }}
               >
-                <option value="local">Local</option>
-                <option value="provider">Provider</option>
-              </select>
-            </label>
-            <label>
-              <span>Path</span>
-              <input
-                type="text"
-                value={sourceDraft.path}
-                onChange={(event) => setSourceDraft((current) => ({ ...current, path: event.target.value }))}
-              />
-            </label>
-            <div className="form-actions">
-              <button type="submit" className="button" disabled={busyAction == 'create'}>
-                {busyAction === 'create' ? 'Adding…' : 'Add source'}
-              </button>
-            </div>
-          </form>
-        </Card>
-
-        <Card title="Scan local path" eyebrow="Discovery">
-          <form className="form-grid" onSubmit={(event) => void handleScan(event)}>
-            <label>
-              <span>Directory path</span>
-              <input
-                type="text"
-                value={scanRequest.path}
-                onChange={(event) => setScanRequest((current) => ({ ...current, path: event.target.value }))}
-              />
-            </label>
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={scanRequest.recursive}
-                onChange={(event) =>
-                  setScanRequest((current) => ({
-                    ...current,
-                    recursive: event.target.checked,
-                  }))
-                }
-              />
-              <span>Include nested folders</span>
-            </label>
-            <div className="form-actions">
-              <button type="submit" className="button" disabled={busyAction === 'scan'}>
-                {busyAction === 'scan' ? 'Scanning…' : 'Scan'}
-              </button>
-            </div>
-          </form>
-          {scanResult ? (
-            <>
-              <dl className="detail-list detail-list--compact">
-                <div>
-                  <dt>Discovered</dt>
-                  <dd>{formatNumber(scanResult.discovered_count)}</dd>
-                </div>
-                <div>
-                  <dt>Skipped</dt>
-                  <dd>{formatNumber(scanResult.skipped_count)}</dd>
-                </div>
-              </dl>
-              {scanResult.sample_files.length > 0 ? (
-                <div className="inline-list">
-                  {scanResult.sample_files.slice(0, 4).map((file) => (
-                    <span key={file} className="pill pill--muted">
-                      {file}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : null}
-        </Card>
-
-        <Card title="Run import" eyebrow="Ingest">
-          <form className="form-grid" onSubmit={(event) => void handleRun(event)}>
-            <label>
-              <span>Directory path</span>
-              <input
-                type="text"
-                value={runRequest.path}
-                onChange={(event) => setRunRequest((current) => ({ ...current, path: event.target.value }))}
-              />
-            </label>
-            <label>
-              <span>Target collection</span>
-              <select
-                value={runRequest.collection_id ?? ''}
-                onChange={(event) =>
-                  setRunRequest((current) => ({
-                    ...current,
-                    collection_id: event.target.value,
-                  }))
-                }
-              >
-                <option value="">None</option>
-                {collectionOptions.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={runRequest.recursive}
-                onChange={(event) =>
-                  setRunRequest((current) => ({
-                    ...current,
-                    recursive: event.target.checked,
-                  }))
-                }
-              />
-              <span>Include nested folders</span>
-            </label>
-            <div className="form-actions">
-              <button type="submit" className="button" disabled={busyAction === 'run'}>
-                {busyAction === 'run' ? 'Importing…' : 'Run import'}
-              </button>
-            </div>
-          </form>
-          {runResult ? (
-            <dl className="detail-list detail-list--compact">
-              <div>
-                <dt>Imported</dt>
-                <dd>{formatNumber(runResult.imported_count)}</dd>
-              </div>
-              <div>
-                <dt>Duplicates</dt>
-                <dd>{formatNumber(runResult.duplicate_count)}</dd>
-              </div>
-              <div>
-                <dt>Failed</dt>
-                <dd>{formatNumber(runResult.failed_count)}</dd>
-              </div>
-            </dl>
-          ) : null}
-        </Card>
-      </div>
-
-      <Card title="Configured sources" eyebrow="Available providers">
-        {data && data.sources.length > 0 ? (
-          <div className="card-grid">
-            {data.sources.map((source) => (
-              <article key={source.id} className="source-card">
-                <div className="source-card-row">
-                  <div>
-                    <h3>{source.name}</h3>
-                    <p>{source.path ?? source.kind}</p>
-                  </div>
-                  <span className={`pill pill--${source.enabled ? 'ok' : 'muted'}`}>{source.status}</span>
-                </div>
+                <label>
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [source.id]: {
+                          ...draft,
+                          name: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Import path</span>
+                  <input
+                    type="text"
+                    value={draft.import_path}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [source.id]: {
+                          ...draft,
+                          import_path: event.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={draft.enabled}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [source.id]: {
+                          ...draft,
+                          enabled: event.target.checked,
+                        },
+                      }))
+                    }
+                  />
+                  <span>Source enabled</span>
+                </label>
                 <dl className="detail-list detail-list--compact">
                   <div>
                     <dt>Assets</dt>
@@ -325,18 +239,171 @@ export function SourcesPage() {
                     <dd>{formatDateTime(source.last_import_at)}</dd>
                   </div>
                 </dl>
-                {source.detail ? <p className="card-muted">{source.detail}</p> : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <StatusNotice
-            variant="empty"
-            title="No sources configured"
-            detail="Add a source above and use the scan/import tools to populate the library."
-          />
-        )}
-      </Card>
+                <div className="form-actions">
+                  <button type="submit" className="button" disabled={busyAction === 'save'}>
+                    {busyAction === 'save' ? 'Saving…' : 'Save source'}
+                  </button>
+                </div>
+              </form>
+            </Card>
+          )
+        })}
+      </div>
+
+      <div className="two-column-grid">
+        <Card title="Scan configured import path" eyebrow="Discovery">
+          <form className="form-grid" onSubmit={(event) => void handleScan(event)}>
+            <label>
+              <span>Source</span>
+              <select
+                value={scanRequest.source_id}
+                onChange={(event) =>
+                  setScanRequest((current) => ({
+                    ...current,
+                    source_id: event.target.value,
+                  }))
+                }
+              >
+                {(data?.sources ?? []).map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Sample file count</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={scanRequest.max_samples}
+                onChange={(event) =>
+                  setScanRequest((current) => ({
+                    ...current,
+                    max_samples: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+            <div className="form-actions">
+              <button type="submit" className="button" disabled={busyAction === 'scan'}>
+                {busyAction === 'scan' ? 'Scanning…' : 'Scan source'}
+              </button>
+            </div>
+          </form>
+
+          {scanResult ? (
+            <>
+              <dl className="detail-list detail-list--compact">
+                <div>
+                  <dt>Discovered</dt>
+                  <dd>{formatNumber(scanResult.discovered_count)}</dd>
+                </div>
+                <div>
+                  <dt>Ignored</dt>
+                  <dd>{formatNumber(scanResult.ignored_count)}</dd>
+                </div>
+                <div>
+                  <dt>Job status</dt>
+                  <dd>{scanResult.job.status}</dd>
+                </div>
+              </dl>
+              {scanResult.sample_filenames.length > 0 ? (
+                <div className="inline-list">
+                  {scanResult.sample_filenames.map((file) => (
+                    <span key={file} className="pill pill--muted">
+                      {file}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </Card>
+
+        <Card title="Run import" eyebrow="Ingest">
+          <form className="form-grid" onSubmit={(event) => void handleRun(event)}>
+            <label>
+              <span>Source</span>
+              <select
+                value={runRequest.source_id}
+                onChange={(event) =>
+                  setRunRequest((current) => ({
+                    ...current,
+                    source_id: event.target.value,
+                  }))
+                }
+              >
+                {(data?.sources ?? []).map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Target collection</span>
+              <select
+                value={runRequest.collection_id}
+                onChange={(event) =>
+                  setRunRequest((current) => ({
+                    ...current,
+                    collection_id: event.target.value,
+                  }))
+                }
+              >
+                {(data?.collections ?? []).map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {collection.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Sample file count</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={runRequest.max_samples}
+                onChange={(event) =>
+                  setRunRequest((current) => ({
+                    ...current,
+                    max_samples: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+            <div className="form-actions">
+              <button type="submit" className="button" disabled={busyAction === 'run'}>
+                {busyAction === 'run' ? 'Importing…' : 'Run import'}
+              </button>
+            </div>
+          </form>
+
+          {runResult ? (
+            <dl className="detail-list detail-list--compact">
+              <div>
+                <dt>Imported</dt>
+                <dd>{formatNumber(runResult.imported_count)}</dd>
+              </div>
+              <div>
+                <dt>Duplicates</dt>
+                <dd>{formatNumber(runResult.duplicate_count)}</dd>
+              </div>
+              <div>
+                <dt>Errors</dt>
+                <dd>{formatNumber(runResult.error_count)}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{runResult.status}</dd>
+              </div>
+            </dl>
+          ) : null}
+        </Card>
+      </div>
     </div>
   )
 }
