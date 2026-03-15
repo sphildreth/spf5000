@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
 import type { DisplayConfig, DisplayPlaylist, PlaylistItem, SleepSchedule } from '../api/types'
+import { BootScreen, type BootScreenDemoFrame, type BootScreenMessage, useBootScreenDemo } from '../components/BootScreen'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
 
@@ -25,13 +27,24 @@ const EMPTY_PLAYLIST: DisplayPlaylist = {
   sleep_schedule: null,
 }
 
+const INITIAL_BOOT_MESSAGE: BootScreenMessage = {
+  kicker: 'SPF5000',
+  title: 'Preparing display',
+  detail: 'Starting the fullscreen slideshow runtime.',
+  secondary: 'Fetching display settings and the current playlist.',
+  tone: 'booting',
+  animateDots: true,
+}
+
 export function DisplayPage() {
+  const location = useLocation()
   const [config, setConfig] = useState<DisplayConfig>(getDefaultDisplayConfig())
   const [playlist, setPlaylist] = useState<DisplayPlaylist>(EMPTY_PLAYLIST)
   const [layers, setLayers] = useState<DisplayLayer[]>(INITIAL_LAYERS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSleeping, setIsSleeping] = useState(false)
+  const [bootMessage, setBootMessage] = useState<BootScreenMessage>(INITIAL_BOOT_MESSAGE)
 
   const configRef = useRef(config)
   const playlistRef = useRef(playlist)
@@ -43,6 +56,44 @@ export function DisplayPage() {
   const advanceTimerRef = useRef<number | null>(null)
   const finalizeTimerRef = useRef<number | null>(null)
   const isSleepingRef = useRef(false)
+  const demoFrames = useMemo<BootScreenDemoFrame[]>(
+    () => [
+      {
+        title: 'Preparing display',
+        detail: 'Starting the SPF5000 fullscreen runtime.',
+        secondary: 'Mounting display services and waking the slideshow shell.',
+        tone: 'booting',
+        animateDots: true,
+        durationMs: 1800,
+      },
+      {
+        title: 'Checking schedule',
+        detail: 'Comparing quiet hours against the frame’s local clock.',
+        secondary: 'Quiet hours 23:00 → 07:00 are configured but inactive right now.',
+        tone: 'booting',
+        animateDots: true,
+        durationMs: 1800,
+      },
+      {
+        title: 'Loading media',
+        detail: 'Preloading display-sized photos for a clean handoff.',
+        secondary: 'Decoding the first slide before anything moves on screen.',
+        tone: 'booting',
+        animateDots: true,
+        durationMs: 2200,
+      },
+      {
+        title: 'Ready',
+        detail: 'Demo mode is holding on the boot screen.',
+        secondary: 'Remove ?demo=boot from the URL to return to live display playback.',
+        tone: 'empty',
+        durationMs: 2600,
+      },
+    ],
+    [],
+  )
+  const showBootDemo = useMemo(() => new URLSearchParams(location.search).get('demo') === 'boot', [location.search])
+  const demoMessage = useBootScreenDemo(showBootDemo, demoFrames)
 
   useEffect(() => {
     configRef.current = config
@@ -169,11 +220,31 @@ export function DisplayPage() {
         transitionRef.current = false
         clearTimers()
         setLayers(INITIAL_LAYERS)
+        setError(null)
         setLoading(false)
+        setBootMessage({
+          kicker: 'SPF5000',
+          title: 'No photos ready yet',
+          detail: nextConfig.idle_message,
+          secondary: nextPlaylist.collection_name
+            ? `Selected collection: ${nextPlaylist.collection_name}.`
+            : 'Add photos from the admin UI to build the first playlist.',
+          tone: 'empty',
+        })
         return
       }
 
       try {
+        setBootMessage({
+          kicker: 'SPF5000',
+          title: 'Loading media',
+          detail: `Preloading “${firstItem.filename}” for the first transition-free frame.`,
+          secondary: nextPlaylist.collection_name
+            ? `Collection: ${nextPlaylist.collection_name}.`
+            : 'Preparing the default collection.',
+          tone: 'booting',
+          animateDots: true,
+        })
         await preloadImage(firstItem.display_url)
         activeLayerRef.current = 0
         currentIndexRef.current = 0
@@ -185,10 +256,25 @@ export function DisplayPage() {
         ])
         setLoading(false)
         setError(null)
+        setBootMessage({
+          kicker: 'SPF5000',
+          title: 'Ready',
+          detail: `Loaded ${nextPlaylist.items.length} photo${nextPlaylist.items.length === 1 ? '' : 's'} for playback.`,
+          secondary: 'Starting the slideshow now.',
+          tone: 'empty',
+        })
         scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
       } catch (caught) {
+        const detail = caught instanceof Error ? caught.message : 'Unable to prepare slideshow.'
         setLoading(false)
-        setError(caught instanceof Error ? caught.message : 'Unable to prepare slideshow.')
+        setError(detail)
+        setBootMessage({
+          kicker: 'SPF5000',
+          title: 'Display unavailable',
+          detail,
+          secondary: 'The display will try again on the next playlist refresh.',
+          tone: 'error',
+        })
       }
     },
     [clearTimers, scheduleAdvance],
@@ -231,6 +317,14 @@ export function DisplayPage() {
       try {
         if (initial) {
           setLoading(true)
+          setBootMessage({
+            kicker: 'SPF5000',
+            title: 'Preparing display',
+            detail: 'Fetching display settings and the current playlist.',
+            secondary: 'The slideshow runtime is starting up on this screen.',
+            tone: 'booting',
+            animateDots: true,
+          })
         }
 
         const nextPlaylist = await getDisplayPlaylist()
@@ -239,6 +333,14 @@ export function DisplayPage() {
         playlistRef.current = nextPlaylist
         setConfig(nextConfig)
         setPlaylist(nextPlaylist)
+        setBootMessage({
+          kicker: 'SPF5000',
+          title: 'Checking schedule',
+          detail: 'Comparing quiet hours against the frame’s local device time.',
+          secondary: describeSleepSchedule(nextPlaylist.sleep_schedule),
+          tone: 'booting',
+          animateDots: true,
+        })
         updateSleepState(nextPlaylist.sleep_schedule)
 
         const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id
@@ -256,7 +358,15 @@ export function DisplayPage() {
       } catch (caught) {
         setLoading(false)
         if (!startedRef.current) {
-          setError(caught instanceof Error ? caught.message : 'Unable to load display data.')
+          const detail = caught instanceof Error ? caught.message : 'Unable to load display data.'
+          setError(detail)
+          setBootMessage({
+            kicker: 'SPF5000',
+            title: 'Display unavailable',
+            detail,
+            secondary: 'Check the backend and playlist source, then refresh the display.',
+            tone: 'error',
+          })
         }
       }
     },
@@ -298,29 +408,34 @@ export function DisplayPage() {
 
   const showIdle = playlist.items.length === 0 || !layers.some((layer) => layer.item)
 
-  const idleTitle = useMemo(() => {
-    if (loading) {
-      return 'Preparing slideshow'
+  const idleMessage = useMemo(() => {
+    if (demoMessage) {
+      return demoMessage
     }
 
-    if (error) {
-      return 'Display unavailable'
+    if (error && !showIdle) {
+      return {
+        kicker: 'SPF5000',
+        title: 'Display unavailable',
+        detail: error,
+        secondary: 'Check the backend and playlist source, then refresh the display.',
+        tone: 'error' as const,
+      }
     }
 
-    return 'No photos ready yet'
-  }, [error, loading])
-
-  const idleDetail = useMemo(() => {
-    if (loading) {
-      return 'The frame is fetching display settings and building the current playlist.'
+    if (!loading && showIdle && !error) {
+      return {
+        kicker: 'SPF5000',
+        title: bootMessage.title,
+        detail: bootMessage.detail ?? config.idle_message,
+        secondary: bootMessage.secondary,
+        tone: bootMessage.tone ?? 'empty',
+        animateDots: bootMessage.animateDots,
+      }
     }
 
-    if (error) {
-      return error
-    }
-
-    return config.idle_message
-  }, [config.idle_message, error, loading])
+    return bootMessage
+  }, [bootMessage, config.idle_message, demoMessage, error, loading, showIdle])
 
   return (
     <main className="display-page" style={{ ['--display-fit' as string]: config.fit_mode } as CSSProperties}>
@@ -339,15 +454,7 @@ export function DisplayPage() {
           </div>
         ))}
 
-        {showIdle && !isSleeping ? (
-          <div className="display-idle-shell">
-            <div className="display-idle-card">
-              <p className="display-idle-kicker">SPF5000</p>
-              <h1>{idleTitle}</h1>
-              <p>{idleDetail}</p>
-            </div>
-          </div>
-        ) : null}
+        {(showIdle || demoMessage || (error && !layers.some((layer) => layer.item))) && !isSleeping ? <BootScreen message={idleMessage} /> : null}
 
         {isSleeping ? <div className="display-sleep-overlay" aria-hidden="true" /> : null}
       </div>
@@ -407,4 +514,12 @@ function preloadImage(src: string): Promise<void> {
     image.onerror = () => reject(new Error(`Could not load image: ${src}`))
     image.src = src
   })
+}
+
+function describeSleepSchedule(schedule: SleepSchedule | null): string {
+  if (!schedule?.sleep_schedule_enabled) {
+    return 'No quiet hours are active for this frame.'
+  }
+
+  return `Quiet hours ${schedule.sleep_start_local_time} → ${schedule.sleep_end_local_time} are configured on this frame.`
 }

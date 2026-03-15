@@ -570,6 +570,96 @@ textarea {
   line-height: 1.7;
 }
 
+.display-boot-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.display-boot-artwork {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.display-boot-artwork img {
+  width: min(100vw, calc(100vh * 1.5));
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.display-boot-copy {
+  --boot-glow-color: rgba(71, 214, 255, 0.26);
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 74%;
+  bottom: 12%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.75rem;
+  text-align: center;
+  color: rgba(242, 248, 255, 0.96);
+  text-shadow:
+    0 0 0.35rem rgba(255, 255, 255, 0.3),
+    0 0 1rem var(--boot-glow-color),
+    0 0 2rem rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.display-boot-screen--empty .display-boot-copy {
+  --boot-glow-color: rgba(132, 240, 206, 0.22);
+}
+
+.display-boot-screen--error .display-boot-copy {
+  --boot-glow-color: rgba(255, 101, 184, 0.26);
+  color: rgba(255, 236, 244, 0.96);
+}
+
+.display-boot-kicker,
+.display-boot-detail,
+.display-boot-secondary {
+  max-width: min(52rem, 100%);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.display-boot-kicker {
+  color: rgba(212, 238, 255, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: clamp(0.72rem, 1vw, 0.95rem);
+}
+
+.display-boot-copy h1 {
+  max-width: min(32rem, 100%);
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.75rem, 3.15vw, 3.25rem);
+  line-height: 1.06;
+}
+
+.display-boot-detail {
+  font-size: clamp(0.92rem, 1.45vw, 1.28rem);
+  line-height: 1.42;
+  color: rgba(241, 248, 255, 0.88);
+}
+
+.display-boot-secondary {
+  font-size: clamp(0.8rem, 1.2vw, 1rem);
+  line-height: 1.4;
+  color: rgba(207, 229, 246, 0.72);
+}
+
 /* Solid black overlay enforced during scheduled sleep window.
    z-index is intentionally high to cover all slideshow layers and idle UI.
    This overlay is only added/removed on sleep schedule boundaries — never
@@ -608,5 +698,22 @@ textarea {
 
   .detail-list dd {
     text-align: left;
+  }
+
+  .display-boot-copy {
+    left: 16%;
+    right: 16%;
+    top: 71%;
+    bottom: 10%;
+  }
+}
+
+@media (max-width: 640px) {
+  .display-boot-copy {
+    left: 8%;
+    right: 8%;
+    top: auto;
+    bottom: 6%;
+    min-height: 22vh;
   }
 }
