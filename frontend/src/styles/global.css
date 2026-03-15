@@ -1,0 +1,73 @@
+:root {
+  color-scheme: dark;
+  --bg: #111318;
+  --panel: #1b1f27;
+  --text: #f4f7fb;
+  --muted: #b2bccb;
+  --accent: #66a3ff;
+  --border: #2b3240;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 1.5rem;
+  background: var(--panel);
+}
+
+.sidebar nav {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sidebar a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.sidebar a.active {
+  color: var(--accent);
+}
+
+.content {
+  padding: 2rem;
+}
+
+.display-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: black;
+}
+
+.display-placeholder {
+  text-align: center;
+  color: white;
+}
+
+pre {
+  background: #0b0d12;
+  border: 1px solid var(--border);
+  padding: 1rem;
+  border-radius: 12px;
+}
