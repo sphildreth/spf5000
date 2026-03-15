@@ -35,6 +35,24 @@ TABLE_STATEMENTS = {
             updated_at text not null
         )
     """,
+    "admin_users": """
+        create table admin_users (
+            id text primary key,
+            username text not null unique,
+            password_hash text not null,
+            enabled integer not null default 1,
+            created_at text not null,
+            updated_at text not null,
+            last_login_at text
+        )
+    """,
+    "system_state": """
+        create table system_state (
+            key text primary key,
+            value text not null,
+            updated_at text not null
+        )
+    """,
     "sources": """
         create table sources (
             id text primary key,
@@ -213,6 +231,7 @@ def bootstrap_database() -> None:
             "text not null default 'Add photos from the admin UI to begin playback.'",
         )
         _ensure_column(conn, "display_profiles", "refresh_interval_seconds", "integer not null default 60")
+        _ensure_column(conn, "admin_users", "last_login_at", "text")
 
         now = utc_now()
         for key, value in DEFAULT_SETTINGS.items():

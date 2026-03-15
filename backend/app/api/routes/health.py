@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import require_admin
 from app.core.config import settings
 from app.db.connection import is_decentdb_available
 from app.schemas.system import HealthResponse
@@ -19,7 +20,7 @@ def health() -> HealthResponse:
     )
 
 
-@router.get("/status")
-@router.get("/system/status")
+@router.get("/status", dependencies=[Depends(require_admin)])
+@router.get("/system/status", dependencies=[Depends(require_admin)])
 def status() -> dict[str, object]:
     return system_service.get_status()

@@ -1,7 +1,7 @@
 .PHONY: backend frontend test
 
 backend:
-	cd backend && uvicorn app.main:app --reload
+	cd backend && python -m app
 
 frontend:
 	cd frontend && npm run dev

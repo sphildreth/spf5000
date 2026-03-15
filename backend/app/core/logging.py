@@ -9,6 +9,12 @@ from app.core.config import settings
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
 
 
+def _resolve_log_level() -> int:
+    if settings.debug:
+        return logging.DEBUG
+    return getattr(logging, settings.log_level.upper(), logging.INFO)
+
+
 def configure_logging() -> None:
     settings.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -16,7 +22,7 @@ def configure_logging() -> None:
     if getattr(root_logger, "_spf5000_configured", False):
         return
 
-    root_logger.setLevel(logging.DEBUG if settings.debug else logging.INFO)
+    root_logger.setLevel(_resolve_log_level())
 
     formatter = logging.Formatter(LOG_FORMAT)
 

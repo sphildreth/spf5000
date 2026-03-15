@@ -1,0 +1,29 @@
+# SPF5000 Runtime Configuration
+# Loaded at startup. Override the config file path with the SPF5000_CONFIG env var.
+# All settings have sensible defaults — edit only what you need to change.
+
+[server]
+host = "0.0.0.0"
+port = 8000
+debug = false
+
+[logging]
+level = "INFO"
+
+[security]
+# Set a stable session secret to persist admin sessions across restarts.
+# If not set, an ephemeral random secret is generated each startup (sessions
+# are invalidated on every restart). Generate a strong secret with:
+#   python -c "import secrets; print(secrets.token_hex(32))"
+# session_secret = "replace-with-a-long-random-string"
+
+[display]
+max_width = 1920
+max_height = 1080
+
+[paths]
+# Override storage root locations when running outside the repo directory.
+# Relative paths are resolved relative to this config file.
+# data_dir  = "/var/lib/spf5000/data"
+# cache_dir = "/var/lib/spf5000/cache"
+# database_path = "/var/lib/spf5000/data/spf5000.ddb"
