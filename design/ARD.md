@@ -15,7 +15,7 @@ This makes the system easier to maintain long-term, especially after future refa
 
 ## ADR Conventions
 
-- ADR files live in `docs/adr/`
+- ADR files live in `design/adr/`
 - file naming pattern: `NNNN-title.md`
 - statuses: Proposed, Accepted, Superseded, Deprecated
 - every meaningful architectural deviation should result in a new ADR rather than editing history away

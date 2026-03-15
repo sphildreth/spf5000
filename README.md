@@ -14,7 +14,7 @@ This starter repository provides:
 
 - `backend/` - FastAPI application, services, repositories, and API endpoints
 - `frontend/` - React + TypeScript + Vite admin/display UI
-- `docs/` - PRD, SPEC, and architecture decision records
+- `design/` - PRD, SPEC, and architecture decision records
 - `scripts/` - convenience scripts for development and deployment
 
 ## Intended v1 scope

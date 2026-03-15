@@ -43,7 +43,7 @@ frontend/
     layouts/
     pages/
     styles/
-docs/
+design/
   adr/
 ```
 
