@@ -47,10 +47,52 @@ design/
   adr/
 ```
 
+## Runtime Model on Raspberry Pi
+
+### Startup Flow
+1. Raspberry Pi OS boots into a lightweight graphical session.
+2. The Pi auto-logs into the dedicated local session.
+3. A systemd service starts the SPF5000 FastAPI backend.
+4. Chromium launches in kiosk mode and opens the local display route.
+5. The display route begins slideshow playback from the locally cached playlist.
+6. Administration is performed remotely from another device on the LAN.
+
+### Why Browser Kiosk
+The production display runtime is browser-based rather than console-rendered. This allows:
+
+- a dedicated fullscreen slideshow route
+- smooth CSS-driven transitions
+- easy future overlay support
+- a single frontend technology stack for both display and admin experiences
+- rapid iteration with normal web tooling
+
+## Display Rendering Strategy
+
+### Display Route
+- `/display` is a dedicated fullscreen slideshow page with no admin chrome.
+- The display route consumes a local playlist API and renders from locally cached image derivatives.
+- The display route should remain usable even if the admin route is unavailable.
+
+### Transition Strategy
+The v1 slideshow renderer uses a dual-layer approach:
+
+- two absolutely positioned image layers are maintained at all times
+- one visible layer shows the current image
+- one hidden layer preloads and decodes the next image
+- the transition begins only after the next image is ready
+- the next image enters with a left-to-right slide motion while the current image exits without exposing a full black background
+
+### Anti-Flicker Rules
+- never intentionally blank the screen between normal image transitions
+- preload and decode the next image before transition start
+- use display-sized cached variants rather than full originals during playback
+- keep layout stable during transitions to avoid reflow flashes
+- use a black background only as a persistent backing layer, not as a transitional state
+
 ## Data Model
 
 ### settings
-Stores device-wide settings such as slideshow interval, fit mode, source selection defaults, sleep hours, and display preferences.
+Stores device-wide settings such as slideshow interval, fit mode, transition mode, transition duration, source selection defaults, sleep hours, and display preferences.
 
 ### photo_sources
 Stores configured source providers such as local disk, Google Photos Ambient, NAS import, or future providers.
@@ -129,6 +171,7 @@ Source integrations implementing a common interface.
 
 ### Display
 - `GET /api/display/playlist`
+- `GET /api/display/config`
 
 ## Provider Interface
 
@@ -144,7 +187,8 @@ class PhotoProvider(Protocol):
 
 ### Display App
 - fullscreen slideshow route
-- polls or refreshes playlist periodically
+- playlist refresh on interval or revision change
+- dual-layer renderer with horizontal slide transition
 - minimal UI chrome
 
 ### Admin App
@@ -163,7 +207,7 @@ class PhotoProvider(Protocol):
 - frontend built into static assets
 - FastAPI serves built frontend from `frontend/dist`
 - systemd unit starts backend on boot
-- browser opens fullscreen display page on local HDMI session
+- Chromium opens fullscreen display page on local HDMI session
 
 ## Logging and Diagnostics
 - structured backend logs to stdout and rotating file
@@ -178,4 +222,4 @@ class PhotoProvider(Protocol):
 ## Open Questions
 - exact Google Photos Ambient onboarding sequence
 - whether image resizing should be synchronous, background worker, or first-view lazy generation
-- whether display should be fully browser-based or allow a future native renderer
+- whether a future native renderer is ever worth the complexity compared with the kiosk browser approach

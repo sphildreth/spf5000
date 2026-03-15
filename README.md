@@ -14,7 +14,7 @@ This starter repository provides:
 
 - `backend/` - FastAPI application, services, repositories, and API endpoints
 - `frontend/` - React + TypeScript + Vite admin/display UI
-- `design/` - PRD, SPEC, and architecture decision records
+- `design/` - product, specification, architecture repository, and decision records
 - `scripts/` - convenience scripts for development and deployment
 
 ## Intended v1 scope
@@ -25,6 +25,7 @@ This starter repository provides:
 - Source/provider model for future Google Photos ambient integration
 - Metadata and settings persisted in DecentDB
 - Image files cached on local disk
+- Kiosk browser runtime on the Pi with smooth no-black-frame transitions
 
 ## Quick start
 

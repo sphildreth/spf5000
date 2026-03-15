@@ -27,14 +27,15 @@ The target household wants a frame that behaves like an appliance, not a service
 5. Make the system resilient to power loss and temporary network failure.
 6. Allow local image management directly on the device.
 7. Allow future integration with user-selected Google Photos albums or ambient sources.
+8. Present transitions that feel polished and continuous, without a visible black flash between images.
 
 ## Non-Goals for v1
 
 - public multi-tenant SaaS hosting
 - advanced user account management
-- social sharing features
 - AI image tagging and semantic search on-device
-- complex animation effects or video-first focus
+- complex video-first playback
+- a native non-browser renderer
 
 ## Target Users
 
@@ -50,6 +51,7 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want the frame to boot directly into a slideshow.
 - As a household member, I want the frame to keep showing photos even if the network is temporarily unavailable.
 - As a household member, I want portrait and landscape images to display cleanly.
+- As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
 
 ### Administration
 - As an administrator, I want to configure slideshow timing and display behavior from a simple web page.
@@ -68,6 +70,8 @@ Technical household member who installs, configures, and maintains the device.
 - Configurable dwell time per image.
 - Configurable fit modes: contain, cover, smart center-fit.
 - Automatic resume after reboot.
+- Default transition mode should support horizontal slide animation with no visible full-black frame.
+- Playback should use preloaded assets and never intentionally blank the screen during normal image-to-image transitions.
 
 ### Local Web UI
 - Settings page
@@ -98,26 +102,32 @@ Technical household member who installs, configures, and maintains the device.
 ### Reliability
 - Device must recover from power interruption.
 - Display page should remain functional even if admin UI unavailable.
+- Cached playback should continue if remote providers or NAS shares are unavailable.
 
 ### Simplicity
 - The admin UI should be understandable without technical training.
 - The display experience should avoid intrusive overlays.
+- Slideshow behavior should feel like a consumer appliance rather than a browser tab.
 
 ### Performance
 - Pi 3 must be sufficient for v1 slideshow and admin flows.
 - Remote images should be prefetched and cached.
+- Display playback should avoid visible flicker during transitions.
 
 ### Maintainability
 - Architectural decisions must be documented using ADRs.
 - Data model and provider abstractions should support future expansion.
+- Design artifacts should live under `design/` while future end-user documentation can live under `design/`.
 
 ## Risks
 - Google Photos integration constraints may change or require specific APIs.
 - Browser-based display rendering on low-power hardware may require tuning.
 - Poorly bounded cache growth may consume disk unexpectedly.
+- Some portable monitors may have undesirable wake, sleep, or power-loss behavior.
 
 ## Success Criteria
 - Device boots to slideshow after power cycle.
 - Admin can change settings and manage local images via browser on LAN.
 - Cached playback continues if remote source is unavailable.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
+- Transitions feel smooth and continuous, with no obvious black flash between images.

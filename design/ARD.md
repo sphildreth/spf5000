@@ -27,3 +27,6 @@ This makes the system easier to maintain long-term, especially after future refa
 - 0003-use-decentdb-for-metadata-and-settings.md
 - 0004-use-filesystem-for-image-binaries.md
 - 0005-use-provider-abstraction-for-photo-sources.md
+- 0006-use-design-directory-for-product-and-architecture-documents.md
+- 0007-use-browser-kiosk-runtime-on-pi.md
+- 0008-use-dual-layer-slideshow-renderer-with-slide-transition.md
