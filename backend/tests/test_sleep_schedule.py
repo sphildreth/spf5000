@@ -73,10 +73,8 @@ def test_normalize_sleep_schedule_rejects_equal_start_end_when_enabled() -> None
         ("00:00", True),
         ("03:45", True),
         ("07:59", True),
-        # boundary: end is inside
-        ("08:00", True),
-        # just after end → awake
-        ("08:01", False),
+        # boundary: end is exclusive
+        ("08:00", False),
         # middle of the day → awake
         ("12:00", False),
         ("21:59", False),
@@ -100,8 +98,8 @@ def test_sleep_window_overnight(current_time: str, expected: bool) -> None:
         # boundary: start inside
         ("14:00", True),
         ("15:00", True),
-        # boundary: end inside
-        ("16:00", True),
+        # boundary: end is exclusive
+        ("16:00", False),
         # outside
         ("13:59", False),
         ("16:01", False),
@@ -126,7 +124,7 @@ def test_sleep_window_midnight_start() -> None:
     schedule = SleepSchedule(sleep_schedule_enabled=True, sleep_start_local_time="00:00", sleep_end_local_time="06:00")
     assert is_in_sleep_window("00:00", schedule) is True
     assert is_in_sleep_window("05:59", schedule) is True
-    assert is_in_sleep_window("06:00", schedule) is True
+    assert is_in_sleep_window("06:00", schedule) is False
     assert is_in_sleep_window("06:01", schedule) is False
     assert is_in_sleep_window("23:59", schedule) is False
 

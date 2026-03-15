@@ -570,6 +570,17 @@ textarea {
   line-height: 1.7;
 }
 
+/* Solid black overlay enforced during scheduled sleep window.
+   z-index is intentionally high to cover all slideshow layers and idle UI.
+   This overlay is only added/removed on sleep schedule boundaries — never
+   during normal image-to-image transitions (ADR 0008). */
+.display-sleep-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 100;
+}
+
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;

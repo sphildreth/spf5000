@@ -208,14 +208,16 @@ The repository itself remains in the chosen app root, and the backend still uses
 
 ## 11. Sleep schedule behavior
 
-SPF5000's quiet-hours behavior is controlled by application settings, not by the installer.
+SPF5000's quiet-hours behavior is controlled by application settings stored in DecentDB, not by the installer, `spf5000.toml`, `systemd`, cron, or Chromium flags.
 
 The recommended model remains:
 
 - keep the Pi powered on
 - keep the backend running
 - keep Chromium open
-- let the app render a black screen and pause slideshow advancement during quiet hours
+- configure the sleep schedule from the admin UI
+- let the app use the frame's local device time to render a black screen and pause slideshow advancement during quiet hours
+- let the display wake at the configured end time without shutting down the Pi or browser
 
 That preserves the appliance feel without adding brittle reboot or monitor-power choreography.
 

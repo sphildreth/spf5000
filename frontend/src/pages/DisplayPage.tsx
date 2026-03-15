@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
-import type { DisplayConfig, DisplayPlaylist, PlaylistItem } from '../api/types'
+import type { DisplayConfig, DisplayPlaylist, PlaylistItem, SleepSchedule } from '../api/types'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
 
@@ -22,6 +22,7 @@ const EMPTY_PLAYLIST: DisplayPlaylist = {
   playlist_revision: 'empty',
   profile: getDefaultDisplayConfig(),
   items: [],
+  sleep_schedule: null,
 }
 
 export function DisplayPage() {
@@ -30,6 +31,7 @@ export function DisplayPage() {
   const [layers, setLayers] = useState<DisplayLayer[]>(INITIAL_LAYERS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isSleeping, setIsSleeping] = useState(false)
 
   const configRef = useRef(config)
   const playlistRef = useRef(playlist)
@@ -40,6 +42,7 @@ export function DisplayPage() {
   const transitionRef = useRef(false)
   const advanceTimerRef = useRef<number | null>(null)
   const finalizeTimerRef = useRef<number | null>(null)
+  const isSleepingRef = useRef(false)
 
   useEffect(() => {
     configRef.current = config
@@ -137,6 +140,9 @@ export function DisplayPage() {
   const scheduleAdvance = useCallback(
     (delayMs: number) => {
       clearTimers()
+      if (isSleepingRef.current) {
+        return
+      }
       advanceTimerRef.current = window.setTimeout(() => {
         void advanceToNext()
       }, Math.max(delayMs, 1000))
@@ -188,6 +194,38 @@ export function DisplayPage() {
     [clearTimers, scheduleAdvance],
   )
 
+  const updateSleepState = useCallback(
+    (schedule: SleepSchedule | null) => {
+      const nowSleeping = schedule ? isInSleepWindow(schedule) : false
+      const wasSleeping = isSleepingRef.current
+      isSleepingRef.current = nowSleeping
+      setIsSleeping(nowSleeping)
+
+      if (wasSleeping && !nowSleeping) {
+        if (startedRef.current) {
+          scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
+        } else if (playlistRef.current.items.length > 0) {
+          void bootPlaylist(playlistRef.current, configRef.current)
+        }
+      } else if (!wasSleeping && nowSleeping) {
+        clearTimers()
+        transitionRef.current = false
+        setLayers((current) =>
+          current.map((layer, index) => {
+            if (index === activeLayerRef.current) {
+              return { ...layer, stage: 'visible' }
+            }
+
+            return { ...layer, stage: 'hidden' }
+          }),
+        )
+      }
+
+      return nowSleeping
+    },
+    [bootPlaylist, clearTimers, scheduleAdvance],
+  )
+
   const syncDisplayData = useCallback(
     async (initial = false) => {
       try {
@@ -201,6 +239,7 @@ export function DisplayPage() {
         playlistRef.current = nextPlaylist
         setConfig(nextConfig)
         setPlaylist(nextPlaylist)
+        updateSleepState(nextPlaylist.sleep_schedule)
 
         const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id
         const currentIndex = currentItemId ? nextPlaylist.items.findIndex((item) => item.asset_id === currentItemId) : -1
@@ -221,7 +260,7 @@ export function DisplayPage() {
         }
       }
     },
-    [bootPlaylist, scheduleAdvance],
+    [bootPlaylist, scheduleAdvance, updateSleepState],
   )
 
   useEffect(() => {
@@ -233,6 +272,18 @@ export function DisplayPage() {
       clearTimers()
     }
   }, [clearTimers, syncDisplayData])
+
+  // Evaluate sleep schedule using the kiosk browser's local device time so the
+  // display can enter and leave sleep mode without waiting for a playlist refresh.
+  useEffect(() => {
+    const checkSleep = () => {
+      updateSleepState(playlistRef.current.sleep_schedule)
+    }
+
+    checkSleep()
+    const timer = window.setInterval(checkSleep, 1_000)
+    return () => window.clearInterval(timer)
+  }, [updateSleepState])
 
   useEffect(() => {
     const intervalMs = Math.max(config.refresh_interval_seconds, 15) * 1000
@@ -288,7 +339,7 @@ export function DisplayPage() {
           </div>
         ))}
 
-        {showIdle ? (
+        {showIdle && !isSleeping ? (
           <div className="display-idle-shell">
             <div className="display-idle-card">
               <p className="display-idle-kicker">SPF5000</p>
@@ -297,6 +348,8 @@ export function DisplayPage() {
             </div>
           </div>
         ) : null}
+
+        {isSleeping ? <div className="display-sleep-overlay" aria-hidden="true" /> : null}
       </div>
     </main>
   )
@@ -308,6 +361,39 @@ function selectNextIndex(currentIndex: number, length: number): number {
   }
 
   return (currentIndex + 1) % length
+}
+
+/**
+ * Returns true when the current device-local browser time falls inside the
+ * configured sleep window. The start time is inclusive and the end time is
+ * exclusive, so a schedule ending at 08:00 wakes at 08:00.
+ */
+function isInSleepWindow(schedule: SleepSchedule): boolean {
+  if (!schedule.sleep_schedule_enabled) {
+    return false
+  }
+
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const [startH = 0, startM = 0] = schedule.sleep_start_local_time.split(':').map(Number)
+  const [endH = 0, endM = 0] = schedule.sleep_end_local_time.split(':').map(Number)
+  const startMinutes = startH * 60 + startM
+  const endMinutes = endH * 60 + endM
+
+  if (startMinutes === endMinutes) {
+    // Identical times — treat as disabled (backend rejects this when enabled,
+    // but guard here for safety)
+    return false
+  }
+
+  if (startMinutes < endMinutes) {
+    // Same-day window e.g. 09:00 → 17:00
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes
+  }
+
+  // Overnight window e.g. 22:00 → 06:00
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes
 }
 
 function preloadImage(src: string): Promise<void> {

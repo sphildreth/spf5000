@@ -52,9 +52,11 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want the frame to keep showing photos even if the network is temporarily unavailable.
 - As a household member, I want portrait and landscape images to display cleanly.
 - As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
+- As a household member, I want the frame to go dark automatically during configured quiet hours and wake back up on its own.
 
 ### Administration
 - As an administrator, I want to configure slideshow timing and display behavior from a simple web page.
+- As an administrator, I want to configure the display sleep schedule from the admin UI instead of editing OS timers or browser flags.
 - As an administrator, I want to upload, remove, and organize pictures stored on the frame.
 - As an administrator, I want to see sync and device health information.
 - As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
@@ -74,12 +76,15 @@ Technical household member who installs, configures, and maintains the device.
 - Automatic resume after reboot.
 - Default transition mode should support horizontal slide animation with no visible full-black frame.
 - Playback should use preloaded assets and never intentionally blank the screen during normal image-to-image transitions.
+- Support a configurable sleep window based on the device's local time, with an inclusive start time and exclusive end time.
+- During the sleep window, render a solid black fullscreen state, pause slideshow advancement, and resume automatically when the window ends.
 
 ### Local Web UI
 - First-run setup page
 - Login page
 - Protected admin shell
 - Settings page
+- Display settings page with sleep schedule controls
 - Sources page
 - Albums page
 - Local media management page
@@ -101,6 +106,7 @@ Technical household member who installs, configures, and maintains the device.
 ### Persistence
 - Store settings, metadata, sync state, and source mappings in DecentDB.
 - Store bootstrap state and single-admin credentials in DecentDB.
+- Store the sleep schedule in DecentDB application settings rather than OS schedulers or runtime config files.
 - Store image binaries and resized variants on local disk.
 
 ## Quality Attributes
@@ -134,6 +140,7 @@ Technical household member who installs, configures, and maintains the device.
 ## Success Criteria
 - Device boots to slideshow after power cycle.
 - Admin can change settings and manage local images via browser on LAN.
+- Admin can configure quiet hours in the app and the display wakes automatically at the configured end time.
 - Fresh installs guide the administrator through first-run setup before normal login.
 - Admin routes require local authentication while `/display` remains usable without sign-in.
 - Cached playback continues if remote source is unavailable.

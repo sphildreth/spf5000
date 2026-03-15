@@ -1,5 +1,6 @@
 import { apiGet, apiPut } from './http'
 import { asArray, asBoolean, asFitMode, asNumber, asOptionalString, asRecord, asString, type DisplayConfig, type DisplayConfigUpdateRequest, type DisplayPlaylist, type PlaylistItem } from './types'
+import { normalizeSleepSchedule } from './settings'
 
 const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   id: 'default-display-profile',
@@ -38,6 +39,7 @@ export async function getDisplayPlaylist(): Promise<DisplayPlaylist> {
     playlist_revision: asString(record?.playlist_revision, 'empty'),
     profile: record?.profile ? normalizeDisplayConfig(record.profile) : DEFAULT_DISPLAY_CONFIG,
     items: asArray(record?.items, normalizePlaylistItem).filter((item) => item.display_url.length > 0),
+    sleep_schedule: record?.sleep_schedule ? normalizeSleepSchedule(record.sleep_schedule) : null,
   }
 }
 

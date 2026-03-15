@@ -1,5 +1,5 @@
 import { apiGet, apiPut } from './http'
-import { asBoolean, asFitMode, asNumber, asRecord, asString, type FrameSettings } from './types'
+import { asBoolean, asFitMode, asNumber, asRecord, asString, type FrameSettings, type SleepSchedule, type SleepScheduleUpdateRequest } from './types'
 
 export async function getSettings(): Promise<FrameSettings> {
   const payload = await apiGet<unknown>('/api/settings')
@@ -9,6 +9,25 @@ export async function getSettings(): Promise<FrameSettings> {
 export async function updateSettings(settings: FrameSettings): Promise<FrameSettings> {
   const payload = await apiPut<FrameSettings, unknown>('/api/settings', settings)
   return normalizeSettings(payload)
+}
+
+export async function getSleepSchedule(): Promise<SleepSchedule> {
+  const payload = await apiGet<unknown>('/api/settings/sleep-schedule')
+  return normalizeSleepSchedule(payload)
+}
+
+export async function updateSleepSchedule(request: SleepScheduleUpdateRequest): Promise<SleepSchedule> {
+  const payload = await apiPut<SleepScheduleUpdateRequest, unknown>('/api/settings/sleep-schedule', request)
+  return normalizeSleepSchedule(payload)
+}
+
+export function normalizeSleepSchedule(payload: unknown): SleepSchedule {
+  const record = asRecord(payload)
+  return {
+    sleep_schedule_enabled: asBoolean(record?.sleep_schedule_enabled, false),
+    sleep_start_local_time: asString(record?.sleep_start_local_time, '22:00'),
+    sleep_end_local_time: asString(record?.sleep_end_local_time, '08:00'),
+  }
 }
 
 function normalizeSettings(payload: unknown): FrameSettings {

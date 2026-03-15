@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { getCollections } from '../api/collections'
 import { getDisplayConfig, updateDisplayConfig } from '../api/display'
-import type { DisplayConfig, DisplayConfigUpdateRequest } from '../api/types'
+import { getSleepSchedule, updateSleepSchedule } from '../api/settings'
+import type { DisplayConfig, DisplayConfigUpdateRequest, SleepSchedule, SleepScheduleUpdateRequest } from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -12,13 +13,14 @@ import { toTitleCase } from '../utils/format'
 interface DisplaySettingsData {
   config: DisplayConfig
   collections: Awaited<ReturnType<typeof getCollections>>
+  sleepSchedule: SleepSchedule
 }
 
 export function DisplaySettingsPage() {
   const { data, loading, error, reload, setData } = useAsyncData<DisplaySettingsData>(
     async () => {
-      const [config, collections] = await Promise.all([getDisplayConfig(), getCollections()])
-      return { config, collections }
+      const [config, collections, sleepSchedule] = await Promise.all([getDisplayConfig(), getCollections(), getSleepSchedule()])
+      return { config, collections, sleepSchedule }
     },
     [],
   )
@@ -26,9 +28,14 @@ export function DisplaySettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  const [sleepDraft, setSleepDraft] = useState<SleepSchedule | null>(null)
+  const [sleepSaveError, setSleepSaveError] = useState<string | null>(null)
+  const [sleepSaved, setSleepSaved] = useState(false)
+
   useEffect(() => {
     if (data) {
       setDraft(data.config)
+      setSleepDraft(data.sleepSchedule)
     }
   }, [data])
 
@@ -42,6 +49,34 @@ export function DisplaySettingsPage() {
       draft.selected_collection_id
     )
   }, [data, draft])
+
+  async function handleSleepSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!sleepDraft) {
+      return
+    }
+
+    if (sleepDraft.sleep_schedule_enabled && sleepDraft.sleep_start_local_time === sleepDraft.sleep_end_local_time) {
+      setSleepSaveError('Start time and end time must differ when the sleep schedule is enabled.')
+      return
+    }
+
+    try {
+      setSleepSaveError(null)
+      setSleepSaved(false)
+      const request: SleepScheduleUpdateRequest = {
+        sleep_schedule_enabled: sleepDraft.sleep_schedule_enabled,
+        sleep_start_local_time: sleepDraft.sleep_start_local_time,
+        sleep_end_local_time: sleepDraft.sleep_end_local_time,
+      }
+      const updated = await updateSleepSchedule(request)
+      setData((current) => (current ? { ...current, sleepSchedule: updated } : current))
+      setSleepDraft(updated)
+      setSleepSaved(true)
+    } catch (caught) {
+      setSleepSaveError(caught instanceof Error ? caught.message : 'Unable to save sleep schedule.')
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -93,6 +128,8 @@ export function DisplaySettingsPage() {
       {error ? <StatusNotice variant="error" title="Could not load display settings" detail={error} /> : null}
       {saveError ? <StatusNotice variant="error" title="Could not save display settings" detail={saveError} /> : null}
       {saved ? <StatusNotice variant="success" title="Display settings saved" /> : null}
+      {sleepSaveError ? <StatusNotice variant="error" title="Could not save sleep schedule" detail={sleepSaveError} /> : null}
+      {sleepSaved ? <StatusNotice variant="success" title="Sleep schedule saved" /> : null}
 
       {draft ? (
         <div className="two-column-grid">
@@ -302,6 +339,52 @@ export function DisplaySettingsPage() {
               The display renderer keeps two image layers mounted so the next frame is decoded before the slide begins.
             </p>
           </Card>
+
+          {sleepDraft ? (
+            <Card title="Sleep schedule" eyebrow="Display power">
+              <form className="form-grid" onSubmit={(event) => void handleSleepSubmit(event)}>
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={sleepDraft.sleep_schedule_enabled}
+                    onChange={(event) =>
+                      setSleepDraft((current) => (current ? { ...current, sleep_schedule_enabled: event.target.checked } : current))
+                    }
+                  />
+                  <span>Enable sleep schedule</span>
+                </label>
+                <label>
+                  <span>Sleep start (local time)</span>
+                  <input
+                    type="time"
+                    value={sleepDraft.sleep_start_local_time}
+                    onChange={(event) =>
+                      setSleepDraft((current) => (current ? { ...current, sleep_start_local_time: event.target.value } : current))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Sleep end (local time)</span>
+                  <input
+                    type="time"
+                    value={sleepDraft.sleep_end_local_time}
+                    onChange={(event) =>
+                      setSleepDraft((current) => (current ? { ...current, sleep_end_local_time: event.target.value } : current))
+                    }
+                  />
+                </label>
+                <p className="card-muted">
+                  SPF5000 compares these times against the frame&apos;s local device time on the display hardware. Overnight
+                  windows (for example 22:00 → 06:00) are supported, and the frame wakes at the configured end time.
+                </p>
+                <div className="form-actions">
+                  <button type="submit" className="button">
+                    Save sleep schedule
+                  </button>
+                </div>
+              </form>
+            </Card>
+          ) : null}
         </div>
       ) : null}
     </div>

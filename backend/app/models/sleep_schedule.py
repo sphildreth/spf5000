@@ -63,11 +63,12 @@ def is_in_sleep_window(current_hhmm: str, schedule: SleepSchedule) -> bool:
     Rules
     -----
     * If the schedule is disabled, always returns ``False``.
-    * Boundary times (exactly *start* or exactly *end*) are considered **inside** the window.
+    * The start time is inclusive and the end time is exclusive, so a schedule ending at
+      ``08:00`` wakes the display at ``08:00``.
     * Overnight windows (start > end, e.g. 22:00–08:00) are handled correctly by wrapping
       around midnight.
     * A normal (same-day) window (start < end, e.g. 14:00–16:00) is handled as a simple
-      inclusive range.
+      half-open range.
     * start == end is undefined — callers should prevent this via validation before reaching
       this function.
 
@@ -93,7 +94,7 @@ def is_in_sleep_window(current_hhmm: str, schedule: SleepSchedule) -> bool:
 
     if start < end:
         # Same-day window, e.g. 14:00–16:00
-        return start <= cur <= end
+        return start <= cur < end
     else:
         # Overnight window, e.g. 22:00–08:00 (crosses midnight)
-        return cur >= start or cur <= end
+        return cur >= start or cur < end

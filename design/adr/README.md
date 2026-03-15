@@ -10,3 +10,4 @@
 - 0008 Use dual-layer slideshow renderer with slide transition
 - 0009 Use runtime config and single-admin bootstrap auth
 - 0010 Use Pi-specific appliance installer toolchain
+- 0011 Use app-managed sleep schedule for display quiet hours

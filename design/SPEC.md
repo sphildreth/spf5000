@@ -12,7 +12,7 @@ SPF5000 V1 consists of:
 - filesystem-backed originals and generated image variants
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
-The architecture follows the accepted ADR set in `design/adr/0001` through `0009`.
+The architecture follows the accepted ADR set in `design/adr/0001` through `0011`.
 
 ## Implemented architecture
 
@@ -72,7 +72,7 @@ If the DecentDB binding is unavailable, the app preserves the existing `NullConn
 - log level
 - optional session-cookie signing secret
 
-Application settings such as slideshow timing, transition behavior, selected collection, bootstrap completion, and admin users remain in DecentDB.
+Application settings such as slideshow timing, transition behavior, selected collection, sleep schedule, bootstrap completion, and admin users remain in DecentDB.
 
 ## Filesystem layout
 
@@ -121,6 +121,9 @@ Key/value device settings, including:
 - `shuffle_enabled`
 - `selected_collection_id`
 - `active_display_profile_id`
+- `sleep_schedule_enabled`
+- `sleep_start_local_time`
+- `sleep_end_local_time`
 
 ### `sources`
 
@@ -213,6 +216,7 @@ Import failures do not stop the display route from continuing to run with the ex
 - `/display` is intentionally independent from the admin shell
 - the display route renders on a black background with a hidden cursor
 - the display route shows a calm idle state when no assets are available
+- the display route can intentionally render a solid black fullscreen sleep state during the configured sleep window
 
 ### Dual-layer renderer
 
@@ -226,6 +230,19 @@ The slideshow uses two persistent absolutely positioned layers:
 
 This preserves the ADR 0008 requirement to avoid a visible full-black frame between slides.
 
+Scheduled sleep is the only intentional full-black display state. Entering or leaving sleep mode is separate from normal image-to-image transitions and does not relax the ADR 0008 transition rule.
+
+### Scheduled sleep behavior
+
+- the sleep schedule is stored in DecentDB-backed application settings, not in `spf5000.toml`, `systemd`, cron, or Chromium flags
+- authenticated administrators manage the schedule from the admin UI through dedicated sleep-schedule settings APIs
+- `/api/display/playlist` includes the effective sleep schedule so the public `/display` route can enforce it without requiring admin auth
+- the display evaluates the schedule against the local device time on the display hardware
+- sleep start time is inclusive and sleep end time is exclusive, so the frame wakes at the configured end time
+- overnight windows are supported
+- when sleep is active, the display renders a solid black fullscreen overlay, pauses slideshow timers and transitions, and resumes playback automatically after the sleep window ends
+- when the schedule is enabled, identical start and end times are rejected as invalid
+
 ### Display settings
 
 V1 supports these end-to-end settings:
@@ -238,6 +255,8 @@ V1 supports these end-to-end settings:
 - selected collection
 - idle message
 - playlist refresh interval seconds
+- sleep schedule enabled/disabled
+- sleep start and end times in local device time
 
 ## Admin UI
 
@@ -251,7 +270,7 @@ The React admin shell currently includes:
 - `Library` for browsing imported assets and variants
 - `Collections` for collection management
 - `Sources` for local source configuration plus scan/import actions
-- `Display Settings` for slideshow behavior
+- `Display Settings` for slideshow behavior and the sleep schedule
 
 Frontend API access stays under `frontend/src/api/` and uses relative `/api/...` paths so the Vite proxy works in development and the same routes work when FastAPI serves the production build.
 
@@ -281,6 +300,8 @@ Admin routing behavior:
 
 - `GET /api/settings` (authenticated admin)
 - `PUT /api/settings` (authenticated admin)
+- `GET /api/settings/sleep-schedule` (authenticated admin)
+- `PUT /api/settings/sleep-schedule` (authenticated admin)
 
 ### Collections
 

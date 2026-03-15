@@ -1,6 +1,6 @@
 # Super Picture Frame 5000 (SPF5000)
 
-SPF5000 is an offline-first, LAN-manageable digital picture frame stack for Raspberry Pi and similar Linux devices. V1 now ships a FastAPI backend, a React + TypeScript + Vite frontend, DecentDB-backed metadata/state, filesystem-backed image storage, a local-files provider, a minimal `spf5000.toml` runtime config, single-admin bootstrap/login flows, and a dedicated fullscreen `/display` slideshow route with dual-layer slide transitions.
+SPF5000 is an offline-first, LAN-manageable digital picture frame stack for Raspberry Pi and similar Linux devices. V1 now ships a FastAPI backend, a React + TypeScript + Vite frontend, DecentDB-backed metadata/state, filesystem-backed image storage, a local-files provider, a minimal `spf5000.toml` runtime config, single-admin bootstrap/login flows, an app-managed sleep schedule, and a dedicated fullscreen `/display` slideshow route with dual-layer slide transitions.
 
 ## What V1 includes
 
@@ -11,8 +11,8 @@ SPF5000 is an offline-first, LAN-manageable digital picture frame stack for Rasp
 - Filesystem-backed originals plus generated `display` and `thumbnail` variants
 - First-run `/setup` flow that creates the single local admin account
 - Session-cookie auth for `/login`, `/admin`, and protected admin APIs
-- Admin UI pages for dashboard, settings, library, collections, sources/import, and display settings under `/admin`
-- Fullscreen `/display` route with preload-before-transition behavior, hidden cursor, idle state, and no intentional black flash between images
+- Admin UI pages for dashboard, settings, library, collections, sources/import, and display settings under `/admin`, including sleep schedule controls
+- Fullscreen `/display` route with preload-before-transition behavior, hidden cursor, idle state, scheduled black-screen sleep mode, and no intentional black flash between images
 - Static frontend serving from `frontend/dist` when the production build is present
 
 ## Repository layout
@@ -70,7 +70,7 @@ npm run build
 
 ## Runtime configuration
 
-SPF5000 keeps startup/runtime concerns in `spf5000.toml` and keeps application settings, bootstrap state, and admin user records in DecentDB.
+SPF5000 keeps startup/runtime concerns in `spf5000.toml` and keeps application settings, bootstrap state, admin user records, and the display sleep schedule in DecentDB.
 
 The checked-in `spf5000.toml` demonstrates the supported structure for development, and `deploy/config/spf5000.toml.example` shows the recommended Pi appliance layout:
 
@@ -89,7 +89,7 @@ database_path = "./backend/data/spf5000.ddb"
 level = "INFO"
 ```
 
-Use `SPF5000_CONFIG` to point the backend at a different config file. Session signing uses `security.session_secret` when provided; otherwise SPF5000 generates an ephemeral secret and invalidates admin sessions on restart.
+Use `SPF5000_CONFIG` to point the backend at a different config file. Session signing uses `security.session_secret` when provided; otherwise SPF5000 generates an ephemeral secret and invalidates admin sessions on restart. Slideshow quiet hours are not configured in `spf5000.toml`, Chromium flags, cron, or `systemd`; they are managed in-app and stored in DecentDB.
 
 ## Runtime and storage layout
 
@@ -113,7 +113,7 @@ Originals and variants use deterministic managed paths derived from imported ass
 5. Put supported images into the import directory.
 6. Use `Scan` to preview what SPF5000 discovered.
 7. Use `Import` to ingest assets, generate derivatives, and update the selected collection.
-8. Tune slideshow behavior from `Display Settings`.
+8. Tune slideshow behavior and the sleep schedule from `Display Settings`.
 9. Open `/display` on the Pi-attached screen for fullscreen playback.
 
 ## Implemented API surface
@@ -126,6 +126,7 @@ Originals and variants use deterministic managed paths derived from imported ass
 - `GET /api/status` (authenticated admin)
 - `GET /api/system/status` (authenticated admin)
 - `GET|PUT /api/settings` (authenticated admin)
+- `GET|PUT /api/settings/sleep-schedule` (authenticated admin)
 - `GET|POST /api/collections` (authenticated admin)
 - `GET|PUT /api/collections/{collection_id}` (authenticated admin)
 - `GET /api/assets` (authenticated admin)
@@ -148,6 +149,13 @@ SPF5000 is designed for a Pi kiosk runtime:
 - let FastAPI serve `frontend/dist`
 - launch Chromium in kiosk/fullscreen mode against `http://127.0.0.1:8000/display`
 - use another LAN device to access bootstrap/login/admin at `http://<pi-hostname-or-ip>:8000/`
+
+Sleep scheduling is intentionally app-managed in this runtime model:
+
+- keep the Pi powered on, the backend running, and Chromium open
+- configure the sleep window from the admin UI instead of OS timers or shutdown jobs
+- let `/display` use the device's local time to render a solid black sleep screen during the configured window
+- let slideshow timers and transitions pause during sleep and resume automatically at the configured wake time
 
 Example production-ish backend command:
 
@@ -185,4 +193,4 @@ See `docs/PI_SETUP_GUIDE.md` for the Pi OS prep steps and `docs/INSTALLER.md` fo
 - V1 is intentionally local-first and image-focused.
 - The implemented provider is `LocalFilesProvider`; cloud providers and uploads are future work.
 - Authentication is intentionally single-admin and local-account only; multi-user and external identity providers are future work.
-- DecentDB remains the source of truth for metadata/settings, while the filesystem stores binaries and derivatives.
+- DecentDB remains the source of truth for metadata/settings, including the sleep schedule, while the filesystem stores binaries and derivatives.

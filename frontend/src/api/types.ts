@@ -189,6 +189,18 @@ export interface PlaylistItem {
   source_name?: string
 }
 
+export interface SleepSchedule {
+  sleep_schedule_enabled: boolean
+  sleep_start_local_time: string // HH:MM
+  sleep_end_local_time: string // HH:MM
+}
+
+export interface SleepScheduleUpdateRequest {
+  sleep_schedule_enabled: boolean
+  sleep_start_local_time: string // HH:MM
+  sleep_end_local_time: string // HH:MM
+}
+
 export interface DisplayPlaylist {
   collection_id: string | null
   collection_name: string | null
@@ -196,6 +208,7 @@ export interface DisplayPlaylist {
   playlist_revision: string
   profile: DisplayConfig
   items: PlaylistItem[]
+  sleep_schedule: SleepSchedule | null
 }
 
 export interface AuthUser {
