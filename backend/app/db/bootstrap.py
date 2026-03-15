@@ -25,6 +25,10 @@ DEFAULT_SETTINGS = {
     "shuffle_enabled": "1",
     "selected_collection_id": DEFAULT_COLLECTION_ID,
     "active_display_profile_id": DEFAULT_DISPLAY_PROFILE_ID,
+    # Sleep schedule defaults — display is off by default; 22:00 → 08:00 is a sensible preset.
+    "sleep_schedule_enabled": "0",
+    "sleep_start_local_time": "22:00",
+    "sleep_end_local_time": "08:00",
 }
 
 TABLE_STATEMENTS = {

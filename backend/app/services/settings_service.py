@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.settings import FrameSettings
+from app.models.sleep_schedule import SleepSchedule, normalize_sleep_schedule
 from app.repositories.display_repository import DisplayRepository
 from app.repositories.settings_repository import SettingsRepository
 
@@ -29,3 +30,9 @@ class SettingsService:
             profile.shuffle_enabled = updated.shuffle_enabled
             self.display_repo.update_profile(profile)
         return updated
+
+    def get_sleep_schedule(self) -> SleepSchedule:
+        return self.repo.get_sleep_schedule()
+
+    def update_sleep_schedule(self, schedule: SleepSchedule) -> SleepSchedule:
+        return self.repo.update_sleep_schedule(normalize_sleep_schedule(schedule))

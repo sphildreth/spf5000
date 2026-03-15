@@ -37,6 +37,8 @@ _PROTECTED_ROUTES: list[tuple[str, str]] = [
     ("POST", "/api/import/local/run"),
     ("GET", "/api/display/config"),
     ("PUT", "/api/display/config"),
+    ("GET", "/api/settings/sleep-schedule"),
+    ("PUT", "/api/settings/sleep-schedule"),
 ]
 
 

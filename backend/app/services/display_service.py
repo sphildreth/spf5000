@@ -109,5 +109,6 @@ class DisplayService:
             collection_name=None if collection is None else collection.name,
             shuffle_enabled=profile.shuffle_enabled,
             playlist_revision=playlist_revision,
+            sleep_schedule=self.settings_repo.get_sleep_schedule(),
             items=items,
         )

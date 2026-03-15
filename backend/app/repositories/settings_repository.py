@@ -3,7 +3,15 @@ from __future__ import annotations
 from app.db.bootstrap import DEFAULT_COLLECTION_ID, DEFAULT_DISPLAY_PROFILE_ID
 from app.db.connection import get_connection, is_null_connection
 from app.models.settings import FrameSettings
+from app.models.sleep_schedule import SleepSchedule, normalize_sleep_schedule
 from app.repositories.base import utc_now
+
+_SLEEP_SCHEDULE_KEYS = (
+    "sleep_schedule_enabled",
+    "sleep_start_local_time",
+    "sleep_end_local_time",
+)
+_SLEEP_SCHEDULE_DEFAULTS = SleepSchedule()
 
 
 class SettingsRepository:
@@ -78,3 +86,47 @@ class SettingsRepository:
                         (value, now, key),
                     )
         return frame_settings
+
+    def get_sleep_schedule(self) -> SleepSchedule:
+        d = _SLEEP_SCHEDULE_DEFAULTS
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return d
+            cursor = conn.execute(
+                "select key, value from settings where key in (?, ?, ?)",
+                _SLEEP_SCHEDULE_KEYS,
+            )
+            rows = cursor.fetchall()
+            values = {key: value for key, value in rows}
+            return normalize_sleep_schedule(
+                SleepSchedule(
+                    sleep_schedule_enabled=bool(int(values.get("sleep_schedule_enabled", "0"))),
+                    sleep_start_local_time=str(values.get("sleep_start_local_time", d.sleep_start_local_time)),
+                    sleep_end_local_time=str(values.get("sleep_end_local_time", d.sleep_end_local_time)),
+                )
+            )
+
+    def update_sleep_schedule(self, schedule: SleepSchedule) -> SleepSchedule:
+        normalized = normalize_sleep_schedule(schedule)
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return normalized
+            now = utc_now()
+            updates = {
+                "sleep_schedule_enabled": "1" if normalized.sleep_schedule_enabled else "0",
+                "sleep_start_local_time": normalized.sleep_start_local_time,
+                "sleep_end_local_time": normalized.sleep_end_local_time,
+            }
+            for key, value in updates.items():
+                existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()
+                if existing is None:
+                    conn.execute(
+                        "insert into settings (key, value, updated_at) values (?, ?, ?)",
+                        (key, value, now),
+                    )
+                else:
+                    conn.execute(
+                        "update settings set value = ?, updated_at = ? where key = ?",
+                        (value, now, key),
+                    )
+        return normalized

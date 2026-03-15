@@ -5,6 +5,7 @@ from dataclasses import asdict
 from pydantic import BaseModel, Field
 
 from app.models.display import DisplayPlaylist, DisplayProfile, PlaylistItem
+from app.schemas.settings import SleepScheduleResponse
 
 
 class DisplayProfileResponse(BaseModel):
@@ -59,6 +60,7 @@ class DisplayPlaylistResponse(BaseModel):
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    sleep_schedule: SleepScheduleResponse
     profile: DisplayProfileResponse
     items: list[PlaylistItemResponse]
 
@@ -69,6 +71,8 @@ class DisplayPlaylistResponse(BaseModel):
             collection_name=playlist.collection_name,
             shuffle_enabled=playlist.shuffle_enabled,
             playlist_revision=playlist.playlist_revision,
+            sleep_schedule=SleepScheduleResponse.from_domain(playlist.sleep_schedule),
             profile=DisplayProfileResponse.from_domain(playlist.profile),
             items=[PlaylistItemResponse.from_domain(item) for item in playlist.items],
         )
+

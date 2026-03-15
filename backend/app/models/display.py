@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.models.sleep_schedule import SleepSchedule
+
 
 @dataclass(slots=True)
 class DisplayProfile:
@@ -39,4 +41,5 @@ class DisplayPlaylist:
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    sleep_schedule: SleepSchedule = field(default_factory=SleepSchedule)
     items: list[PlaylistItem] = field(default_factory=list)
