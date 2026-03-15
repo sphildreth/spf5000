@@ -1,8 +1,17 @@
 # SPF5000 Copilot Instructions
 
-## Canonical docs
+## Start here
 
-Read `README.md`, `design/PRD.md`, `design/SPEC.md`, `design/ADR.md`, and any affected ADRs in `design/adr/` before changing architecture or product scope. This scaffold is intentionally shaped by accepted ADRs; extend those decisions instead of silently replacing them.
+- Read `AGENTS.md` first, then `README.md`, `design/PRD.md`, `design/SPEC.md`, `design/ADR.md`, and any affected ADRs in `design/adr/`.
+- Never run `git commit`, `git push`, create a PR, merge, or rewrite history without explicit user approval.
+- If a requested change conflicts with an accepted ADR, do not silently diverge. Draft or request a new ADR in `design/adr/NNNN-title.md`.
+- Use repo agent assets when helpful:
+  - `.github/agents/backend-expert.agent.md`
+  - `.github/agents/frontend-expert.agent.md`
+  - `.github/agents/adr-writer.agent.md`
+  - `.github/skills/create-architectural-decision-record/`
+  - `.github/skills/webapp-testing/`
+  - `.vscode/mcp.json` for Playwright MCP
 
 ## Build, test, and run commands
 
@@ -16,6 +25,7 @@ Read `README.md`, `design/PRD.md`, `design/SPEC.md`, `design/ADR.md`, and any af
 - Frontend production build: `cd frontend && npm run build`
 - Frontend production preview: `cd frontend && npm run preview`
 - Convenience scripts: `scripts/dev-backend.sh`, `scripts/dev-frontend.sh`, `scripts/build-frontend.sh`
+- Browser testing: use the Playwright MCP server from `.vscode/mcp.json` together with `.github/skills/webapp-testing/`
 - Linting: no repo-defined lint command is currently present in `backend/pyproject.toml` or `frontend/package.json`
 
 ## High-level architecture
@@ -31,6 +41,7 @@ Read `README.md`, `design/PRD.md`, `design/SPEC.md`, `design/ADR.md`, and any af
 ## Key conventions
 
 - Treat `design/` as the source of truth for architecture and product intent. Accepted ADRs already lock in the stack choices that matter here: FastAPI, React + TypeScript + Vite, DecentDB for metadata/settings, filesystem-backed image storage, provider abstraction, browser kiosk runtime, and a dual-layer slideshow renderer with no full-black transition.
+- Meaningful architectural changes require a new ADR under `design/adr/`; do not rewrite accepted ADR history away.
 - Backend domain models are dataclasses in `backend/app/models/`; request/response contracts are separate Pydantic models in `backend/app/schemas/`. When an API shape changes, update both layers together.
 - `backend/app/db/connection.py` is responsible for creating `data/` and `cache/`, wrapping commit/rollback, and falling back to `NullConnection` when `decentdb` is unavailable. Preserve that graceful-degradation path when touching persistence.
 - Repositories are intentionally thin and currently stubbed with placeholder SQL. Extend the existing layers instead of bypassing services or collapsing provider/repository boundaries.
@@ -39,3 +50,4 @@ Read `README.md`, `design/PRD.md`, `design/SPEC.md`, `design/ADR.md`, and any af
 - If you change slideshow behavior, preserve the `/display` route's independence from the admin layout and follow `design/adr/0008-use-dual-layer-slideshow-renderer-with-slide-transition.md`: preload the next image, keep persistent layers, and avoid visible black frames between images.
 - If you change build or deployment wiring, reconcile the current static-asset mismatch between Vite's default `frontend/dist` output and FastAPI's `frontend_dist` mount path.
 - Backend tests live under `backend/tests/` and currently use `fastapi.testclient.TestClient`.
+- Keep agent-facing assets focused and portable: `AGENTS.md` for repo-wide guidance, `.github/instructions/` for targeted rules, `.github/agents/` for specialized agents, and `.github/skills/` for reusable workflows.
