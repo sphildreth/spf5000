@@ -1,18 +1,80 @@
 from __future__ import annotations
 
-from app.db.connection import get_connection
+from app.db.bootstrap import DEFAULT_COLLECTION_ID, DEFAULT_DISPLAY_PROFILE_ID
+from app.db.connection import get_connection, is_null_connection
 from app.models.settings import FrameSettings
+from app.repositories.base import utc_now
 
 
 class SettingsRepository:
     def get_settings(self) -> FrameSettings:
+        defaults = FrameSettings(
+            selected_collection_id=DEFAULT_COLLECTION_ID,
+            active_display_profile_id=DEFAULT_DISPLAY_PROFILE_ID,
+        )
         with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("select 1")
-            return FrameSettings()
+            if is_null_connection(conn):
+                return defaults
+            cursor = conn.execute(
+                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "frame_name",
+                    "display_variant_width",
+                    "display_variant_height",
+                    "thumbnail_max_size",
+                    "slideshow_interval_seconds",
+                    "transition_mode",
+                    "transition_duration_ms",
+                    "fit_mode",
+                    "shuffle_enabled",
+                    "selected_collection_id",
+                    "active_display_profile_id",
+                ),
+            )
+            rows = cursor.fetchall()
+            values = {key: value for key, value in rows}
+            return FrameSettings(
+                frame_name=str(values.get("frame_name", defaults.frame_name)),
+                display_variant_width=int(values.get("display_variant_width", defaults.display_variant_width)),
+                display_variant_height=int(values.get("display_variant_height", defaults.display_variant_height)),
+                thumbnail_max_size=int(values.get("thumbnail_max_size", defaults.thumbnail_max_size)),
+                slideshow_interval_seconds=int(values.get("slideshow_interval_seconds", defaults.slideshow_interval_seconds)),
+                transition_mode=str(values.get("transition_mode", defaults.transition_mode)),
+                transition_duration_ms=int(values.get("transition_duration_ms", defaults.transition_duration_ms)),
+                fit_mode=str(values.get("fit_mode", defaults.fit_mode)),
+                shuffle_enabled=bool(int(values.get("shuffle_enabled", 1 if defaults.shuffle_enabled else 0))),
+                selected_collection_id=str(values.get("selected_collection_id", defaults.selected_collection_id)),
+                active_display_profile_id=str(values.get("active_display_profile_id", defaults.active_display_profile_id)),
+            )
 
-    def update_settings(self, settings: FrameSettings) -> FrameSettings:
+    def update_settings(self, frame_settings: FrameSettings) -> FrameSettings:
         with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("select 1")
-            return settings
+            if is_null_connection(conn):
+                return frame_settings
+            now = utc_now()
+            updates = {
+                "frame_name": frame_settings.frame_name,
+                "display_variant_width": str(frame_settings.display_variant_width),
+                "display_variant_height": str(frame_settings.display_variant_height),
+                "thumbnail_max_size": str(frame_settings.thumbnail_max_size),
+                "slideshow_interval_seconds": str(frame_settings.slideshow_interval_seconds),
+                "transition_mode": frame_settings.transition_mode,
+                "transition_duration_ms": str(frame_settings.transition_duration_ms),
+                "fit_mode": frame_settings.fit_mode,
+                "shuffle_enabled": "1" if frame_settings.shuffle_enabled else "0",
+                "selected_collection_id": frame_settings.selected_collection_id,
+                "active_display_profile_id": frame_settings.active_display_profile_id,
+            }
+            for key, value in updates.items():
+                existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()
+                if existing is None:
+                    conn.execute(
+                        "insert into settings (key, value, updated_at) values (?, ?, ?)",
+                        (key, value, now),
+                    )
+                else:
+                    conn.execute(
+                        "update settings set value = ?, updated_at = ? where key = ?",
+                        (value, now, key),
+                    )
+        return frame_settings

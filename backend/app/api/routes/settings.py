@@ -10,11 +10,11 @@ service = SettingsService()
 
 @router.get("", response_model=SettingsResponse)
 def get_settings() -> SettingsResponse:
-    settings = service.get_settings()
-    return SettingsResponse(**settings.__dict__)
+    current_settings = service.get_settings()
+    return SettingsResponse.from_domain(current_settings)
 
 
 @router.put("", response_model=SettingsResponse)
 def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
     updated = service.update_settings(FrameSettings(**request.model_dump()))
-    return SettingsResponse(**updated.__dict__)
+    return SettingsResponse.from_domain(updated)
