@@ -34,8 +34,7 @@ Version `1.0.0` ships a complete end-to-end local picture-frame workflow: first-
 <details>
 <summary>Table of contents</summary>
 
-- [Why SPF5000](#why-spf5000)
-- [What ships in 1.0.0](#what-ships-in-100)
+- [✨ Key Features](#-key-features)
 - [Architecture at a glance](#architecture-at-a-glance)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
@@ -50,33 +49,20 @@ Version `1.0.0` ships a complete end-to-end local picture-frame workflow: first-
 
 </details>
 
-## Why SPF5000
+## ✨ Key Features
 
-SPF5000 exists to make a digital picture frame feel like a dependable home appliance instead of a subscription service.
+SPF5000 exists to make a digital picture frame feel like a dependable home appliance instead of a subscription service. Here are the highlights of what's inside:
 
-- **Offline-first by design** — playback stays local and cached instead of depending on live cloud responses.
-- **Appliance-oriented UX** — the Pi boots into a dedicated fullscreen slideshow at `/display`.
-- **LAN-managed admin** — setup, login, settings, import, and diagnostics are available from a browser on your local network.
-- **No intentional black-frame transitions** — the display route uses a dual-layer slideshow renderer that preloads the next image before animating.
-- **Clear storage boundaries** — DecentDB stores metadata and settings, while the filesystem stores originals and generated variants.
-- **Future-friendly provider model** — source integrations live behind a provider abstraction, with managed local files and Google Photos Ambient API support.
-
-## What ships in 1.0.0
-
-Release `1.0.0` includes:
-
-- a **FastAPI backend** with setup, auth/session, health, status, settings, sources, collections, assets, upload/import, and display APIs
-- a **React + TypeScript + Vite frontend** with `/setup`, `/login`, `/admin`, and the fullscreen `/display` route
-- **DecentDB-backed** metadata, bootstrap state, settings, sleep schedule, and single-admin account storage
-- **filesystem-backed originals and variants**, including generated display-sized images and thumbnails
-- a **managed local import and admin upload workflow** via `LocalFilesProvider`
-- a **first-class Google Photos provider** that can display photos from a selected Google Photos album or ambient source using the Ambient API device flow, Google-managed source selection, and offline local cache playback
-- **SHA-256 duplicate detection** during import
-- **session-cookie admin auth** for protected routes while keeping `/display` public
-- an **app-managed sleep schedule** stored in DecentDB and enforced by the display client
-- **Pi appliance scripts** for install, uninstall, and health checks on Raspberry Pi OS Desktop
-
-The current implementation also includes a first-pass weather and alert subsystem with a cached National Weather Service provider, a configurable weather widget, and badge/banner/fullscreen alert behavior on `/display`.
+- 🔌 **Offline-First by Design** — Playback stays local and cached instead of depending on live cloud responses.
+- 🖼️ **Appliance-Oriented UX** — The Pi boots directly into a dedicated, gorgeous fullscreen slideshow at `/display`.
+- 🚀 **Smooth Transitions** — Say goodbye to jarring black flashes! The display route uses a dual-layer renderer that preloads the next image before animating.
+- 📱 **LAN-Managed Admin** — Setup, login, settings, import, and diagnostics are seamlessly available from a browser on your local network.
+- ☁️ **Google Photos Integration** — First-class Google Photos provider using the Ambient API for offline-cached local playback.
+- 🌦️ **Weather & Alerts** — Built-in National Weather Service integration for real-time widget overlays and fullscreen alerts.
+- 🛠️ **Modern Stack** — Built with a snappy **FastAPI backend** and a polished **React 19 + TypeScript + Vite frontend**.
+- 🔒 **Secure & Private** — Single-admin session auth, clear storage boundaries with **DecentDB**, and locally managed files with SHA-256 duplicate detection.
+- 🌙 **Smart Scheduling** — App-managed sleep schedule stored in DecentDB and enforced by the display client.
+- 🍓 **Pi-Ready** — Includes appliance scripts for install, uninstall, and health checks on Raspberry Pi OS Desktop.
 
 ## Architecture at a glance
 
