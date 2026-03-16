@@ -70,7 +70,7 @@ Release `1.0.0` includes:
 - **DecentDB-backed** metadata, bootstrap state, settings, sleep schedule, and single-admin account storage
 - **filesystem-backed originals and variants**, including generated display-sized images and thumbnails
 - a **managed local import workflow** via `LocalFilesProvider`
-- a **first-class Google Photos provider** using the Ambient API device flow, Google-managed source selection, and offline local cache playback
+- a **first-class Google Photos provider** that can display photos from a selected Google Photos album or ambient source using the Ambient API device flow, Google-managed source selection, and offline local cache playback
 - **SHA-256 duplicate detection** during import
 - **session-cookie admin auth** for protected routes while keeping `/display` public
 - an **app-managed sleep schedule** stored in DecentDB and enforced by the display client
@@ -356,7 +356,7 @@ http://127.0.0.1:8000/api/docs
 backend/    FastAPI app, services, repositories, providers, tests
 frontend/   React + TypeScript + Vite admin and display UI
 design/     PRD, SPEC, ADR index, accepted architecture decisions
-docs/       Raspberry Pi setup and installer guides
+docs/       Raspberry Pi setup, Google Photos, and installer guides
 deploy/     systemd, autostart, and config templates
 graphics/   project artwork and logos
 scripts/    development and Pi appliance helper scripts
@@ -372,13 +372,14 @@ Design and operational docs live in-repo:
 - [`design/adr/`](design/adr/) — accepted ADRs
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes following Keep a Changelog
 - [`docs/PI_SETUP_GUIDE.md`](docs/PI_SETUP_GUIDE.md) — end-to-end Pi setup
+- [`docs/GOOGLE_PHOTOS_GUIDE.md`](docs/GOOGLE_PHOTOS_GUIDE.md) — Google Photos credential setup, connection flow, and sync behavior
 - [`docs/INSTALLER.md`](docs/INSTALLER.md) — installer, doctor, and uninstall details
 
 ## Current limits
 
 SPF5000 `1.0.0` is intentionally focused:
 
-- only the `LocalFilesProvider` is implemented today
+- Google Photos selection happens through Google's Ambient settings UI instead of an in-app full-library browser
 - browser uploads are not part of this release
 - destructive library management is not part of this release
 - authentication is single-admin and local-account only
