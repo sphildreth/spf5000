@@ -8,13 +8,14 @@ SPF5000 V1 consists of:
 - a React + TypeScript + Vite frontend
 - a minimal `spf5000.toml` runtime config for host/port/paths/logging/session secret
 - Google Photos Ambient API runtime credentials and sync cadence in `spf5000.toml`
+- a cached weather and alert subsystem with a National Weather Service provider
 - DecentDB for metadata, settings, display profiles, and import job history
 - DecentDB-backed bootstrap state plus a single local admin user
 - filesystem-backed originals and generated image variants
 - provider-backed offline sync metadata for Google Photos auth/device/source state
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
-The architecture follows the accepted ADR set in `design/adr/0001` through `0011`.
+The architecture follows the accepted ADR set in `design/adr/0001` through `0015`.
 
 ## Implemented architecture
 
@@ -24,10 +25,12 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0011
 - load startup/runtime settings from `spf5000.toml`
 - expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, uploads/imports, and display state
 - expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
+- expose weather settings, weather status, weather alert, and display-facing weather APIs
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
 - manage local import, admin uploads, duplicate detection, original-file storage, and derivative generation
 - manage Google Photos Ambient API device registration, media-source state, and background sync into the local asset pipeline
+- manage scheduled weather and alert refresh into local cached state
 - protect admin APIs with signed session cookies while keeping display APIs public
 - serve built frontend assets from `frontend/dist` when available
 
@@ -38,6 +41,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0011
 - provide a dedicated fullscreen `/display` route with no admin chrome
 - consume backend API endpoints through typed helpers under `frontend/src/api/`
 - keep display playback independent from the admin shell layout
+- render a configurable weather widget plus alert badge/banner/fullscreen overlays from cached backend data
 
 ### Persistence split
 
@@ -132,6 +136,21 @@ Key/value device settings, including:
 - `sleep_schedule_enabled`
 - `sleep_start_local_time`
 - `sleep_end_local_time`
+- `weather_enabled`
+- `weather_provider`
+- `weather_location`
+- `weather_units`
+- `weather_position`
+- `weather_refresh_minutes`
+- `weather_show_precipitation`
+- `weather_show_humidity`
+- `weather_show_wind`
+- `weather_alerts_enabled`
+- `weather_alert_fullscreen_enabled`
+- `weather_alert_minimum_severity`
+- `weather_alert_repeat_enabled`
+- `weather_alert_repeat_interval_minutes`
+- `weather_alert_repeat_display_seconds`
 
 ### `sources`
 
@@ -223,6 +242,44 @@ Small key/value runtime metadata such as:
 - bootstrap completion marker
 - other system-level state that should stay in DecentDB
 
+### Weather tables
+
+#### `weather_provider_state`
+
+Current provider health and refresh metadata, including:
+
+- provider status (`ready`, `degraded`, `disabled`, `unconfigured`)
+- last attempted and last successful weather refresh timestamps
+- last attempted and last successful alert refresh timestamps
+- current provider error text
+
+#### `weather_current_conditions`
+
+Cached normalized current conditions for the configured location, including:
+
+- condition summary and icon token
+- canonical temperature value
+- humidity, wind, and precipitation-chance details
+- observation and fetch timestamps
+
+#### `weather_alerts`
+
+Cached normalized active alerts for the configured location, including:
+
+- event, severity, certainty, and urgency
+- headline, area, description, and instruction
+- escalation mode and alert priority metadata
+- issue/effective/expiry timestamps
+
+#### `weather_refresh_runs`
+
+Refresh history for weather and alert cache updates, including:
+
+- refresh kind (`weather` or `alerts`)
+- trigger (`scheduled` or `manual`)
+- completion status and error text
+- start and completion timestamps
+
 ## Local provider and import flow
 
 ### Provider boundary
@@ -250,6 +307,14 @@ Import failures do not stop the display route from continuing to run with the ex
 5. The backend periodically syncs selected Google media into managed local storage and normalizes them into standard assets/variants.
 6. `/display` continues to read only local playlist data and cached assets, even if Google is temporarily unavailable.
 
+## Weather and alert subsystem
+
+1. The admin configures a weather location, widget settings, and alert behavior from the Weather page.
+2. A dedicated weather coordinator refreshes cached current conditions and active alerts on a schedule.
+3. The provider normalizes remote payloads into SPF5000 weather and alert models before persistence.
+4. `/api/display/weather` and `/api/display/alerts` expose only cached normalized state to the public display route.
+5. `/display` renders weather and alert overlays without waiting on live provider requests.
+
 ## Display rendering strategy
 
 ### Route separation
@@ -258,6 +323,7 @@ Import failures do not stop the display route from continuing to run with the ex
 - the display route renders on a black background with a hidden cursor
 - the display route shows a calm idle state when no assets are available
 - the display route can intentionally render a solid black fullscreen sleep state during the configured sleep window
+- the display route can render a cached weather widget and alert overlays without changing slideshow layer ownership
 
 ### Dual-layer renderer
 
@@ -298,6 +364,18 @@ V1 supports these end-to-end settings:
 - playlist refresh interval seconds
 - sleep schedule enabled/disabled
 - sleep start and end times in local device time
+- weather widget enabled/disabled
+- weather widget position and units
+- weather detail toggles for precipitation, humidity, and wind
+- alert minimum severity, fullscreen allowance, and repeat cadence
+
+### Weather and alert presentation
+
+- the weather widget is a persistent overlay separate from slideshow layers
+- banner and badge alerts stay outside the slideshow transition machinery
+- fullscreen alerts pause slideshow timers instead of changing the dual-layer renderer itself
+- `fullscreen_repeat` returns to a banner between repeated fullscreen takeovers
+- sleep mode remains the highest-precedence display state
 
 ## Admin UI
 
@@ -312,6 +390,7 @@ The React admin shell currently includes:
 - `Collections` for collection management
 - `Sources` for local source configuration plus scan/import actions
 - `Display Settings` for slideshow behavior and the sleep schedule
+- `Weather` for weather widget settings, provider/cache status, and alert visibility
 
 Frontend API access stays under `frontend/src/api/` and uses relative `/api/...` paths so the Vite proxy works in development and the same routes work when FastAPI serves the production build.
 
@@ -344,6 +423,14 @@ Admin routing behavior:
 - `GET /api/settings/sleep-schedule` (authenticated admin)
 - `PUT /api/settings/sleep-schedule` (authenticated admin)
 
+### Weather
+
+- `GET /api/weather/settings` (authenticated admin)
+- `PUT /api/weather/settings` (authenticated admin)
+- `GET /api/weather/status` (authenticated admin)
+- `GET /api/weather/alerts` (authenticated admin)
+- `POST /api/weather/refresh` (authenticated admin)
+
 ### Collections
 
 - `GET /api/collections` (authenticated admin)
@@ -370,6 +457,8 @@ Admin routing behavior:
 - `GET /api/display/config` (authenticated admin)
 - `PUT /api/display/config` (authenticated admin)
 - `GET /api/display/playlist`
+- `GET /api/display/weather`
+- `GET /api/display/alerts`
 
 ## Development and deployment model
 
@@ -407,5 +496,6 @@ The current implementation has been validated with:
 ## Current limits
 
 - local-files and Google Photos providers are implemented
+- weather currently supports a single configured location and the National Weather Service provider
 - admin batch uploads into local collections are supported, while destructive library management remains out of scope
 - v1 supports only a single local admin account with cookie-backed sessions

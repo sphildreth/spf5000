@@ -17,6 +17,8 @@ from app.core.logging import configure_logging
 from app.db.bootstrap import initialize_runtime
 from app.services.google_photos_service import GooglePhotosService
 from app.services.google_photos_sync_coordinator import GooglePhotosSyncCoordinator
+from app.services.weather_service import WeatherService
+from app.services.weather_sync_coordinator import WeatherSyncCoordinator
 
 _LOG = logging.getLogger(__name__)
 
@@ -56,12 +58,16 @@ async def lifespan(app: FastAPI):
     configure_logging()
     initialize_runtime()
     coordinator = GooglePhotosSyncCoordinator(service_factory=GooglePhotosService)
+    weather_coordinator = WeatherSyncCoordinator(service_factory=WeatherService)
     coordinator.start()
+    weather_coordinator.start()
     app.state.google_photos_sync_coordinator = coordinator
+    app.state.weather_sync_coordinator = weather_coordinator
     try:
         yield
     finally:
         coordinator.stop()
+        weather_coordinator.stop()
 
 
 def create_app() -> FastAPI:

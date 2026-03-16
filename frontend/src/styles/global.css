@@ -660,6 +660,236 @@ textarea {
   pointer-events: none;
 }
 
+.display-weather-widget {
+  position: absolute;
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 1rem;
+  min-width: 24rem;
+  padding: 1rem 1.15rem;
+  border-radius: 20px;
+  background: rgba(12, 16, 24, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+  color: rgba(249, 251, 255, 0.98);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.display-weather-widget--top-left {
+  top: 2rem;
+  left: 2rem;
+}
+
+.display-weather-widget--top-right {
+  top: 2rem;
+  right: 2rem;
+}
+
+.display-weather-widget--bottom-left {
+  left: 2rem;
+  bottom: 2rem;
+}
+
+.display-weather-widget--bottom-right {
+  right: 2rem;
+  bottom: 2rem;
+}
+
+.display-weather-widget__icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.display-weather-widget__summary {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.display-weather-widget__temperature {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.display-weather-widget__condition {
+  font-size: 0.95rem;
+  color: rgba(235, 242, 255, 0.86);
+}
+
+.display-weather-widget__location,
+.display-weather-widget__stale {
+  font-size: 0.8rem;
+  color: rgba(182, 199, 224, 0.82);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.display-weather-widget__details {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.display-weather-widget__details div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.display-weather-widget__details dt {
+  font-size: 0.72rem;
+  color: rgba(182, 199, 224, 0.82);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.display-weather-widget__details dd {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.display-alert-badge {
+  position: absolute;
+  top: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(111, 21, 21, 0.9);
+  border: 1px solid rgba(255, 212, 93, 0.32);
+  color: #fff7da;
+  z-index: 12;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.26);
+  pointer-events: none;
+}
+
+.display-alert-badge em {
+  font-style: normal;
+  font-weight: 700;
+  color: #ffe36d;
+}
+
+.display-alert-banner {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 1.5rem;
+  background:
+    linear-gradient(90deg, rgba(120, 18, 18, 0.95), rgba(64, 10, 10, 0.92));
+  border-bottom: 3px solid rgba(255, 212, 93, 0.88);
+  color: #fff6d9;
+  z-index: 12;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.display-alert-banner strong {
+  display: block;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.display-alert-banner p,
+.display-alert-banner span {
+  margin: 0.3rem 0 0;
+  color: rgba(255, 243, 209, 0.92);
+}
+
+.display-alert-fullscreen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  background: #090909;
+  color: #fff7db;
+  z-index: 90;
+  pointer-events: none;
+}
+
+.display-alert-fullscreen__header {
+  padding: 1rem 1.6rem;
+  background: #a31616;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+}
+
+.display-alert-fullscreen__band {
+  padding: 1rem 1.6rem;
+  background: #ffd54a;
+  color: #1f1500;
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.display-alert-fullscreen__body {
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+  padding: 2rem 2.2rem 2.4rem;
+}
+
+.display-alert-fullscreen__headline {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 800;
+  line-height: 1.08;
+}
+
+.display-alert-fullscreen__area {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  color: #ffe483;
+  font-weight: 700;
+}
+
+.display-alert-fullscreen__instruction {
+  margin: 0;
+  max-width: 42rem;
+  font-size: clamp(1.15rem, 2vw, 1.6rem);
+  line-height: 1.45;
+}
+
+.display-alert-fullscreen__meta {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  max-width: 42rem;
+}
+
+.display-alert-fullscreen__meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.display-alert-fullscreen__meta dt {
+  color: rgba(255, 233, 172, 0.84);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.display-alert-fullscreen__meta dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+}
+
 .display-idle-shell {
   position: absolute;
   inset: 0;
@@ -702,6 +932,7 @@ textarea {
   inset: 0;
   overflow: hidden;
   background: #000;
+  z-index: 40;
 }
 
 .display-boot-artwork {

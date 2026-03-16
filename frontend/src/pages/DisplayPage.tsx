@@ -2,8 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useLocation } from 'react-router-dom'
 
 import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
-import type { DisplayConfig, DisplayPlaylist, DisplayTransitionMode, PlaylistItem, SleepSchedule } from '../api/types'
+import { getDisplayAlerts, getDisplayWeather } from '../api/weather'
+import type {
+  DisplayAlerts,
+  DisplayConfig,
+  DisplayPlaylist,
+  DisplayTransitionMode,
+  DisplayWeather,
+  PlaylistItem,
+  SleepSchedule,
+} from '../api/types'
 import { BootScreen, type BootScreenDemoFrame, type BootScreenMessage, useBootScreenDemo } from '../components/BootScreen'
+import { WeatherAlertOverlay } from '../components/WeatherAlertOverlay'
+import { WeatherWidget } from '../components/WeatherWidget'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
 
@@ -39,6 +50,56 @@ const EMPTY_PLAYLIST: DisplayPlaylist = {
   sleep_schedule: null,
 }
 
+const EMPTY_DISPLAY_WEATHER: DisplayWeather = {
+  enabled: false,
+  position: 'top-right',
+  units: 'f',
+  show_precipitation: true,
+  show_humidity: true,
+  show_wind: true,
+  provider_status: {
+    provider_name: 'nws',
+    provider_display_name: 'National Weather Service',
+    status: 'disabled',
+    available: true,
+    configured: false,
+    location_label: '',
+    last_weather_refresh_at: null,
+    last_alert_refresh_at: null,
+    last_successful_weather_refresh_at: null,
+    last_successful_alert_refresh_at: null,
+    current_error: null,
+    updated_at: '',
+  },
+  current_conditions: null,
+}
+
+const EMPTY_DISPLAY_ALERTS: DisplayAlerts = {
+  provider_status: {
+    provider_name: 'nws',
+    provider_display_name: 'National Weather Service',
+    status: 'disabled',
+    available: true,
+    configured: false,
+    location_label: '',
+    last_weather_refresh_at: null,
+    last_alert_refresh_at: null,
+    last_successful_weather_refresh_at: null,
+    last_successful_alert_refresh_at: null,
+    current_error: null,
+    updated_at: '',
+  },
+  dominant_alert: null,
+  active_alerts: [],
+  presentation: {
+    mode: 'none',
+    fallback_mode: null,
+    repeat_interval_minutes: 5,
+    repeat_display_seconds: 20,
+    alert_count: 0,
+  },
+}
+
 const INITIAL_BOOT_MESSAGE: BootScreenMessage = {
   kicker: 'SPF5000',
   title: 'Preparing display',
@@ -48,14 +109,19 @@ const INITIAL_BOOT_MESSAGE: BootScreenMessage = {
   animateDots: true,
 }
 
+const OVERLAY_REFRESH_SECONDS = 30
+
 export function DisplayPage() {
   const location = useLocation()
   const [config, setConfig] = useState<DisplayConfig>(getDefaultDisplayConfig())
   const [playlist, setPlaylist] = useState<DisplayPlaylist>(EMPTY_PLAYLIST)
+  const [weather, setWeather] = useState<DisplayWeather>(EMPTY_DISPLAY_WEATHER)
+  const [alerts, setAlerts] = useState<DisplayAlerts>(EMPTY_DISPLAY_ALERTS)
   const [layers, setLayers] = useState<DisplayLayer[]>(INITIAL_LAYERS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSleeping, setIsSleeping] = useState(false)
+  const [isFullscreenAlertActive, setIsFullscreenAlertActive] = useState(false)
   const [bootMessage, setBootMessage] = useState<BootScreenMessage>(INITIAL_BOOT_MESSAGE)
 
   const configRef = useRef(config)
@@ -68,6 +134,11 @@ export function DisplayPage() {
   const advanceTimerRef = useRef<number | null>(null)
   const finalizeTimerRef = useRef<number | null>(null)
   const isSleepingRef = useRef(false)
+  const isFullscreenAlertActiveRef = useRef(false)
+  const fullscreenAlertTimerRef = useRef<number | null>(null)
+  const nextFullscreenRepeatAtRef = useRef<number | null>(null)
+  const activeRepeatAlertIdRef = useRef<string | null>(null)
+
   const demoFrames = useMemo<BootScreenDemoFrame[]>(
     () => [
       {
@@ -104,6 +175,7 @@ export function DisplayPage() {
     ],
     [],
   )
+
   // Allow `/display?demo=boot` to showcase the branded boot screen without
   // depending on live playlist timing or backend availability.
   const showBootDemo = useMemo(() => new URLSearchParams(location.search).get('demo') === 'boot', [location.search])
@@ -135,6 +207,13 @@ export function DisplayPage() {
     if (finalizeTimerRef.current !== null) {
       window.clearTimeout(finalizeTimerRef.current)
       finalizeTimerRef.current = null
+    }
+  }, [])
+
+  const clearAlertTimers = useCallback(() => {
+    if (fullscreenAlertTimerRef.current !== null) {
+      window.clearTimeout(fullscreenAlertTimerRef.current)
+      fullscreenAlertTimerRef.current = null
     }
   }, [])
 
@@ -211,7 +290,7 @@ export function DisplayPage() {
   const scheduleAdvance = useCallback(
     (delayMs: number) => {
       clearTimers()
-      if (isSleepingRef.current) {
+      if (isSleepingRef.current || isFullscreenAlertActiveRef.current) {
         return
       }
       advanceTimerRef.current = window.setTimeout(() => {
@@ -300,6 +379,43 @@ export function DisplayPage() {
     [clearTimers, scheduleAdvance],
   )
 
+  const setFullscreenAlertActiveState = useCallback(
+    (active: boolean) => {
+      const wasActive = isFullscreenAlertActiveRef.current
+      if (wasActive === active) {
+        return
+      }
+
+      isFullscreenAlertActiveRef.current = active
+      setIsFullscreenAlertActive(active)
+
+      if (active) {
+        clearTimers()
+        transitionRef.current = false
+        setLayers((current) =>
+          current.map((layer, index) => {
+            if (index === activeLayerRef.current) {
+              return { ...layer, stage: 'visible' }
+            }
+            return { ...layer, stage: 'hidden' }
+          }),
+        )
+        return
+      }
+
+      if (isSleepingRef.current) {
+        return
+      }
+
+      if (startedRef.current) {
+        scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
+      } else if (playlistRef.current.items.length > 0) {
+        void bootPlaylist(playlistRef.current, configRef.current)
+      }
+    },
+    [bootPlaylist, clearTimers, scheduleAdvance],
+  )
+
   const updateSleepState = useCallback(
     (schedule: SleepSchedule | null) => {
       const nowSleeping = schedule ? isInSleepWindow(schedule) : false
@@ -308,6 +424,9 @@ export function DisplayPage() {
       setIsSleeping(nowSleeping)
 
       if (wasSleeping && !nowSleeping) {
+        if (isFullscreenAlertActiveRef.current) {
+          return nowSleeping
+        }
         if (startedRef.current) {
           scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
         } else if (playlistRef.current.items.length > 0) {
@@ -332,6 +451,18 @@ export function DisplayPage() {
     [bootPlaylist, clearTimers, scheduleAdvance],
   )
 
+  const syncDisplayOverlays = useCallback(async () => {
+    const [weatherResult, alertsResult] = await Promise.allSettled([getDisplayWeather(), getDisplayAlerts()])
+
+    if (weatherResult.status === 'fulfilled') {
+      setWeather(weatherResult.value)
+    }
+
+    if (alertsResult.status === 'fulfilled') {
+      setAlerts(alertsResult.value)
+    }
+  }, [])
+
   const syncDisplayData = useCallback(
     async (initial = false) => {
       try {
@@ -347,12 +478,27 @@ export function DisplayPage() {
           })
         }
 
-        const nextPlaylist = await getDisplayPlaylist()
+        const [playlistResult, weatherResult, alertsResult] = await Promise.allSettled([
+          getDisplayPlaylist(),
+          getDisplayWeather(),
+          getDisplayAlerts(),
+        ])
+
+        if (playlistResult.status !== 'fulfilled') {
+          throw playlistResult.reason
+        }
+
+        const nextPlaylist = playlistResult.value
+        const nextWeather = weatherResult.status === 'fulfilled' ? weatherResult.value : EMPTY_DISPLAY_WEATHER
+        const nextAlerts = alertsResult.status === 'fulfilled' ? alertsResult.value : EMPTY_DISPLAY_ALERTS
         const nextConfig = nextPlaylist.profile
+
         configRef.current = nextConfig
         playlistRef.current = nextPlaylist
         setConfig(nextConfig)
         setPlaylist(nextPlaylist)
+        setWeather(nextWeather)
+        setAlerts(nextAlerts)
         setBootMessage({
           kicker: 'SPF5000',
           title: 'Checking schedule',
@@ -399,6 +545,7 @@ export function DisplayPage() {
     document.body.style.cursor = 'none'
     if (showBootDemo) {
       clearTimers()
+      clearAlertTimers()
       setLoading(false)
       setError(null)
       return () => {
@@ -406,6 +553,7 @@ export function DisplayPage() {
         document.body.style.removeProperty('cursor')
         document.body.classList.remove('display-body')
         clearTimers()
+        clearAlertTimers()
       }
     }
 
@@ -416,8 +564,9 @@ export function DisplayPage() {
       document.body.style.removeProperty('cursor')
       document.body.classList.remove('display-body')
       clearTimers()
+      clearAlertTimers()
     }
-  }, [clearTimers, showBootDemo, syncDisplayData])
+  }, [clearAlertTimers, clearTimers, showBootDemo, syncDisplayData])
 
   // Evaluate sleep schedule using the kiosk browser's local device time so the
   // display can enter and leave sleep mode without waiting for a playlist refresh.
@@ -450,7 +599,81 @@ export function DisplayPage() {
     }
   }, [config.refresh_interval_seconds, showBootDemo, syncDisplayData])
 
+  useEffect(() => {
+    if (showBootDemo) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void syncDisplayOverlays()
+    }, OVERLAY_REFRESH_SECONDS * 1000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [showBootDemo, syncDisplayOverlays])
+
+  useEffect(() => {
+    if (showBootDemo) {
+      return
+    }
+
+    if (isSleeping) {
+      clearAlertTimers()
+      setFullscreenAlertActiveState(false)
+      return
+    }
+
+    const dominant = alerts.dominant_alert
+    const mode = alerts.presentation.mode
+
+    if (!dominant || (mode !== 'fullscreen' && mode !== 'fullscreen_repeat')) {
+      activeRepeatAlertIdRef.current = null
+      nextFullscreenRepeatAtRef.current = null
+      clearAlertTimers()
+      setFullscreenAlertActiveState(false)
+      return
+    }
+
+    if (mode === 'fullscreen') {
+      activeRepeatAlertIdRef.current = dominant.id
+      nextFullscreenRepeatAtRef.current = null
+      clearAlertTimers()
+      setFullscreenAlertActiveState(true)
+      return
+    }
+
+    if (activeRepeatAlertIdRef.current !== dominant.id) {
+      activeRepeatAlertIdRef.current = dominant.id
+      nextFullscreenRepeatAtRef.current = null
+    }
+
+    if (isFullscreenAlertActiveRef.current) {
+      return
+    }
+
+    const now = Date.now()
+    if (nextFullscreenRepeatAtRef.current && now < nextFullscreenRepeatAtRef.current) {
+      return
+    }
+
+    nextFullscreenRepeatAtRef.current = now + alerts.presentation.repeat_interval_minutes * 60 * 1000
+    setFullscreenAlertActiveState(true)
+    clearAlertTimers()
+    fullscreenAlertTimerRef.current = window.setTimeout(() => {
+      setFullscreenAlertActiveState(false)
+    }, Math.max(alerts.presentation.repeat_display_seconds, 5) * 1000)
+  }, [alerts, clearAlertTimers, isSleeping, setFullscreenAlertActiveState, showBootDemo])
+
   const showIdle = playlist.items.length === 0 || !layers.some((layer) => layer.item)
+  const bootOverlayVisible = Boolean((showIdle || demoMessage || (error && !layers.some((layer) => layer.item))) && !isSleeping)
+  const showNonFullscreenAlerts =
+    !isSleeping &&
+    !isFullscreenAlertActive &&
+    !bootOverlayVisible &&
+    (alerts.presentation.mode === 'badge' ||
+      alerts.presentation.mode === 'banner' ||
+      (alerts.presentation.mode === 'fullscreen_repeat' && alerts.presentation.fallback_mode === 'banner'))
 
   const idleMessage = useMemo(() => {
     if (demoMessage) {
@@ -511,8 +734,12 @@ export function DisplayPage() {
           </div>
         ))}
 
-        {(showIdle || demoMessage || (error && !layers.some((layer) => layer.item))) && !isSleeping ? <BootScreen message={idleMessage} /> : null}
+        {!isSleeping && !isFullscreenAlertActive ? <WeatherWidget weather={weather} /> : null}
+        {showNonFullscreenAlerts ? <WeatherAlertOverlay alerts={alerts} fullscreenActive={false} /> : null}
 
+        {bootOverlayVisible ? <BootScreen message={idleMessage} /> : null}
+
+        {!isSleeping && isFullscreenAlertActive ? <WeatherAlertOverlay alerts={alerts} fullscreenActive /> : null}
         {isSleeping ? <div className="display-sleep-overlay" aria-hidden="true" /> : null}
       </div>
     </main>

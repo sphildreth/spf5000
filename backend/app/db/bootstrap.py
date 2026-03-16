@@ -31,6 +31,21 @@ DEFAULT_SETTINGS = {
     "sleep_schedule_enabled": "0",
     "sleep_start_local_time": "22:00",
     "sleep_end_local_time": "08:00",
+    "weather_enabled": "0",
+    "weather_provider": "nws",
+    "weather_location": '{"label":"","latitude":null,"longitude":null}',
+    "weather_units": "f",
+    "weather_position": "top-right",
+    "weather_refresh_minutes": "15",
+    "weather_show_precipitation": "1",
+    "weather_show_humidity": "1",
+    "weather_show_wind": "1",
+    "weather_alerts_enabled": "1",
+    "weather_alert_fullscreen_enabled": "1",
+    "weather_alert_minimum_severity": "minor",
+    "weather_alert_repeat_enabled": "1",
+    "weather_alert_repeat_interval_minutes": "5",
+    "weather_alert_repeat_display_seconds": "20",
 }
 
 TABLE_STATEMENTS = {
@@ -276,6 +291,84 @@ TABLE_STATEMENTS = {
             primary key (provider_asset_id, media_source_id)
         )
     """,
+    "weather_provider_state": """
+        create table weather_provider_state (
+            provider_name text primary key,
+            provider_display_name text not null,
+            status text not null,
+            available integer not null default 1,
+            configured integer not null default 0,
+            location_label text not null default '',
+            last_weather_refresh_at text,
+            last_alert_refresh_at text,
+            last_successful_weather_refresh_at text,
+            last_successful_alert_refresh_at text,
+            current_error text not null default '',
+            updated_at text not null
+        )
+    """,
+    "weather_current_conditions": """
+        create table weather_current_conditions (
+            provider_name text not null,
+            provider_display_name text not null,
+            location_key text not null,
+            location_label text not null,
+            condition text not null,
+            icon_token text not null,
+            temperature_c real,
+            humidity_percent integer,
+            wind_speed_mph real,
+            wind_direction text,
+            precipitation_probability_percent integer,
+            observed_at text,
+            fetched_at text not null,
+            attribution text not null default 'National Weather Service',
+            is_stale integer not null default 0,
+            primary key (provider_name, location_key)
+        )
+    """,
+    "weather_alerts": """
+        create table weather_alerts (
+            id text primary key,
+            provider_name text not null,
+            provider_display_name text not null,
+            location_key text not null,
+            source_alert_id text not null,
+            event text not null,
+            severity text not null,
+            certainty text not null,
+            urgency text not null,
+            headline text not null,
+            description text not null,
+            instruction text not null,
+            area text not null,
+            status text not null,
+            issued_at text,
+            effective_at text,
+            expires_at text,
+            ends_at text,
+            attribution text not null,
+            escalation_mode text not null,
+            display_priority integer not null,
+            event_priority integer not null,
+            updated_at text not null,
+            fetched_at text not null,
+            is_active integer not null default 1
+        )
+    """,
+    "weather_refresh_runs": """
+        create table weather_refresh_runs (
+            id text primary key,
+            provider_name text not null,
+            refresh_kind text not null,
+            trigger text not null,
+            status text not null,
+            message text not null default '',
+            error_message text not null default '',
+            started_at text not null,
+            completed_at text
+        )
+    """,
 }
 
 INDEX_STATEMENTS = {
@@ -288,6 +381,8 @@ INDEX_STATEMENTS = {
     "idx_provider_media_sources_provider": "create index idx_provider_media_sources_provider on provider_media_sources (provider_name)",
     "idx_provider_sync_runs_provider_started": "create index idx_provider_sync_runs_provider_started on provider_sync_runs (provider_name, started_at)",
     "idx_provider_assets_provider_media_id": "create index idx_provider_assets_provider_media_id on provider_assets (provider_name, remote_media_id)",
+    "idx_weather_alerts_provider_location": "create index idx_weather_alerts_provider_location on weather_alerts (provider_name, location_key, display_priority)",
+    "idx_weather_refresh_runs_provider_started": "create index idx_weather_refresh_runs_provider_started on weather_refresh_runs (provider_name, started_at)",
 }
 
 

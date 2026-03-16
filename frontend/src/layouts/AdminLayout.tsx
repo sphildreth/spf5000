@@ -10,6 +10,7 @@ const navItems = [
   { to: '/admin/collections', label: 'Collections' },
   { to: '/admin/sources', label: 'Sources' },
   { to: '/admin/display-settings', label: 'Display' },
+  { to: '/admin/weather', label: 'Weather' },
 ]
 
 export function AdminLayout() {

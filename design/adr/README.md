@@ -11,3 +11,7 @@
 - 0009 Use runtime config and single-admin bootstrap auth
 - 0010 Use Pi-specific appliance installer toolchain
 - 0011 Use app-managed sleep schedule for display quiet hours
+- 0012 Use Google Photos Ambient API for offline-first local asset sync
+- 0013 Use provider abstraction and cached state for weather and alerts
+- 0014 Use National Weather Service as the initial weather provider
+- 0015 Use alert escalation and visible takeover behavior on the display

@@ -11,6 +11,7 @@ import { LoginPage } from './pages/LoginPage'
 import { SetupPage } from './pages/SetupPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SourcesPage } from './pages/SourcesPage'
+import { WeatherPage } from './pages/WeatherPage'
 
 function LoadingScreen() {
   return (
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="display-settings" element={<DisplaySettingsPage />} />
+        <Route path="weather" element={<WeatherPage />} />
       </Route>
       <Route path="/" element={<RootRedirect />} />
       <Route path="*" element={<Navigate to="/" replace />} />

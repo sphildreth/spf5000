@@ -76,6 +76,8 @@ Release `1.0.0` includes:
 - an **app-managed sleep schedule** stored in DecentDB and enforced by the display client
 - **Pi appliance scripts** for install, uninstall, and health checks on Raspberry Pi OS Desktop
 
+The current implementation also includes a first-pass weather and alert subsystem with a cached National Weather Service provider, a configurable weather widget, and badge/banner/fullscreen alert behavior on `/display`.
+
 ## Architecture at a glance
 
 ### Core stack
@@ -111,6 +113,8 @@ LocalFilesProvider      GooglePhotosProvider
 ### Display behavior
 
 The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a black background with a hidden cursor, preloads the next slide before transitioning, and can render an intentional black fullscreen sleep state during configured quiet hours.
+
+Weather and alert overlays are also display concerns, but they still follow the same appliance rules: weather and alerts are fetched and cached by the backend, `/display` consumes only cached data, and sleep mode remains the highest-precedence fullscreen state.
 
 ## Quick start
 
@@ -223,6 +227,7 @@ Important notes:
 - Sleep scheduling is managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
 - Google Photos credentials live in `spf5000.toml`, while linked-account state, selected media sources, sync runs, and provider asset mappings live in DecentDB.
 - Google Photos playback stays offline-first: the frame syncs media into managed local storage and `/display` plays from the local cache.
+- Weather settings, cached conditions, active alerts, and refresh history live in DecentDB-backed application state rather than the runtime config file.
 
 ### Default managed storage layout
 
@@ -351,9 +356,10 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 - health and system status
 - setup and auth/session
 - settings and sleep schedule
+- weather settings, cached conditions, and alert status
 - collections and assets
 - sources and local import
-- display config and public playlist
+- display config, public playlist, and public weather/alert overlays
 
 Browse the generated OpenAPI docs at:
 
@@ -391,6 +397,7 @@ Design and operational docs live in-repo:
 SPF5000 `1.0.0` is intentionally focused:
 
 - Google Photos selection happens through Google's Ambient settings UI instead of an in-app full-library browser
+- weather currently supports one configured location and the U.S. National Weather Service provider
 - browser uploads support batch image ingestion into local collections
 - destructive library management remains intentionally limited
 - authentication is single-admin and local-account only

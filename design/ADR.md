@@ -34,10 +34,13 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0010-use-pi-specific-appliance-installer-toolchain.md` - Pi deployment automation strategy
 - `0011-use-app-managed-sleep-schedule-for-display-quiet-hours.md` - app-managed display quiet-hours behavior
 - `0012-use-google-photos-ambient-api-for-offline-first-local-sync.md` - Google Photos Ambient API integration with offline-first local sync
+- `0013-use-provider-abstraction-and-cached-state-for-weather-and-alerts.md` - weather provider abstraction plus offline-first cached weather state
+- `0014-use-national-weather-service-as-the-initial-weather-provider.md` - first weather provider choice
+- `0015-use-alert-escalation-and-visible-takeover-behavior-on-the-display.md` - alert escalation and display takeover policy
 
 ## V1 implementation status
 
-The current V1 implementation is expected to conform to ADRs `0001` through `0012`:
+The current V1 implementation is expected to conform to ADRs `0001` through `0015`:
 
 - FastAPI remains the backend entrypoint and API host
 - React + TypeScript + Vite remain the frontend stack
@@ -50,3 +53,6 @@ The current V1 implementation is expected to conform to ADRs `0001` through `001
 - scheduled sleep behavior remains app-managed, DecentDB-backed, and enforced by `/display` with a black fullscreen sleep state instead of OS-level shutdown or blanking
 - `spf5000.toml` owns startup/runtime concerns while DecentDB remains the source of truth for settings, bootstrap state, and the local admin record
 - `/setup`, `/login`, `/admin`, and the signed session-cookie model define the admin auth boundary while keeping `/display` public
+- weather and alert data remain provider-backed, DecentDB-cached, and consumed by `/display` through public cached APIs instead of live upstream calls
+- the first weather provider is the U.S. National Weather Service
+- alert escalation, fullscreen takeover, repeat behavior, and sleep precedence are documented instead of being left to ad hoc frontend behavior

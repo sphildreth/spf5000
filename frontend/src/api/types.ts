@@ -333,6 +333,145 @@ export interface DisplayPlaylist {
   sleep_schedule: SleepSchedule | null
 }
 
+export interface WeatherLocation {
+  label: string
+  latitude: number | null
+  longitude: number | null
+}
+
+export interface WeatherSettings {
+  weather_enabled: boolean
+  weather_provider: string
+  weather_location: WeatherLocation
+  weather_units: 'f' | 'c'
+  weather_position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  weather_refresh_minutes: number
+  weather_show_precipitation: boolean
+  weather_show_humidity: boolean
+  weather_show_wind: boolean
+  weather_alerts_enabled: boolean
+  weather_alert_fullscreen_enabled: boolean
+  weather_alert_minimum_severity: 'unknown' | 'minor' | 'moderate' | 'severe' | 'extreme'
+  weather_alert_repeat_enabled: boolean
+  weather_alert_repeat_interval_minutes: number
+  weather_alert_repeat_display_seconds: number
+}
+
+export interface WeatherProviderState {
+  provider_name: string
+  provider_display_name: string
+  status: string
+  available: boolean
+  configured: boolean
+  location_label: string
+  last_weather_refresh_at: string | null
+  last_alert_refresh_at: string | null
+  last_successful_weather_refresh_at: string | null
+  last_successful_alert_refresh_at: string | null
+  current_error: string | null
+  updated_at: string
+}
+
+export interface WeatherCurrentConditions {
+  provider_name: string
+  provider_display_name: string
+  location_label: string
+  condition: string
+  icon_token: string
+  temperature: number | null
+  temperature_unit: string
+  humidity_percent: number | null
+  wind_speed: number | null
+  wind_unit: string
+  wind_direction: string | null
+  precipitation_probability_percent: number | null
+  observed_at: string | null
+  fetched_at: string
+  attribution: string
+  is_stale: boolean
+}
+
+export interface WeatherAlert {
+  id: string
+  provider_name: string
+  provider_display_name: string
+  event: string
+  severity: string
+  certainty: string
+  urgency: string
+  headline: string
+  description: string
+  instruction: string
+  area: string
+  status: string
+  issued_at: string | null
+  effective_at: string | null
+  expires_at: string | null
+  ends_at: string | null
+  attribution: string
+  escalation_mode: string
+  effective_escalation_mode: string
+  display_priority: number
+  effective_display_priority: number
+  event_priority: number
+  is_active: boolean
+  is_dominant: boolean
+}
+
+export interface WeatherRefreshRun {
+  id: string
+  provider_name: string
+  refresh_kind: string
+  trigger: string
+  status: string
+  message: string
+  error_message: string | null
+  started_at: string
+  completed_at: string | null
+}
+
+export interface WeatherStatus {
+  provider_status: WeatherProviderState
+  current_conditions: WeatherCurrentConditions | null
+  dominant_alert: WeatherAlert | null
+  active_alert_count: number
+  current_display_action: string
+  recent_refresh_runs: WeatherRefreshRun[]
+}
+
+export interface WeatherAlertsState {
+  provider_status: WeatherProviderState
+  alert_count: number
+  dominant_alert: WeatherAlert | null
+  active_alerts: WeatherAlert[]
+}
+
+export interface DisplayWeather {
+  enabled: boolean
+  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  units: 'f' | 'c'
+  show_precipitation: boolean
+  show_humidity: boolean
+  show_wind: boolean
+  provider_status: WeatherProviderState
+  current_conditions: WeatherCurrentConditions | null
+}
+
+export interface DisplayAlertPresentation {
+  mode: string
+  fallback_mode: string | null
+  repeat_interval_minutes: number
+  repeat_display_seconds: number
+  alert_count: number
+}
+
+export interface DisplayAlerts {
+  provider_status: WeatherProviderState
+  dominant_alert: WeatherAlert | null
+  active_alerts: WeatherAlert[]
+  presentation: DisplayAlertPresentation
+}
+
 export interface AuthUser {
   username: string
 }

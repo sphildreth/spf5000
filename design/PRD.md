@@ -28,6 +28,7 @@ The target household wants a frame that behaves like an appliance, not a service
 6. Allow local image management directly on the device.
 7. Support user-selected Google Photos ambient sources through a first-class provider flow.
 8. Present transitions that feel polished and continuous, without a visible black flash between images.
+9. Provide calm ambient weather plus serious weather-alert behavior without breaking the frame's appliance feel.
 
 ## Non-Goals for v1
 
@@ -53,6 +54,8 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want portrait and landscape images to display cleanly.
 - As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
 - As a household member, I want the frame to go dark automatically during configured quiet hours and wake back up on its own.
+- As a household member, I want a compact weather widget so the frame is useful even when nothing needs urgent attention.
+- As a household member, I want severe weather alerts to become highly visible without looking like a broken slideshow.
 
 ### Administration
 - As an administrator, I want to configure slideshow timing and display behavior from a simple web page.
@@ -62,6 +65,7 @@ Technical household member who installs, configures, and maintains the device.
 - As an administrator, I want to connect Google Photos, finish the device approval flow, and choose what the frame should show.
 - As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
 - As an administrator, I want the admin UI to require a local sign-in without affecting the public slideshow display.
+- As an administrator, I want to configure weather, alert escalation, and refresh behavior from the same LAN admin UI.
 
 ### Sources
 - As a household member, I want to select an album source and have pictures appear automatically on the frame.
@@ -79,6 +83,9 @@ Technical household member who installs, configures, and maintains the device.
 - Playback should use preloaded assets and never intentionally blank the screen during normal image-to-image transitions.
 - Support a configurable sleep window based on the device's local time, with an inclusive start time and exclusive end time.
 - During the sleep window, render a solid black fullscreen state, pause slideshow advancement, and resume automatically when the window ends.
+- Render an optional weather widget from cached backend weather state without blocking slideshow playback.
+- Render badge, banner, fullscreen, and repeating-fullscreen weather alert behaviors based on deterministic escalation rules.
+- Keep sleep mode higher priority than weather and alert presentation by default.
 
 ### Local Web UI
 - First-run setup page
@@ -86,6 +93,7 @@ Technical household member who installs, configures, and maintains the device.
 - Protected admin shell
 - Settings page
 - Display settings page with sleep schedule controls
+- Weather and alerts page for configuration and visibility
 - Sources page
 - Albums page
 - Local media management page
@@ -105,10 +113,18 @@ Technical household member who installs, configures, and maintains the device.
 - Graceful degradation when provider unavailable
 - Google Photos support via the Ambient API device flow and Google-managed source-selection UI
 
+### Weather and Alerts
+- Abstract provider model for weather integrations
+- Background refresh of cached current conditions and active alerts
+- Deterministic alert escalation and priority resolution
+- Fullscreen alert takeover that pauses slideshow timers without redefining the slideshow renderer itself
+- Admin visibility into cached weather state, provider health, and active alerts
+
 ### Persistence
 - Store settings, metadata, sync state, and source mappings in DecentDB.
 - Store bootstrap state and single-admin credentials in DecentDB.
 - Store the sleep schedule in DecentDB application settings rather than OS schedulers or runtime config files.
+- Store weather settings plus cached weather and alert state in DecentDB.
 - Store image binaries and resized variants on local disk.
 
 ## Quality Attributes

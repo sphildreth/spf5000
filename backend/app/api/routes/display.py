@@ -2,10 +2,13 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import require_admin
 from app.schemas.display import DisplayConfigUpdateRequest, DisplayPlaylistResponse, DisplayProfileResponse
+from app.schemas.weather import DisplayAlertsResponse, DisplayWeatherResponse
 from app.services.display_service import DisplayService
+from app.services.weather_service import WeatherService
 
 router = APIRouter()
 service = DisplayService()
+weather_service = WeatherService()
 
 _admin_dep = [Depends(require_admin)]
 
@@ -24,3 +27,13 @@ def update_display_config(request: DisplayConfigUpdateRequest) -> DisplayProfile
 @router.get("/playlist", response_model=DisplayPlaylistResponse)  # intentionally public
 def get_display_playlist(collection_id: str | None = None) -> DisplayPlaylistResponse:
     return DisplayPlaylistResponse.from_domain(service.get_playlist(collection_id=collection_id))
+
+
+@router.get("/weather", response_model=DisplayWeatherResponse)  # intentionally public
+def get_display_weather() -> DisplayWeatherResponse:
+    return DisplayWeatherResponse.model_validate(weather_service.get_display_weather_payload())
+
+
+@router.get("/alerts", response_model=DisplayAlertsResponse)  # intentionally public
+def get_display_alerts() -> DisplayAlertsResponse:
+    return DisplayAlertsResponse.model_validate(weather_service.get_display_alerts_payload())
