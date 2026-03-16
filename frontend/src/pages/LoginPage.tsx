@@ -13,6 +13,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const loginUnavailableMessage = !state.authAvailable
+    ? state.backendReachable
+      ? 'Authentication is unavailable because the backend cannot access DecentDB right now.'
+      : 'Authentication is unavailable because the frontend cannot reach the backend API. Start the backend, then refresh this page.'
+    : null
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,9 +48,9 @@ export function LoginPage() {
         <h1 className="auth-title">Sign in</h1>
         <p className="auth-desc">Use the local admin account to manage the frame from your LAN.</p>
 
-        {!state.authAvailable ? (
+        {loginUnavailableMessage ? (
           <div className="notice notice--error auth-notice">
-            <p>Authentication is unavailable because the backend cannot access DecentDB right now.</p>
+            <p>{loginUnavailableMessage}</p>
           </div>
         ) : null}
 

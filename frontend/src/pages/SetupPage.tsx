@@ -14,6 +14,11 @@ export function SetupPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const setupUnavailableMessage = !state.authAvailable
+    ? state.backendReachable
+      ? 'Setup is unavailable because the backend cannot access DecentDB right now.'
+      : 'Setup is unavailable because the frontend cannot reach the backend API. Start the backend, then refresh this page.'
+    : null
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -50,9 +55,9 @@ export function SetupPage() {
         <h1 className="auth-title">Set up the admin account</h1>
         <p className="auth-desc">This one-time step creates the local admin user for the frame.</p>
 
-        {!state.authAvailable ? (
+        {setupUnavailableMessage ? (
           <div className="notice notice--error auth-notice">
-            <p>Setup is unavailable because the backend cannot access DecentDB right now.</p>
+            <p>{setupUnavailableMessage}</p>
           </div>
         ) : null}
 
@@ -82,6 +87,7 @@ export function SetupPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
+              minLength={8}
               autoComplete="new-password"
             />
           </label>
@@ -93,6 +99,7 @@ export function SetupPage() {
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               required
+              minLength={8}
               autoComplete="new-password"
             />
           </label>

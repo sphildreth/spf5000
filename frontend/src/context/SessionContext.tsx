@@ -8,6 +8,7 @@ export type SessionStatus = 'loading' | 'anonymous' | 'authenticated'
 export interface SessionState {
   status: SessionStatus
   authAvailable: boolean
+  backendReachable: boolean
   bootstrapped: boolean
   user: AuthUser | null
 }
@@ -24,6 +25,7 @@ function toSessionState(session: AuthSessionResponse): SessionState {
   return {
     status: session.authenticated ? 'authenticated' : 'anonymous',
     authAvailable: session.auth_available,
+    backendReachable: true,
     bootstrapped: session.bootstrapped,
     user: session.user,
   }
@@ -33,6 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>({
     status: 'loading',
     authAvailable: true,
+    backendReachable: true,
     bootstrapped: false,
     user: null,
   })
@@ -45,6 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setState({
         status: 'anonymous',
         authAvailable: false,
+        backendReachable: false,
         bootstrapped: false,
         user: null,
       })

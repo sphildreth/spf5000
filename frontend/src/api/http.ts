@@ -33,15 +33,54 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const payload = text ? safeParseJson(text) : undefined
 
   if (!response.ok) {
-    const message =
-      payload && typeof payload === 'object' && 'detail' in payload && typeof payload.detail === 'string'
-        ? payload.detail
-        : `Request failed: ${response.status}`
+    const message = getErrorMessage(payload, response.status)
 
     throw new ApiError(message, response.status, payload)
   }
 
   return payload as T
+}
+
+function getErrorMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === 'object' && 'detail' in payload) {
+    const detail = payload.detail
+    if (typeof detail === 'string') {
+      return detail
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = Array.from(
+        new Set(
+          detail
+            .map((item) => {
+              if (!item || typeof item !== 'object') {
+                return null
+              }
+
+              const messageSource = 'msg' in item ? item.msg : undefined
+              const message = typeof messageSource === 'string' ? messageSource : null
+              const locationSource = 'loc' in item ? item.loc : undefined
+              const location = Array.isArray(locationSource)
+                ? locationSource.filter((part: unknown): part is string => typeof part === 'string')
+                : []
+              const field = location.at(-1)
+              if (!message) {
+                return null
+              }
+
+              return field && field !== 'body' ? `${field}: ${message}` : message
+            })
+            .filter((message): message is string => Boolean(message)),
+        ),
+      )
+
+      if (messages.length > 0) {
+        return messages.join(' ')
+      }
+    }
+  }
+
+  return `Request failed: ${status}`
 }
 
 function safeParseJson(value: string): unknown {
