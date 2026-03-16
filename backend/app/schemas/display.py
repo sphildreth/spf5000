@@ -16,6 +16,7 @@ class DisplayProfileResponse(BaseModel):
     transition_duration_ms: int
     fit_mode: str
     shuffle_enabled: bool
+    shuffle_bag_enabled: bool
     idle_message: str
     refresh_interval_seconds: int
     is_default: bool
@@ -34,6 +35,7 @@ class DisplayProfileResponse(BaseModel):
             transition_duration_ms=profile.transition_duration_ms,
             fit_mode=profile.fit_mode,
             shuffle_enabled=profile.shuffle_enabled,
+            shuffle_bag_enabled=profile.shuffle_bag_enabled,
             idle_message=profile.idle_message,
             refresh_interval_seconds=profile.refresh_interval_seconds,
             is_default=profile.is_default,
@@ -51,6 +53,7 @@ class DisplayConfigUpdateRequest(BaseModel):
     transition_duration_ms: int | None = Field(default=None, ge=0, le=30000)
     fit_mode: str | None = None
     shuffle_enabled: bool | None = None
+    shuffle_bag_enabled: bool | None = None
     idle_message: str | None = None
     refresh_interval_seconds: int | None = Field(default=None, ge=15, le=86400)
     background_fill_mode: str | None = None

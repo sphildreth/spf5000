@@ -16,6 +16,7 @@ class FrameSettings:
     transition_duration_ms: int = 700
     fit_mode: str = "contain"
     shuffle_enabled: bool = True
+    shuffle_bag_enabled: bool = False
     selected_collection_id: str = DEFAULT_COLLECTION_ID
     active_display_profile_id: str = DEFAULT_DISPLAY_PROFILE_ID
     background_fill_mode: str = "black"

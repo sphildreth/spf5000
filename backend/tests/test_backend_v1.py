@@ -56,6 +56,7 @@ def test_status_bootstrap_and_settings_update(test_client) -> None:
             "transition_duration_ms": 900,
             "fit_mode": "cover",
             "shuffle_enabled": False,
+            "shuffle_bag_enabled": False,
             "selected_collection_id": "default-collection",
             "active_display_profile_id": "default-display-profile",
         },
@@ -65,11 +66,13 @@ def test_status_bootstrap_and_settings_update(test_client) -> None:
     assert update_response.json()["display_variant_width"] == 1600
     assert update_response.json()["fit_mode"] == "cover"
     assert update_response.json()["shuffle_enabled"] is False
+    assert update_response.json()["shuffle_bag_enabled"] is False
 
     display_response = test_client.get("/api/display/config")
     assert display_response.status_code == 200
     assert display_response.json()["idle_message"]
     assert display_response.json()["refresh_interval_seconds"] == 60
+    assert display_response.json()["shuffle_bag_enabled"] is False
 
 
 def test_collections_crud(test_client) -> None:
@@ -234,6 +237,7 @@ def test_display_variants_are_sized_for_cover_playback(test_client) -> None:
             "transition_duration_ms": 700,
             "fit_mode": "cover",
             "shuffle_enabled": True,
+            "shuffle_bag_enabled": False,
             "selected_collection_id": "default-collection",
             "active_display_profile_id": "default-display-profile",
         },
@@ -426,6 +430,25 @@ def test_settings_background_fill_mode_default(test_client) -> None:
     body = resp.json()
     assert "background_fill_mode" in body
     assert body["background_fill_mode"] == "black"
+    assert body["shuffle_bag_enabled"] is False
+
+
+def test_display_config_update_shuffle_bag_enabled(test_client) -> None:
+    """PUT /api/display/config accepts shuffle_bag_enabled."""
+    resp = test_client.put(
+        "/api/display/config",
+        json={"shuffle_bag_enabled": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["shuffle_bag_enabled"] is True
+
+    get_resp = test_client.get("/api/display/config")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["shuffle_bag_enabled"] is True
+
+    settings_resp = test_client.get("/api/settings")
+    assert settings_resp.status_code == 200
+    assert settings_resp.json()["shuffle_bag_enabled"] is True
 
 
 def test_settings_background_fill_mode_update_valid(test_client) -> None:

@@ -7,6 +7,7 @@ import {
   asBackgroundFillMode,
   asDisplayTransitionMode,
   BACKGROUND_FILL_MODE_OPTIONS,
+  getBackgroundFillModeDescription,
   DISPLAY_TRANSITION_MODE_OPTIONS,
   getBackgroundFillModeLabel,
   getDisplayTransitionModeLabel,
@@ -61,6 +62,18 @@ export function DisplaySettingsPage() {
     )
   }, [data, draft])
 
+  const shuffleRepeatSummary = useMemo(() => {
+    if (!draft?.shuffle_enabled) {
+      return 'Only used when shuffle playback is enabled.'
+    }
+
+    if (draft.shuffle_bag_enabled) {
+      return 'Each photo is shown once before repeats, with the next cycle avoiding the most recently shown images.'
+    }
+
+    return 'Uses the current shuffled playlist order, which can feel repetitive after a restart or refresh.'
+  }, [draft])
+
   async function handleSleepSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!sleepDraft) {
@@ -98,18 +111,19 @@ export function DisplaySettingsPage() {
     try {
       setSaveError(null)
       setSaved(false)
-      const request: DisplayConfigUpdateRequest = {
-        name: draft.name.trim(),
-        selected_collection_id: draft.selected_collection_id,
-        slideshow_interval_seconds: draft.slideshow_interval_seconds,
-        transition_mode: draft.transition_mode,
-        transition_duration_ms: draft.transition_duration_ms,
-        fit_mode: draft.fit_mode,
-        shuffle_enabled: draft.shuffle_enabled,
-        idle_message: draft.idle_message,
-        refresh_interval_seconds: draft.refresh_interval_seconds,
-        background_fill_mode: draft.background_fill_mode,
-      }
+        const request: DisplayConfigUpdateRequest = {
+          name: draft.name.trim(),
+          selected_collection_id: draft.selected_collection_id,
+          slideshow_interval_seconds: draft.slideshow_interval_seconds,
+          transition_mode: draft.transition_mode,
+          transition_duration_ms: draft.transition_duration_ms,
+          fit_mode: draft.fit_mode,
+          shuffle_enabled: draft.shuffle_enabled,
+          shuffle_bag_enabled: draft.shuffle_bag_enabled,
+          idle_message: draft.idle_message,
+          refresh_interval_seconds: draft.refresh_interval_seconds,
+          background_fill_mode: draft.background_fill_mode,
+        }
       const updated = await updateDisplayConfig(request)
       setData((current) => (current ? { ...current, config: updated } : current))
       setDraft(updated)
@@ -307,23 +321,51 @@ export function DisplaySettingsPage() {
                   }
                 />
               </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={draft.shuffle_enabled}
-                  onChange={(event) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            shuffle_enabled: event.target.checked,
-                          }
-                        : current,
-                    )
-                  }
-                />
-                <span>Shuffle playlist order</span>
-              </label>
+              <div className="field-span-full settings-toggle-row">
+                <label className="checkbox-field settings-toggle-card">
+                  <input
+                    type="checkbox"
+                    checked={draft.shuffle_enabled}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              shuffle_enabled: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                  <span className="settings-toggle-card__copy">
+                    <span>Shuffle playlist order</span>
+                    <span className="settings-toggle-card__note">Randomizes playback instead of following the collection order.</span>
+                  </span>
+                </label>
+                <label className={`checkbox-field settings-toggle-card${!draft.shuffle_enabled ? ' settings-toggle-card--disabled' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={draft.shuffle_bag_enabled}
+                    disabled={!draft.shuffle_enabled}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              shuffle_bag_enabled: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                  <span className="settings-toggle-card__copy">
+                    <span>Show all photos before repeating</span>
+                    <span className="settings-toggle-card__note">
+                      Uses a local shuffle bag to reduce quick "I just saw that one" repeats.
+                    </span>
+                  </span>
+                </label>
+              </div>
               <label className="field-span-full">
                 <span>Idle message</span>
                 <textarea
@@ -356,6 +398,17 @@ export function DisplaySettingsPage() {
                 <dd>{draft.shuffle_enabled ? 'Shuffle' : 'Sequential'}</dd>
               </div>
               <div>
+                <dt>Shuffle repeat handling</dt>
+                <dd>
+                  <span className="detail-list__value-block">
+                    <span className="detail-list__value-heading">
+                      {draft.shuffle_enabled && draft.shuffle_bag_enabled ? 'Show all photos before repeating' : 'Standard'}
+                    </span>
+                    <span className="detail-list__value-note">{shuffleRepeatSummary}</span>
+                  </span>
+                </dd>
+              </div>
+              <div>
                 <dt>Collection</dt>
                 <dd>{selectedCollectionName}</dd>
               </div>
@@ -369,7 +422,14 @@ export function DisplaySettingsPage() {
               </div>
               <div>
                 <dt>Background fill</dt>
-                <dd>{getBackgroundFillModeLabel(draft.background_fill_mode)}</dd>
+                <dd>
+                  <span className="detail-list__value-block">
+                    <span className="detail-list__value-heading">{getBackgroundFillModeLabel(draft.background_fill_mode)}</span>
+                    <span className="detail-list__value-note">
+                      {getBackgroundFillModeDescription(draft.background_fill_mode)}
+                    </span>
+                  </span>
+                </dd>
               </div>
               <div>
                 <dt>Playlist refresh</dt>

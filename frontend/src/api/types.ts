@@ -65,6 +65,17 @@ const BACKGROUND_FILL_MODE_LABELS: Record<BackgroundFillMode, string> = {
   adaptive_auto: 'Adaptive Auto',
 }
 
+const BACKGROUND_FILL_MODE_DESCRIPTIONS: Record<BackgroundFillMode, string> = {
+  black: 'Leaves unused screen space solid black.',
+  dominant_color: 'Uses a subdued color sampled from the current photo.',
+  gradient: 'Builds a calm gradient from colors sampled from the current photo.',
+  blurred_backdrop: 'Places a blurred, dimmed version of the photo behind the main image.',
+  mirrored_edges: 'Extends mirrored image edges outward so portrait shots feel less boxed in.',
+  soft_vignette: 'Adds a gentle image-derived fill with darker edges to keep focus on the photo.',
+  palette_wash: 'Applies a soft multi-color wash derived from the photo palette.',
+  adaptive_auto: 'Automatically picks the best background treatment for each photo based on its shape and available image colors.',
+}
+
 export const BACKGROUND_FILL_MODE_OPTIONS: ReadonlyArray<{
   value: BackgroundFillMode
   label: string
@@ -93,6 +104,10 @@ export function getBackgroundFillModeLabel(value: BackgroundFillMode): string {
   return BACKGROUND_FILL_MODE_LABELS[value]
 }
 
+export function getBackgroundFillModeDescription(value: BackgroundFillMode): string {
+  return BACKGROUND_FILL_MODE_DESCRIPTIONS[value]
+}
+
 export interface FrameSettings {
   frame_name: string
   display_variant_width: number
@@ -103,6 +118,7 @@ export interface FrameSettings {
   transition_duration_ms: number
   fit_mode: FitMode
   shuffle_enabled: boolean
+  shuffle_bag_enabled: boolean
   selected_collection_id: string
   active_display_profile_id: string
   background_fill_mode: BackgroundFillMode
@@ -328,6 +344,7 @@ export interface DisplayConfig {
   transition_duration_ms: number
   fit_mode: FitMode
   shuffle_enabled: boolean
+  shuffle_bag_enabled: boolean
   idle_message: string
   refresh_interval_seconds: number
   background_fill_mode: BackgroundFillMode
@@ -344,6 +361,7 @@ export interface DisplayConfigUpdateRequest {
   transition_duration_ms?: number
   fit_mode?: FitMode
   shuffle_enabled?: boolean
+  shuffle_bag_enabled?: boolean
   idle_message?: string
   refresh_interval_seconds?: number
   background_fill_mode?: BackgroundFillMode

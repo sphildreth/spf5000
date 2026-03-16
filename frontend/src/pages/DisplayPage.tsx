@@ -117,6 +117,7 @@ const INITIAL_BOOT_MESSAGE: BootScreenMessage = {
 }
 
 const OVERLAY_REFRESH_SECONDS = 30
+const SHUFFLE_BAG_RECENT_LIMIT = 4
 
 export function DisplayPage() {
   const location = useLocation()
@@ -146,6 +147,8 @@ export function DisplayPage() {
   const fullscreenAlertTimerRef = useRef<number | null>(null)
   const nextFullscreenRepeatAtRef = useRef<number | null>(null)
   const activeRepeatAlertIdRef = useRef<string | null>(null)
+  const shuffleBagRef = useRef<string[]>([])
+  const recentShuffleAssetIdsRef = useRef<string[]>([])
 
   const demoFrames = useMemo<BootScreenDemoFrame[]>(
     () => [
@@ -206,6 +209,19 @@ export function DisplayPage() {
     layersRef.current = layers
   }, [layers])
 
+  const resetShuffleBagState = useCallback(() => {
+    shuffleBagRef.current = []
+    recentShuffleAssetIdsRef.current = []
+  }, [])
+
+  const rememberShownAsset = useCallback((assetId: string | null) => {
+    if (!assetId) {
+      return
+    }
+
+    recentShuffleAssetIdsRef.current = [...recentShuffleAssetIdsRef.current, assetId].slice(-SHUFFLE_BAG_RECENT_LIMIT)
+  }, [])
+
   useEffect(() => {
     const handleResize = () => {
       setViewportAspectRatio(getViewportAspectRatio())
@@ -215,6 +231,10 @@ export function DisplayPage() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  useEffect(() => {
+    resetShuffleBagState()
+  }, [config.shuffle_enabled, config.shuffle_bag_enabled, resetShuffleBagState])
 
   const clearTimers = useCallback(() => {
     if (advanceTimerRef.current !== null) {
@@ -290,6 +310,7 @@ export function DisplayPage() {
       activeLayerRef.current = incomingLayerIndex
       currentIndexRef.current = nextIndex
       transitionRef.current = false
+      rememberShownAsset(nextItem.asset_id)
 
       setLayers((current) =>
         current.map((layer, index) => {
@@ -303,6 +324,34 @@ export function DisplayPage() {
 
       scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
     }, finalizeDelayMs)
+  }, [rememberShownAsset])
+
+  const takeNextShuffleBagIndex = useCallback((items: PlaylistItem[]): number => {
+    if (items.length <= 1) {
+      return 0
+    }
+
+    const validIds = new Set(items.map((item) => item.asset_id))
+    const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id ?? null
+    const existingQueue = shuffleBagRef.current.filter((assetId) => validIds.has(assetId) && assetId !== currentItemId)
+
+    if (existingQueue.length > 0) {
+      shuffleBagRef.current = existingQueue
+    } else {
+      shuffleBagRef.current = buildShuffleBagAssetIds(
+        items,
+        recentShuffleAssetIdsRef.current,
+        currentItemId ? [currentItemId] : [],
+      )
+    }
+
+    const nextId = shuffleBagRef.current.shift()
+    if (!nextId) {
+      return 0
+    }
+
+    const nextIndex = items.findIndex((item) => item.asset_id === nextId)
+    return nextIndex >= 0 ? nextIndex : 0
   }, [])
 
   const scheduleAdvance = useCallback(
@@ -325,17 +374,25 @@ export function DisplayPage() {
       return
     }
 
-    const nextIndex = selectNextIndex(currentIndexRef.current, items.length)
+    const nextIndex = usesShuffleBag(configRef.current)
+      ? takeNextShuffleBagIndex(items)
+      : selectNextIndex(currentIndexRef.current, items.length)
     await transitionToItem(nextIndex)
-  }, [scheduleAdvance, transitionToItem])
+  }, [scheduleAdvance, takeNextShuffleBagIndex, transitionToItem])
 
   const bootPlaylist = useCallback(
     async (nextPlaylist: DisplayPlaylist, nextConfig: DisplayConfig) => {
-      const firstItem = nextPlaylist.items[0]
+      if (usesShuffleBag(nextConfig)) {
+        resetShuffleBagState()
+      }
+
+      const firstIndex = usesShuffleBag(nextConfig) ? takeNextShuffleBagIndex(nextPlaylist.items) : 0
+      const firstItem = nextPlaylist.items[firstIndex]
       if (!firstItem) {
         startedRef.current = false
         transitionRef.current = false
         clearTimers()
+        resetShuffleBagState()
         setLayers(INITIAL_LAYERS)
         setError(null)
         setLoading(false)
@@ -364,9 +421,10 @@ export function DisplayPage() {
         })
         await preloadImage(firstItem.display_url)
         activeLayerRef.current = 0
-        currentIndexRef.current = 0
+        currentIndexRef.current = firstIndex
         startedRef.current = true
         transitionRef.current = false
+        rememberShownAsset(firstItem.asset_id)
         setLayers([
           { item: firstItem, stage: 'visible' },
           { item: null, stage: 'hidden' },
@@ -394,7 +452,7 @@ export function DisplayPage() {
         })
       }
     },
-    [clearTimers, scheduleAdvance],
+    [clearTimers, rememberShownAsset, resetShuffleBagState, scheduleAdvance, takeNextShuffleBagIndex],
   )
 
   const setFullscreenAlertActiveState = useCallback(
@@ -1061,4 +1119,41 @@ function describeSleepSchedule(schedule: SleepSchedule | null): string {
   }
 
   return `Quiet hours ${schedule.sleep_start_local_time} → ${schedule.sleep_end_local_time} are configured on this frame.`
+}
+
+function usesShuffleBag(config: Pick<DisplayConfig, 'shuffle_enabled' | 'shuffle_bag_enabled'>): boolean {
+  return config.shuffle_enabled && config.shuffle_bag_enabled
+}
+
+function buildShuffleBagAssetIds(items: PlaylistItem[], recentAssetIds: string[], additionalBlockedIds: string[] = []): string[] {
+  const assetIds = items.map((item) => item.asset_id)
+  if (assetIds.length <= 1) {
+    return assetIds
+  }
+
+  const blockedCount = Math.min(SHUFFLE_BAG_RECENT_LIMIT, Math.max(assetIds.length - 1, 0))
+  const validIds = new Set(assetIds)
+  const blockedIds = [
+    ...recentAssetIds.filter((assetId) => validIds.has(assetId)),
+    ...additionalBlockedIds.filter((assetId) => validIds.has(assetId)),
+  ].slice(-blockedCount)
+  const shuffled = shuffleAssetIds(assetIds)
+
+  if (blockedIds.length === 0) {
+    return shuffled
+  }
+
+  const blockedSet = new Set(blockedIds)
+  const safe = shuffled.filter((assetId) => !blockedSet.has(assetId))
+  const delayed = shuffled.filter((assetId) => blockedSet.has(assetId))
+  return [...safe, ...delayed]
+}
+
+function shuffleAssetIds(assetIds: string[]): string[] {
+  const shuffled = [...assetIds]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+  return shuffled
 }

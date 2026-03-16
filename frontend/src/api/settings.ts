@@ -54,6 +54,7 @@ function normalizeSettings(payload: unknown): FrameSettings {
     transition_duration_ms: asNumber(record?.transition_duration_ms, 700),
     fit_mode: asFitMode(record?.fit_mode, 'contain'),
     shuffle_enabled: asBoolean(record?.shuffle_enabled, true),
+    shuffle_bag_enabled: asBoolean(record?.shuffle_bag_enabled, false),
     selected_collection_id: asString(record?.selected_collection_id, 'default-collection'),
     active_display_profile_id: asString(record?.active_display_profile_id, 'default-display-profile'),
     background_fill_mode: asBackgroundFillMode(record?.background_fill_mode, 'black'),

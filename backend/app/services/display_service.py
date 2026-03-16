@@ -35,10 +35,11 @@ class DisplayService:
         self.settings_repo = settings_repo or SettingsRepository()
 
     def get_config(self) -> DisplayProfile:
-        background_fill_mode = self.settings_repo.get_settings().background_fill_mode
+        settings = self.settings_repo.get_settings()
+        background_fill_mode = settings.background_fill_mode
+        shuffle_bag_enabled = settings.shuffle_bag_enabled
         profile = self.display_repo.get_default_profile()
         if profile is None:
-            settings = self.settings_repo.get_settings()
             return DisplayProfile(
                 id=settings.active_display_profile_id,
                 name="Default Display",
@@ -54,18 +55,26 @@ class DisplayService:
                 created_at="",
                 updated_at="",
                 background_fill_mode=settings.background_fill_mode,
+                shuffle_bag_enabled=settings.shuffle_bag_enabled,
             )
         profile.background_fill_mode = background_fill_mode
+        profile.shuffle_bag_enabled = shuffle_bag_enabled
         return profile
 
     def update_config(self, updates: dict[str, object]) -> DisplayProfile:
-        # Handle background_fill_mode separately — persisted in settings, not display_profiles table.
-        if "background_fill_mode" in updates and updates["background_fill_mode"] is not None:
-            mode = str(updates["background_fill_mode"])
-            if mode in VALID_BACKGROUND_FILL_MODES:
-                frame_settings = self.settings_repo.get_settings()
-                frame_settings.background_fill_mode = mode
-                self.settings_repo.update_settings(frame_settings)
+        # Handle settings-backed display fields separately — persisted in settings, not display_profiles.
+        if (
+            ("background_fill_mode" in updates and updates["background_fill_mode"] is not None)
+            or ("shuffle_bag_enabled" in updates and updates["shuffle_bag_enabled"] is not None)
+        ):
+            frame_settings = self.settings_repo.get_settings()
+            if "background_fill_mode" in updates and updates["background_fill_mode"] is not None:
+                mode = str(updates["background_fill_mode"])
+                if mode in VALID_BACKGROUND_FILL_MODES:
+                    frame_settings.background_fill_mode = mode
+            if "shuffle_bag_enabled" in updates and updates["shuffle_bag_enabled"] is not None:
+                frame_settings.shuffle_bag_enabled = bool(updates["shuffle_bag_enabled"])
+            self.settings_repo.update_settings(frame_settings)
 
         profile = self.get_config()
         for field_name in (
@@ -91,8 +100,10 @@ class DisplayService:
         settings.selected_collection_id = updated_profile.selected_collection_id or ""
         settings.active_display_profile_id = updated_profile.id
         self.settings_repo.update_settings(settings)
-        # Ensure background_fill_mode is fresh on the returned profile.
-        updated_profile.background_fill_mode = self.settings_repo.get_settings().background_fill_mode
+        # Ensure settings-backed fields are fresh on the returned profile.
+        refreshed_settings = self.settings_repo.get_settings()
+        updated_profile.background_fill_mode = refreshed_settings.background_fill_mode
+        updated_profile.shuffle_bag_enabled = refreshed_settings.shuffle_bag_enabled
         return updated_profile
 
     def get_playlist(self, collection_id: str | None = None) -> DisplayPlaylist:
