@@ -51,7 +51,7 @@ The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEA
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
 
-The managed Chromium autostart entry launches `unclutter -idle 0.5 -root` to hide the mouse cursor and sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode.
+The managed Chromium autostart entry sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode. On X11 sessions it also launches `unclutter-xfixes` through `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`. On Raspberry Pi OS Desktop's default `labwc` Wayland session it instead requests native Chromium Wayland mode with `--ozone-platform-hint=auto`, so the display route's own `cursor: none` styling is not routed through Xwayland.
 
 The installer defaults to `--host 0.0.0.0` so another device on the LAN can still reach `/setup`, `/login`, and `/admin`. Chromium still opens the local `http://127.0.0.1:8000/display` route when the host is the wildcard bind.
 
@@ -126,7 +126,7 @@ sudo ./scripts/doctor.sh --user pi
 - local health endpoint reachability
 - frontend shell reachability on `/display`
 - bootstrap state from `/api/auth/session`
-- Chromium availability and kiosk autostart wiring
+- Chromium availability and kiosk autostart wiring for both X11 and Wayland sessions
 - graphical-target and optional undervoltage hints
 
 Warnings indicate manual Pi OS tuning or non-blocking issues. Failing checks mean the appliance setup is not ready.
@@ -165,7 +165,8 @@ The installer deliberately does not try to own every desktop-session knob. You s
 - the runtime user is a normal desktop account with a home directory
 - Desktop Autologin is enabled in `raspi-config`
 - screen blanking is disabled
-- any desired X11 anti-blanking settings are present
+- the active desktop backend is the one you intend to run, and the managed kiosk autostart file has been refreshed for it
+- any desired X11 anti-blanking settings are present if you are using an X11 session
 - the Pi has stable LAN connectivity
 
 That keeps the installer boring, readable, and resilient across Raspberry Pi OS desktop-session variations.

@@ -112,7 +112,19 @@ You may also want the usual X11 anti-blanking settings in the runtime user's ses
 @xset s noblank
 ```
 
-Cursor hiding is handled by the managed SPF5000 Chromium autostart entry, so `unclutter` no longer needs to be added separately as a manual session tweak.
+Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle.
+
+You can verify the active desktop backend with:
+
+```bash
+sid="$(loginctl list-sessions --no-legend | awk '$3=="pi" {print $1; exit}')"
+loginctl show-session "$sid" -p Type -p Desktop
+```
+
+Expected values:
+
+- `Type=x11` means the kiosk launcher will use `unclutter-xfixes` for cursor hiding
+- `Type=wayland` with `Desktop=rpd-labwc` means the kiosk launcher should request native Chromium Wayland mode
 
 ## 5. Put the repository on the Pi
 
@@ -210,7 +222,7 @@ The doctor checks:
 - local `/api/health` reachability
 - frontend shell reachability on `/display`
 - public bootstrap state from `/api/auth/session`
-- Chromium binary and autostart entry presence
+- Chromium binary and autostart entry presence for the active desktop backend
 - graphical-target and optional undervoltage hints
 
 Warnings are acceptable for some manual Pi OS settings. Failing checks should be resolved before you treat the frame as ready.
@@ -329,9 +341,22 @@ Re-check:
 
 ### The mouse cursor is still visible
 
-The managed kiosk autostart entry should already launch `unclutter -idle 0.5 -root`.
+First confirm which desktop backend the Pi is actually running:
 
-Re-run the installer to refresh the managed autostart file, then log out or reboot the Pi. `doctor.sh` now warns if the installed autostart entry is missing the cursor-hiding command.
+```bash
+sid="$(loginctl list-sessions --no-legend | awk '$3=="pi" {print $1; exit}')"
+loginctl show-session "$sid" -p Type -p Desktop
+ps -ef | grep -E 'labwc|openbox|Xorg|Xwayland' | grep -v grep
+```
+
+Interpretation:
+
+- `Type=wayland` and `labwc` mean the Pi is on Wayland; in that case the managed kiosk autostart entry should include `--ozone-platform-hint=auto` so Chromium runs natively on Wayland
+- `Type=x11` and `openbox`/`Xorg` mean the Pi is on X11; in that case the managed kiosk autostart entry should launch `unclutter`
+
+On Wayland, the managed kiosk autostart entry should contain `--ozone-platform-hint=auto`. On X11, it should already launch `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`.
+
+Re-run the installer to refresh the managed autostart file, then log out or reboot the Pi. `doctor.sh` now warns if the installed autostart entry is missing the Wayland selector for Wayland sessions or the X11 cursor-hiding command for X11 sessions.
 
 ### The admin UI is not reachable from another device
 

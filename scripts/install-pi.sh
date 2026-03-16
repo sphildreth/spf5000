@@ -213,7 +213,7 @@ install_packages() {
     python3
     python3-pip
     python3-venv
-    unclutter
+    unclutter-xfixes
     "${chromium_package}"
   )
 

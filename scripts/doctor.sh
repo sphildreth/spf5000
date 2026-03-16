@@ -363,6 +363,11 @@ check_browser_runtime() {
   local throttled=""
   local lan_ip=""
   local autostart_exec_line=""
+  local autostart_has_unclutter="false"
+  local autostart_has_wayland_flag="false"
+  local session_id=""
+  local session_type=""
+  local session_desktop=""
 
   printf '\n== Browser kiosk runtime ==\n'
 
@@ -379,10 +384,12 @@ check_browser_runtime() {
 
       autostart_exec_line="$(grep '^Exec=' "${AUTOSTART_FILE}" 2>/dev/null || true)"
 
-      if [[ "${autostart_exec_line}" == *"unclutter -idle 0.5 -root"* ]]; then
-        pass_check "Chromium autostart entry launches unclutter to hide the mouse cursor."
-      else
-        warn_check "Chromium autostart entry does not appear to launch unclutter; the mouse cursor may remain visible."
+      if [[ "${autostart_exec_line}" == *"/usr/bin/unclutter"* ]]; then
+        autostart_has_unclutter="true"
+      fi
+
+      if [[ "${autostart_exec_line}" == *"--ozone-platform-hint=auto"* ]] || [[ "${autostart_exec_line}" == *"--ozone-platform=wayland"* ]]; then
+        autostart_has_wayland_flag="true"
       fi
 
       if [[ "${autostart_exec_line}" == *"--password-store=basic"* ]]; then
@@ -408,6 +415,47 @@ check_browser_runtime() {
     fi
   fi
 
+  if command -v loginctl >/dev/null 2>&1 && [[ -n "${RUNTIME_USER}" ]]; then
+    session_id="$(loginctl list-sessions --no-legend 2>/dev/null | awk -v user="${RUNTIME_USER}" '$3 == user { print $1; exit }' || true)"
+    if [[ -n "${session_id}" ]]; then
+      session_type="$(loginctl show-session "${session_id}" -p Type --value 2>/dev/null || true)"
+      session_desktop="$(loginctl show-session "${session_id}" -p Desktop --value 2>/dev/null || true)"
+      if [[ "${session_type}" == "x11" ]]; then
+        pass_check "Desktop session for ${RUNTIME_USER} is X11${session_desktop:+ (${session_desktop})}."
+        if [[ "${autostart_has_unclutter}" == "true" ]]; then
+          pass_check "Chromium autostart entry includes unclutter for X11 cursor hiding."
+        else
+          warn_check "Chromium autostart entry does not appear to launch unclutter; the mouse cursor may remain visible on X11."
+        fi
+      elif [[ "${session_type}" == "wayland" ]]; then
+        pass_check "Desktop session for ${RUNTIME_USER} is Wayland${session_desktop:+ (${session_desktop})}."
+        if [[ "${autostart_has_wayland_flag}" == "true" ]]; then
+          pass_check "Chromium autostart entry requests native Wayland mode for Wayland sessions."
+        else
+          warn_check "Chromium autostart entry does not request native Wayland mode; Chromium may fall back to Xwayland and leave the cursor visible."
+        fi
+      elif [[ -n "${session_type}" ]]; then
+        warn_check "Desktop session for ${RUNTIME_USER} reports Type=${session_type}${session_desktop:+ (${session_desktop})}. The kiosk launcher is validated for X11 and Wayland sessions."
+      else
+        warn_check "Could not determine the desktop session type for ${RUNTIME_USER}."
+      fi
+    else
+      warn_check "Could not find an active desktop session for ${RUNTIME_USER}; session backend was not checked."
+    fi
+  elif [[ -n "${AUTOSTART_FILE}" && -f "${AUTOSTART_FILE}" ]]; then
+    if [[ "${autostart_has_wayland_flag}" == "true" ]]; then
+      pass_check "Chromium autostart entry includes a Wayland selector for Wayland sessions."
+    else
+      warn_check "Chromium autostart entry does not request native Wayland mode; Chromium may fall back to Xwayland on Wayland desktops."
+    fi
+
+    if [[ "${autostart_has_unclutter}" == "true" ]]; then
+      pass_check "Chromium autostart entry includes unclutter for X11 cursor hiding."
+    else
+      warn_check "Chromium autostart entry does not appear to launch unclutter; the mouse cursor may remain visible on X11."
+    fi
+  fi
+
   if command -v vcgencmd >/dev/null 2>&1; then
     throttled="$(vcgencmd get_throttled 2>/dev/null || true)"
     if [[ -n "${throttled}" && "${throttled}" != "throttled=0x0" ]]; then
@@ -417,7 +465,7 @@ check_browser_runtime() {
     fi
   fi
 
-  warn_check "Desktop autologin and X11 blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled. The managed autostart entry should now handle cursor hiding and avoid Chromium keyring prompts."
+  warn_check "Desktop autologin and blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled. The managed kiosk launcher now prefers native Wayland Chromium on Wayland sessions and unclutter on X11, while Chromium keyring avoidance via --password-store=basic applies on both backends."
 
   lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [[ "${HOST}" == "127.0.0.1" || "${HOST}" == "localhost" ]]; then
