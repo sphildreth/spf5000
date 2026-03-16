@@ -209,6 +209,7 @@ The doctor checks:
 - data/cache/log path presence
 - path writeability for the runtime user
 - local `/api/health` reachability
+- frontend shell reachability on `/display`
 - public bootstrap state from `/api/auth/session`
 - Chromium binary and autostart entry presence
 - graphical-target and optional undervoltage hints

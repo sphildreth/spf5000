@@ -263,9 +263,14 @@ check_http_endpoints() {
   local local_host=""
   local health_url=""
   local session_url=""
+  local display_url=""
   local health_json=""
   local bootstrapped_state=""
   local bootstrapped_value=""
+  local display_headers_file=""
+  local display_body_file=""
+  local display_status=""
+  local display_content_type=""
 
   printf '\n== HTTP health ==\n'
 
@@ -276,6 +281,7 @@ check_http_endpoints() {
   local_host="$(health_host)"
   health_url="http://${local_host}:${PORT}/api/health"
   session_url="http://${local_host}:${PORT}/api/auth/session"
+  display_url="http://${local_host}:${PORT}/display"
 
   health_json="$(curl --silent --show-error --max-time 5 "${health_url}" 2>/dev/null || true)"
   if [[ -n "${health_json}" ]]; then
@@ -323,6 +329,32 @@ PY
   else
     warn_check "Auth/session endpoint did not respond at ${session_url}."
   fi
+
+  display_headers_file="$(mktemp)"
+  display_body_file="$(mktemp)"
+  trap 'rm -f "${display_headers_file}" "${display_body_file}"' RETURN
+
+  if curl --silent --show-error --location --max-time 5 --dump-header "${display_headers_file}" --output "${display_body_file}" "${display_url}" >/dev/null 2>&1; then
+    display_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "${display_headers_file}")"
+    display_content_type="$(awk 'BEGIN {IGNORECASE=1} /^content-type:/ {sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); value=$0} END {print value}' "${display_headers_file}")"
+
+    if [[ "${display_status}" == "200" ]] && [[ "${display_content_type}" == text/html* ]]; then
+      if grep --quiet '"detail"[[:space:]]*:[[:space:]]*"Not Found"' "${display_body_file}"; then
+        fail_check "Display route ${display_url} returned an error payload instead of the frontend shell."
+      elif grep --quiet --ignore-case '<html' "${display_body_file}" || grep --quiet 'id="root"' "${display_body_file}"; then
+        pass_check "Display route served the frontend shell successfully at ${display_url}."
+      else
+        warn_check "Display route responded with HTML at ${display_url}, but the body did not look like the built frontend shell."
+      fi
+    else
+      fail_check "Display route did not serve the frontend shell at ${display_url} (status=${display_status:-unknown}, content-type=${display_content_type:-unknown})."
+    fi
+  else
+    fail_check "Display route did not respond at ${display_url}."
+  fi
+
+  rm -f "${display_headers_file}" "${display_body_file}"
+  trap - RETURN
 }
 
 check_browser_runtime() {

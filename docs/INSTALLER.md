@@ -122,6 +122,7 @@ sudo ./scripts/doctor.sh --user pi
 - data/cache/log path presence
 - writeability for the runtime user
 - local health endpoint reachability
+- frontend shell reachability on `/display`
 - bootstrap state from `/api/auth/session`
 - Chromium availability and kiosk autostart wiring
 - graphical-target and optional undervoltage hints
