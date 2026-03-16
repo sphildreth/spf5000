@@ -75,6 +75,8 @@ Do not use Raspberry Pi OS Lite unless you are intentionally replacing the brows
 - Chromium autostart installation
 - service enable/start
 
+The installer also detects whether the target OS exposes Chromium as `chromium` or `chromium-browser`, so the package name does not need to be adjusted manually between Debian and Raspberry Pi OS variants.
+
 It does not try to reconfigure every Raspberry Pi OS desktop setting for you. These steps remain manual because they are OS-session specific and easier to verify explicitly:
 
 - Desktop autologin

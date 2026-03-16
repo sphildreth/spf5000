@@ -168,13 +168,21 @@ detect_chromium_binary() {
   return 1
 }
 
+apt_package_has_install_candidate() {
+  local package_name="$1"
+  local candidate=""
+
+  candidate="$(apt-cache policy "${package_name}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  [[ -n "${candidate}" && "${candidate}" != "(none)" ]]
+}
+
 detect_chromium_package() {
-  if apt-cache show chromium-browser >/dev/null 2>&1; then
+  if apt_package_has_install_candidate chromium-browser; then
     printf '%s\n' "chromium-browser"
     return 0
   fi
 
-  if apt-cache show chromium >/dev/null 2>&1; then
+  if apt_package_has_install_candidate chromium; then
     printf '%s\n' "chromium"
     return 0
   fi

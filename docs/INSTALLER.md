@@ -24,6 +24,8 @@ These scripts are intentionally Pi-specific and opinionated. They automate the s
 10. installs the Chromium kiosk autostart entry
 11. enables and starts the backend service
 
+When installing Chromium, the script automatically chooses the distro-supported package name (`chromium` or `chromium-browser`) based on the apt candidate available on the target system.
+
 ## Install command
 
 Typical install:
