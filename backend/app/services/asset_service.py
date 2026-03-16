@@ -1,14 +1,39 @@
 from __future__ import annotations
 
+import logging
+import shutil
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import Sequence
+from uuid import uuid4
 
+from fastapi import UploadFile
+from PIL import UnidentifiedImageError
+
+from app.core.config import settings
+from app.db.bootstrap import DEFAULT_COLLECTION_ID, DEFAULT_SOURCE_ID
 from app.models.asset import Asset, AssetVariant
+from app.models.asset_upload import AssetUploadSummary
 from app.repositories.asset_repository import AssetRepository
+from app.repositories.base import utc_now
+from app.repositories.collection_repository import CollectionRepository
+from app.repositories.source_repository import SourceRepository
+from app.services.asset_ingest_service import AssetIngestService
 
+LOGGER = logging.getLogger(__name__)
 
 class AssetService:
-    def __init__(self, repo: AssetRepository | None = None) -> None:
+    def __init__(
+        self,
+        repo: AssetRepository | None = None,
+        source_repo: SourceRepository | None = None,
+        collection_repo: CollectionRepository | None = None,
+        ingest_service: AssetIngestService | None = None,
+    ) -> None:
         self.repo = repo or AssetRepository()
+        self.source_repo = source_repo or SourceRepository()
+        self.collection_repo = collection_repo or CollectionRepository()
+        self.ingest_service = ingest_service or AssetIngestService()
 
     def list_assets(self, collection_id: str | None = None) -> list[Asset]:
         return self.repo.list_assets(collection_id=collection_id)
@@ -42,3 +67,99 @@ class AssetService:
         if not path.exists():
             return None
         return path, variant.mime_type
+
+    def upload_files(self, files: Sequence[UploadFile], collection_id: str | None = None) -> AssetUploadSummary:
+        if not files:
+            raise ValueError("Select at least one image to upload.")
+
+        source = self._get_local_upload_source()
+        target_collection_id = collection_id or DEFAULT_COLLECTION_ID
+        target_collection = self.collection_repo.get_collection(target_collection_id)
+        if target_collection is None:
+            raise ValueError("Collection not found.")
+        if target_collection.source_id not in {None, source.id}:
+            raise ValueError("Uploads can only target local or shared collections.")
+
+        staging_dir = settings.import_staging_dir / "admin-uploads"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+
+        summary = AssetUploadSummary(
+            source_id=source.id,
+            collection_id=target_collection.id,
+            received_count=len(files),
+            imported_count=0,
+            duplicate_count=0,
+            error_count=0,
+        )
+
+        for index, upload in enumerate(files, start=1):
+            original_filename = Path(upload.filename or "").name or f"upload-{index}"
+            extension = Path(original_filename).suffix.lower()
+            if extension and extension not in settings.supported_image_extensions:
+                summary.error_count += 1
+                summary.errors.append(
+                    f"{original_filename}: unsupported file type; supported formats are "
+                    f"{', '.join(settings.supported_image_extensions)}."
+                )
+                upload.file.close()
+                continue
+
+            staged_path: Path | None = None
+            try:
+                staged_path = self._write_upload_to_staging(upload, staging_dir, suffix=extension or ".upload")
+                result = self.ingest_service.ingest_file(
+                    source_id=source.id,
+                    collection_ids=[target_collection.id],
+                    source_path=staged_path,
+                    imported_from_path=f"admin-upload:{original_filename}",
+                    original_filename=original_filename,
+                    metadata={"uploaded_via": "admin_ui"},
+                )
+                if result.created:
+                    summary.imported_count += 1
+                else:
+                    summary.duplicate_count += 1
+            except Exception as exc:  # noqa: BLE001 - surfacing per-file errors is intentional.
+                LOGGER.exception("Failed to import uploaded asset %s", original_filename)
+                summary.error_count += 1
+                summary.errors.append(f"{original_filename}: {self._describe_upload_error(exc)}")
+            finally:
+                upload.file.close()
+                if staged_path is not None and staged_path.exists():
+                    staged_path.unlink()
+
+        if summary.imported_count > 0 or summary.duplicate_count > 0:
+            self.source_repo.touch_last_import(source.id, utc_now())
+
+        return summary
+
+    def _get_local_upload_source(self):
+        source = self.source_repo.get_source(DEFAULT_SOURCE_ID)
+        if source is not None and source.provider_type == "local_files":
+            return source
+
+        for candidate in self.source_repo.list_sources():
+            if candidate.provider_type == "local_files":
+                return candidate
+
+        raise RuntimeError("No local upload source is configured.")
+
+    @staticmethod
+    def _write_upload_to_staging(upload: UploadFile, staging_dir: Path, *, suffix: str) -> Path:
+        upload.file.seek(0)
+        with NamedTemporaryFile(
+            mode="wb",
+            dir=staging_dir,
+            prefix=f"upload-{uuid4().hex[:8]}-",
+            suffix=suffix,
+            delete=False,
+        ) as handle:
+            shutil.copyfileobj(upload.file, handle)
+            return Path(handle.name)
+
+    @staticmethod
+    def _describe_upload_error(exc: Exception) -> str:
+        if isinstance(exc, UnidentifiedImageError):
+            return "the file could not be read as a supported image"
+        message = str(exc).strip()
+        return message or "the file could not be imported"

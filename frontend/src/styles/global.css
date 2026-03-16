@@ -428,6 +428,17 @@ textarea {
   min-width: min(100%, 26rem);
 }
 
+.toolbar-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: min(100%, 14rem);
+}
+
+.toolbar-field span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .asset-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 1rem;

@@ -25,6 +25,9 @@ DISPLAY_URL=""
 HEALTH_HOST=""
 SERVICE_FILE=""
 AUTOSTART_FILE=""
+DECENTDB_ROOT=""
+DECENTDB_BINDINGS_PATH=""
+DECENTDB_NATIVE_LIB=""
 
 usage() {
   cat <<EOF
@@ -47,7 +50,7 @@ Options:
 Notes:
   - The installer expects an existing SPF5000 checkout at --app-root.
   - A stable security.session_secret is generated only when a new config file is created.
-  - DecentDB must be importable inside backend/.venv before the service is enabled.
+  - The installer expects a nearby DecentDB checkout so it can install the Python binding and build the native library.
 EOF
 }
 
@@ -197,8 +200,11 @@ install_packages() {
 
   chromium_package="$(detect_chromium_package)" || fail "Unable to determine whether this Pi uses the chromium or chromium-browser package."
   packages=(
+    build-essential
     ca-certificates
     curl
+    libpg-query-dev
+    nim
     nodejs
     npm
     python3
@@ -215,6 +221,8 @@ install_packages() {
 ensure_required_binaries() {
   require_command python3
   require_command curl
+  require_command nim
+  require_command nimble
 
   if ! detect_chromium_binary >/dev/null 2>&1; then
     fail "Chromium is not installed or not on PATH. Install it or omit --skip-apt."
@@ -256,32 +264,50 @@ ensure_backend_venv() {
   run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install -r requirements.txt"
 }
 
-ensure_decentdb_binding() {
-  local backend_dir="${APP_ROOT}/backend"
-  local venv_python="${backend_dir}/.venv/bin/python"
-  local candidate_paths=(
-    "${APP_ROOT}/../decentdb/bindings/python"
-    "${APP_ROOT}/decentdb/bindings/python"
-    "${PI_REPO_ROOT}/../decentdb/bindings/python"
+find_decentdb_checkout() {
+  local candidate_roots=(
+    "${APP_ROOT}/../decentdb"
+    "${APP_ROOT}/decentdb"
+    "${PI_REPO_ROOT}/../decentdb"
   )
-  local candidate_path=""
+  local candidate_root=""
 
-  if "${venv_python}" -c 'import decentdb' >/dev/null 2>&1; then
-    log "DecentDB is already importable inside backend/.venv."
-    return
-  fi
-
-  for candidate_path in "${candidate_paths[@]}"; do
-    if [[ -f "${candidate_path}/pyproject.toml" ]]; then
-      log "Installing DecentDB from ${candidate_path}."
-      run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install -e '${candidate_path}'"
-      break
+  for candidate_root in "${candidate_roots[@]}"; do
+    if [[ -f "${candidate_root}/decentdb.nimble" && -f "${candidate_root}/bindings/python/pyproject.toml" ]]; then
+      printf '%s\n' "${candidate_root}"
+      return 0
     fi
   done
 
-  "${venv_python}" -c 'import decentdb' >/dev/null 2>&1 && return
+  return 1
+}
 
-  fail "DecentDB is not importable inside ${backend_dir}/.venv. Install it manually (for example: cd ${backend_dir} && .venv/bin/python -m pip install -e ../decentdb/bindings/python) and re-run this installer."
+ensure_decentdb_runtime() {
+  local backend_dir="${APP_ROOT}/backend"
+  local venv_python="${backend_dir}/.venv/bin/python"
+
+  DECENTDB_ROOT="$(find_decentdb_checkout)" || fail "Could not find a DecentDB checkout. Clone DecentDB next to SPF5000 (for example: ${APP_ROOT}/../decentdb) and re-run this installer."
+  DECENTDB_BINDINGS_PATH="${DECENTDB_ROOT}/bindings/python"
+  DECENTDB_NATIVE_LIB="${DECENTDB_ROOT}/build/libc_api.so"
+
+  if ! run_as_user_shell "${RUNTIME_USER}" "test -w '${DECENTDB_ROOT}'"; then
+    fail "DecentDB checkout ${DECENTDB_ROOT} is not writable by ${RUNTIME_USER}. Fix ownership or permissions and re-run this installer."
+  fi
+
+  log "Installing DecentDB Python binding from ${DECENTDB_BINDINGS_PATH}."
+  run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install -e '${DECENTDB_BINDINGS_PATH}'"
+
+  log "Building DecentDB native library in ${DECENTDB_ROOT}."
+  if ! run_as_user_shell "${RUNTIME_USER}" "cd '${DECENTDB_ROOT}' && nimble build_lib"; then
+    fail "Failed to build DecentDB native library. Ensure nim, nimble, and libpg-query-dev are installed, then re-run this installer."
+  fi
+
+  [[ -f "${DECENTDB_NATIVE_LIB}" ]] || fail "DecentDB build completed without producing ${DECENTDB_NATIVE_LIB}."
+
+  log "Validating DecentDB runtime with ${DECENTDB_NATIVE_LIB}."
+  if ! env DECENTDB_NATIVE_LIB="${DECENTDB_NATIVE_LIB}" "${venv_python}" -c 'import decentdb; conn = decentdb.connect(":memory:"); conn.close()' >/dev/null 2>&1; then
+    fail "DecentDB Python binding installed, but opening a database with ${DECENTDB_NATIVE_LIB} failed."
+  fi
 }
 
 build_frontend() {
@@ -349,7 +375,8 @@ install_service_file() {
     "RUNTIME_GROUP=${RUNTIME_GROUP}" \
     "BACKEND_DIR=${APP_ROOT}/backend" \
     "CONFIG_PATH=${CONFIG_PATH}" \
-    "PYTHON_BIN=${python_bin}"
+    "PYTHON_BIN=${python_bin}" \
+    "DECENTDB_NATIVE_LIB=${DECENTDB_NATIVE_LIB}"
 
   chmod 0644 "${SERVICE_FILE}"
 }
@@ -429,6 +456,7 @@ What was configured
   Service name  : ${SERVICE_NAME}.service
   Kiosk entry   : ${AUTOSTART_FILE}
   Display URL   : ${DISPLAY_URL}
+  DecentDB lib  : ${DECENTDB_NATIVE_LIB}
 
 Useful commands
   sudo systemctl status ${SERVICE_NAME}.service
@@ -456,7 +484,7 @@ main() {
   ensure_required_binaries
   ensure_directories
   ensure_backend_venv
-  ensure_decentdb_binding
+  ensure_decentdb_runtime
   build_frontend
   write_config_if_needed
   install_service_file

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
@@ -9,6 +10,14 @@ def _write_sample_image(path: Path, color: tuple[int, int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.new("RGB", (1200, 800), color=color)
     image.save(path, format="JPEG")
+
+
+def _image_upload(name: str, color: tuple[int, int, int]) -> tuple[str, BytesIO, str]:
+    buffer = BytesIO()
+    image = Image.new("RGB", (1200, 800), color=color)
+    image.save(buffer, format="JPEG")
+    buffer.seek(0)
+    return (name, buffer, "image/jpeg")
 
 
 def test_status_bootstrap_and_settings_update(test_client) -> None:
@@ -129,3 +138,67 @@ def test_local_scan_import_assets_and_playlist(test_client) -> None:
     playlist = playlist_response.json()
     assert playlist["collection_id"] == "default-collection"
     assert len(playlist["items"]) == 2
+
+
+def test_batch_upload_imports_assets_into_selected_collection(test_client) -> None:
+    collection_response = test_client.post(
+        "/api/collections",
+        json={
+            "name": "Uploaded photos",
+            "description": "Browser-uploaded assets",
+            "source_id": "default-local-files",
+            "is_active": True,
+        },
+    )
+    assert collection_response.status_code == 201
+    collection_id = collection_response.json()["id"]
+
+    upload_response = test_client.post(
+        "/api/assets/upload",
+        data={"collection_id": collection_id},
+        files=[
+            ("files", _image_upload("one.jpg", (255, 0, 0))),
+            ("files", _image_upload("two.jpg", (0, 255, 0))),
+        ],
+    )
+    assert upload_response.status_code == 201
+    body = upload_response.json()
+    assert body["collection_id"] == collection_id
+    assert body["imported_count"] == 2
+    assert body["duplicate_count"] == 0
+    assert body["error_count"] == 0
+
+    collection_assets_response = test_client.get("/api/assets", params={"collection_id": collection_id})
+    assert collection_assets_response.status_code == 200
+    assets = collection_assets_response.json()
+    assert len(assets) == 2
+    assert {asset["source_id"] for asset in assets} == {"default-local-files"}
+
+    collections_response = test_client.get("/api/collections")
+    assert collections_response.status_code == 200
+    created_collection = next(item for item in collections_response.json() if item["id"] == collection_id)
+    assert created_collection["asset_count"] == 2
+
+
+def test_batch_upload_reports_duplicates_and_invalid_files(test_client) -> None:
+    upload_response = test_client.post(
+        "/api/assets/upload",
+        data={"collection_id": "default-collection"},
+        files=[
+            ("files", _image_upload("original.jpg", (12, 34, 56))),
+            ("files", _image_upload("duplicate.jpg", (12, 34, 56))),
+            ("files", ("notes.txt", BytesIO(b"not an image"), "text/plain")),
+        ],
+    )
+    assert upload_response.status_code == 201
+    body = upload_response.json()
+    assert body["received_count"] == 3
+    assert body["imported_count"] == 1
+    assert body["duplicate_count"] == 1
+    assert body["error_count"] == 1
+    assert any("unsupported file type" in message for message in body["errors"])
+
+    assets_response = test_client.get("/api/assets", params={"collection_id": "default-collection"})
+    assert assets_response.status_code == 200
+    assets = assets_response.json()
+    assert len(assets) == 1

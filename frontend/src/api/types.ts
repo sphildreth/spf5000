@@ -90,6 +90,16 @@ export interface AssetSummary {
   updated_at?: string | null
 }
 
+export interface AssetUploadSummary {
+  source_id: string
+  collection_id: string
+  received_count: number
+  imported_count: number
+  duplicate_count: number
+  error_count: number
+  errors: string[]
+}
+
 export interface CollectionSummary {
   id: string
   name: string

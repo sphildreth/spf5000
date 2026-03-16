@@ -9,6 +9,7 @@ User=__RUNTIME_USER__
 Group=__RUNTIME_GROUP__
 WorkingDirectory=__BACKEND_DIR__
 Environment=SPF5000_CONFIG=__CONFIG_PATH__
+Environment=DECENTDB_NATIVE_LIB=__DECENTDB_NATIVE_LIB__
 Environment=PYTHONUNBUFFERED=1
 ExecStart=__PYTHON_BIN__ -m app
 Restart=on-failure

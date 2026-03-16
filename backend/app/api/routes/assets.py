@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import require_admin
-from app.schemas.asset import AssetResponse
+from app.schemas.asset import AssetResponse, AssetUploadResponse
 from app.services.asset_service import AssetService
 
 router = APIRouter()
@@ -22,6 +24,20 @@ def get_asset(asset_id: str) -> AssetResponse:
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     return AssetResponse.from_domain(asset)
+
+
+@router.post("/upload", response_model=AssetUploadResponse, status_code=201, dependencies=_admin_dep)
+def upload_assets(
+    files: Annotated[list[UploadFile], File(description="One or more image files to import")],
+    collection_id: Annotated[str | None, Form()] = None,
+) -> AssetUploadResponse:
+    try:
+        summary = service.upload_files(files=files, collection_id=collection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return AssetUploadResponse.from_domain(summary)
 
 
 @router.get("/{asset_id}/variants/{kind}")  # intentionally public — served to the display client

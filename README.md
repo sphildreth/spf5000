@@ -65,11 +65,11 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 
 Release `1.0.0` includes:
 
-- a **FastAPI backend** with setup, auth/session, health, status, settings, sources, collections, assets, import, and display APIs
+- a **FastAPI backend** with setup, auth/session, health, status, settings, sources, collections, assets, upload/import, and display APIs
 - a **React + TypeScript + Vite frontend** with `/setup`, `/login`, `/admin`, and the fullscreen `/display` route
 - **DecentDB-backed** metadata, bootstrap state, settings, sleep schedule, and single-admin account storage
 - **filesystem-backed originals and variants**, including generated display-sized images and thumbnails
-- a **managed local import workflow** via `LocalFilesProvider`
+- a **managed local import and admin upload workflow** via `LocalFilesProvider`
 - a **first-class Google Photos provider** that can display photos from a selected Google Photos album or ambient source using the Ambient API device flow, Google-managed source selection, and offline local cache playback
 - **SHA-256 duplicate detection** during import
 - **session-cookie admin auth** for protected routes while keeping `/display` public
@@ -118,9 +118,9 @@ The fullscreen `/display` route is intentionally separate from the admin shell. 
 
 - Python `3.11+`
 - Node.js and npm
-- the real **DecentDB Python binding** from a local checkout or another supported source
+- a local **DecentDB checkout** so you can install the Python binding and build the native library
 
-SPF5000 does **not** install DecentDB from `backend/requirements.txt`. You must make the binding available separately.
+SPF5000 does **not** install DecentDB from `backend/requirements.txt`. You must make both the editable Python binding and the native library available separately.
 
 ### 1. Start the backend
 
@@ -130,6 +130,10 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -e /path/to/decentdb/bindings/python
+cd /path/to/decentdb
+nimble build_lib
+export DECENTDB_NATIVE_LIB=$PWD/build/libc_api.so
+cd /path/to/spf5000/backend
 python -m app
 ```
 
@@ -139,6 +143,10 @@ If you cloned `decentdb` next to this repository, a typical install looks like t
 cd backend
 source .venv/bin/activate
 python -m pip install -e ../../decentdb/bindings/python
+cd ../../decentdb
+nimble build_lib
+export DECENTDB_NATIVE_LIB=$PWD/build/libc_api.so
+cd ../spf5000/backend
 python -m app
 ```
 
@@ -283,7 +291,7 @@ http://<pi-hostname-or-ip>:8000/setup
 
 - apt package installation for the supported Pi runtime
 - `backend/.venv` creation and backend dependency installation
-- DecentDB binding validation or installation from a nearby checkout
+- DecentDB editable binding installation plus native-library build from a nearby checkout
 - `frontend/dist` creation
 - runtime `spf5000.toml` generation
 - `systemd` service installation and startup
@@ -380,8 +388,8 @@ Design and operational docs live in-repo:
 SPF5000 `1.0.0` is intentionally focused:
 
 - Google Photos selection happens through Google's Ambient settings UI instead of an in-app full-library browser
-- browser uploads are not part of this release
-- destructive library management is not part of this release
+- browser uploads support batch image ingestion into local collections
+- destructive library management remains intentionally limited
 - authentication is single-admin and local-account only
 - the product is image-focused; video-first playback is not a goal for this version
 

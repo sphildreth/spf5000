@@ -135,21 +135,31 @@ sudo chown -R pi:pi /opt/spf5000
 
 If you use a different checkout path, pass it with `--app-root`.
 
-## 6. Make the DecentDB binding available
+## 6. Make the DecentDB checkout available
 
-SPF5000 still relies on the real DecentDB Python binding, which is not installed by `backend/requirements.txt`.
+SPF5000 relies on the upstream DecentDB Python integration, which has two parts:
 
-The installer will:
+- the editable Python binding from `bindings/python`
+- the native C API library built with `nimble build_lib`
 
-1. reuse an already installed `decentdb` module inside `backend/.venv`, or
-2. try a nearby checkout such as:
+`backend/requirements.txt` does not install either of those pieces for you.
+
+The Pi installer now expects a nearby DecentDB checkout such as:
 
 ```text
-/opt/decentdb/bindings/python
-/opt/spf5000/../decentdb/bindings/python
+/opt/decentdb
+/opt/spf5000/../decentdb
 ```
 
-If neither is available, the installer stops with a clear error instead of silently running the backend in `NullConnection` fallback mode.
+On each run, `scripts/install-pi.sh` will:
+
+1. install or refresh the editable Python binding from `bindings/python`
+2. install the build prerequisites unless you used `--skip-apt`
+3. run `nimble build_lib` in the DecentDB checkout
+4. validate that the backend virtualenv can open a DecentDB connection
+5. write `DECENTDB_NATIVE_LIB=<checkout>/build/libc_api.so` into the managed `systemd` unit
+
+If you use `--skip-apt`, make sure the Pi already has `nim`, `nimble`, and `libpg_query` development files available before you run the installer.
 
 ## 7. Run the installer
 
@@ -247,7 +257,7 @@ The repository itself remains in the chosen app root, and the backend still uses
 
 To update a Pi that is already running SPF5000, update the repository checkout and then re-run the installer.
 
-`git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
+`git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, reinstalls the DecentDB Python binding, rebuilds the DecentDB native library, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
 
 Typical update flow:
 
@@ -306,14 +316,23 @@ That means the config is bound to `127.0.0.1` or `localhost`. Re-run the install
 
 ### Doctor reports that DecentDB is missing
 
-Install the binding into `backend/.venv`, for example:
+Re-run the installer first. It now handles the supported DecentDB flow automatically when a nearby checkout exists.
+
+If you need to repair it manually, rebuild the native library and reinstall the editable binding:
 
 ```bash
+sudo apt-get install -y nim libpg-query-dev
+
+cd /opt/decentdb
+nimble build_lib
+
 cd /opt/spf5000/backend
 .venv/bin/python -m pip install -e ../decentdb/bindings/python
+
+sudo systemctl restart spf5000.service
 ```
 
-Then re-run the installer or restart the service.
+The managed service uses `DECENTDB_NATIVE_LIB=/opt/decentdb/build/libc_api.so` by default.
 
 ### Chromium opens before the backend is ready
 

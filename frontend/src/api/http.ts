@@ -17,8 +17,9 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers)
   const hasBody = options.body !== undefined
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
 
-  if (hasBody && !headers.has('Content-Type')) {
+  if (hasBody && !isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -26,7 +27,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...options,
     credentials: 'include',
     headers,
-    body: hasBody ? JSON.stringify(options.body) : undefined,
+    body: hasBody ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
   })
 
   const text = await response.text()
@@ -96,6 +97,10 @@ export function apiGet<T>(path: string): Promise<T> {
 }
 
 export function apiPost<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+  return request<TResponse>(path, { method: 'POST', body })
+}
+
+export function apiPostFormData<TResponse>(path: string, body: FormData): Promise<TResponse> {
   return request<TResponse>(path, { method: 'POST', body })
 }
 

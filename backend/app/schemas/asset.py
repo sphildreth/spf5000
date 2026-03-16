@@ -5,6 +5,7 @@ import json
 from pydantic import BaseModel
 
 from app.models.asset import Asset, AssetVariant
+from app.models.asset_upload import AssetUploadSummary
 
 
 class AssetVariantResponse(BaseModel):
@@ -71,4 +72,26 @@ class AssetResponse(BaseModel):
             imported_at=asset.imported_at,
             updated_at=asset.updated_at,
             variants=variants,
+        )
+
+
+class AssetUploadResponse(BaseModel):
+    source_id: str
+    collection_id: str
+    received_count: int
+    imported_count: int
+    duplicate_count: int
+    error_count: int
+    errors: list[str]
+
+    @classmethod
+    def from_domain(cls, summary: AssetUploadSummary) -> "AssetUploadResponse":
+        return cls(
+            source_id=summary.source_id,
+            collection_id=summary.collection_id,
+            received_count=summary.received_count,
+            imported_count=summary.imported_count,
+            duplicate_count=summary.duplicate_count,
+            error_count=summary.error_count,
+            errors=summary.errors,
         )

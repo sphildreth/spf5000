@@ -22,11 +22,11 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0011
 
 - bootstrap runtime directories and DecentDB schema at startup
 - load startup/runtime settings from `spf5000.toml`
-- expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, imports, and display state
+- expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, uploads/imports, and display state
 - expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
-- manage local import, duplicate detection, original-file storage, and derivative generation
+- manage local import, admin uploads, duplicate detection, original-file storage, and derivative generation
 - manage Google Photos Ambient API device registration, media-source state, and background sync into the local asset pipeline
 - protect admin APIs with signed session cookies while keeping display APIs public
 - serve built frontend assets from `frontend/dist` when available
@@ -308,7 +308,7 @@ The React admin shell currently includes:
 - `/admin` as the protected shell root
 - `Dashboard` for system/library status
 - `Settings` for device and derivative defaults
-- `Library` for browsing imported assets and variants
+- `Library` for batch uploading, filtering, and browsing imported assets and variants
 - `Collections` for collection management
 - `Sources` for local source configuration plus scan/import actions
 - `Display Settings` for slideshow behavior and the sleep schedule
@@ -355,6 +355,7 @@ Admin routing behavior:
 
 - `GET /api/assets` (authenticated admin)
 - `GET /api/assets/{asset_id}` (authenticated admin)
+- `POST /api/assets/upload` (authenticated admin)
 - `GET /api/assets/{asset_id}/variants/{kind}`
 
 ### Sources and import
@@ -389,9 +390,9 @@ Admin routing behavior:
 ### Pi appliance provisioning
 
 - `scripts/install-pi.sh` is the first-pass Pi-specific installer for Raspberry Pi OS Desktop
-- the installer assumes an existing SPF5000 checkout, creates or refreshes `backend/.venv`, validates the DecentDB Python binding, builds `frontend/dist`, generates a runtime `spf5000.toml`, installs the `systemd` unit, and installs the Chromium autostart entry for the selected non-root user
+- the installer assumes an existing SPF5000 checkout, creates or refreshes `backend/.venv`, installs the DecentDB Python binding from a nearby checkout, builds the DecentDB native library, builds `frontend/dist`, generates a runtime `spf5000.toml`, installs the `systemd` unit, and installs the Chromium autostart entry for the selected non-root user
 - default Pi runtime paths are `/opt/spf5000`, `/var/lib/spf5000`, `/var/cache/spf5000`, and `/var/lib/spf5000/spf5000.toml`
-- the generated `systemd` unit runs `cd backend && .venv/bin/python -m app` with `SPF5000_CONFIG` pointing at the generated runtime config
+- the generated `systemd` unit runs `cd backend && .venv/bin/python -m app` with `SPF5000_CONFIG` pointing at the generated runtime config and `DECENTDB_NATIVE_LIB` pointing at the built DecentDB C API library
 - the generated Chromium autostart entry launches the local `/display` route in kiosk mode after a short startup delay
 - `scripts/uninstall-pi.sh` removes the service and kiosk autostart while preserving config, database, cache, and imported assets by default
 - `scripts/doctor.sh` checks runtime prerequisites, service state, filesystem paths, local health endpoints, and kiosk wiring
@@ -405,6 +406,6 @@ The current implementation has been validated with:
 
 ## Current limits
 
-- only the local-files provider is implemented
-- uploads, cloud providers, and destructive library management are not part of this pass
+- local-files and Google Photos providers are implemented
+- admin batch uploads into local collections are supported, while destructive library management remains out of scope
 - v1 supports only a single local admin account with cookie-backed sessions

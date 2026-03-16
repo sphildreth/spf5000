@@ -1,9 +1,30 @@
-import { apiGet } from './http'
-import { asArray, asOptionalNumber, asOptionalString, asRecord, asString, asStringArray, type AssetSummary } from './types'
+import { apiGet, apiPostFormData } from './http'
+import {
+  asArray,
+  asOptionalNumber,
+  asOptionalString,
+  asRecord,
+  asString,
+  asStringArray,
+  type AssetSummary,
+  type AssetUploadSummary,
+} from './types'
 
 export async function getAssets(): Promise<AssetSummary[]> {
   const payload = await apiGet<unknown>('/api/assets')
   return asArray(payload, normalizeAsset)
+}
+
+export async function uploadAssets(files: File[], collectionId?: string): Promise<AssetUploadSummary> {
+  const formData = new FormData()
+  for (const file of files) {
+    formData.append('files', file)
+  }
+  if (collectionId) {
+    formData.append('collection_id', collectionId)
+  }
+  const payload = await apiPostFormData<unknown>('/api/assets/upload', formData)
+  return normalizeAssetUploadSummary(payload)
 }
 
 function normalizeAsset(item: unknown, index: number): AssetSummary {
@@ -26,5 +47,19 @@ function normalizeAsset(item: unknown, index: number): AssetSummary {
     collection_names: asStringArray(record?.collection_names),
     imported_at: asOptionalString(record?.imported_at) ?? null,
     updated_at: asOptionalString(record?.updated_at) ?? null,
+  }
+}
+
+function normalizeAssetUploadSummary(item: unknown): AssetUploadSummary {
+  const record = asRecord(item)
+
+  return {
+    source_id: asString(record?.source_id, ''),
+    collection_id: asString(record?.collection_id, ''),
+    received_count: asOptionalNumber(record?.received_count) ?? 0,
+    imported_count: asOptionalNumber(record?.imported_count) ?? 0,
+    duplicate_count: asOptionalNumber(record?.duplicate_count) ?? 0,
+    error_count: asOptionalNumber(record?.error_count) ?? 0,
+    errors: asStringArray(record?.errors),
   }
 }
