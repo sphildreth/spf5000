@@ -440,7 +440,8 @@ textarea {
 }
 
 .asset-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 320px));
+  justify-content: start;
   margin-top: 1rem;
 }
 
@@ -451,7 +452,9 @@ textarea {
 
 .asset-preview {
   position: relative;
-  aspect-ratio: 4 / 3;
+  inline-size: 100%;
+  block-size: 180px;
+  aspect-ratio: 16 / 9;
   background: rgba(10, 13, 18, 0.9);
 }
 
@@ -808,6 +811,14 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .asset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .asset-preview {
+    block-size: auto;
+  }
+
   .display-boot-copy {
     left: 8%;
     right: 8%;
