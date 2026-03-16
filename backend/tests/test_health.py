@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.version import APP_VERSION
 from app.main import create_app
 
 
@@ -10,3 +11,4 @@ def test_health() -> None:
     body = response.json()
     assert body["ok"] is True
     assert body["app"] == "SPF5000"
+    assert body["version"] == APP_VERSION

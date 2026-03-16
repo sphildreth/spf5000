@@ -9,9 +9,7 @@ from typing import Any
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-BACKEND_DIR = Path(__file__).resolve().parents[2]
-REPO_ROOT = BACKEND_DIR.parent
+from app.core.version import APP_VERSION, BACKEND_DIR, REPO_ROOT
 
 _log = logging.getLogger(__name__)
 
@@ -63,7 +61,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     app_name: str = "SPF5000"
-    app_version: str = "1.0.0"
+    app_version: str = APP_VERSION
 
     host: str = _server.get("host", "0.0.0.0")
     port: int = _server.get("port", 8000)
