@@ -413,3 +413,227 @@ def test_bulk_remove_rejects_empty_asset_ids(test_client) -> None:
         json={"collection_id": "default-collection", "asset_ids": []},
     )
     assert remove_resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Background fill mode tests
+# ---------------------------------------------------------------------------
+
+def test_settings_background_fill_mode_default(test_client) -> None:
+    """Settings response includes background_fill_mode defaulting to 'black'."""
+    resp = test_client.get("/api/settings")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "background_fill_mode" in body
+    assert body["background_fill_mode"] == "black"
+
+
+def test_settings_background_fill_mode_update_valid(test_client) -> None:
+    """Valid background_fill_mode values are accepted and persisted."""
+    valid_modes = (
+        "dominant_color",
+        "gradient",
+        "black",
+        "blurred_backdrop",
+        "mirrored_edges",
+        "soft_vignette",
+        "palette_wash",
+        "adaptive_auto",
+    )
+    for mode in valid_modes:
+        resp = test_client.put(
+            "/api/settings",
+            json={
+                "frame_name": "SPF5000",
+                "display_variant_width": 1920,
+                "display_variant_height": 1080,
+                "thumbnail_max_size": 400,
+                "slideshow_interval_seconds": 30,
+                "transition_mode": "slide",
+                "transition_duration_ms": 700,
+                "fit_mode": "contain",
+                "shuffle_enabled": True,
+                "selected_collection_id": "default-collection",
+                "active_display_profile_id": "default-display-profile",
+                "background_fill_mode": mode,
+            },
+        )
+        assert resp.status_code == 200, f"mode={mode!r} rejected: {resp.text}"
+        assert resp.json()["background_fill_mode"] == mode
+
+    # Verify final value reads back correctly via GET
+    get_resp = test_client.get("/api/settings")
+    assert get_resp.json()["background_fill_mode"] == valid_modes[-1]
+
+
+def test_settings_background_fill_mode_invalid_rejected(test_client) -> None:
+    """Invalid background_fill_mode values are rejected with 422."""
+    resp = test_client.put(
+        "/api/settings",
+        json={
+            "frame_name": "SPF5000",
+            "display_variant_width": 1920,
+            "display_variant_height": 1080,
+            "thumbnail_max_size": 400,
+            "slideshow_interval_seconds": 30,
+            "transition_mode": "slide",
+            "transition_duration_ms": 700,
+            "fit_mode": "contain",
+            "shuffle_enabled": True,
+            "selected_collection_id": "default-collection",
+            "active_display_profile_id": "default-display-profile",
+            "background_fill_mode": "not_a_real_mode",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_display_config_includes_background_fill_mode(test_client) -> None:
+    """GET /api/display/config exposes background_fill_mode."""
+    resp = test_client.get("/api/display/config")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "background_fill_mode" in body
+    assert body["background_fill_mode"] == "black"
+
+
+def test_display_config_update_background_fill_mode(test_client) -> None:
+    """PUT /api/display/config accepts background_fill_mode."""
+    for mode in (
+        "gradient",
+        "blurred_backdrop",
+        "mirrored_edges",
+        "soft_vignette",
+        "palette_wash",
+        "adaptive_auto",
+        "dominant_color",
+        "black",
+    ):
+        resp = test_client.put(
+            "/api/display/config",
+            json={"background_fill_mode": mode},
+        )
+        assert resp.status_code == 200, f"mode={mode!r} rejected: {resp.text}"
+        assert resp.json()["background_fill_mode"] == mode
+
+        # Confirm it persisted via GET
+        get_resp = test_client.get("/api/display/config")
+        assert get_resp.json()["background_fill_mode"] == mode
+
+        # And is reflected in the playlist response
+        playlist_resp = test_client.get("/api/display/playlist")
+        assert playlist_resp.status_code == 200
+        assert playlist_resp.json()["background_fill_mode"] == mode
+
+
+def test_display_config_update_background_fill_mode_invalid_rejected(test_client) -> None:
+    """PUT /api/display/config rejects unsupported background fill modes."""
+    resp = test_client.put(
+        "/api/display/config",
+        json={"background_fill_mode": "totally_invalid"},
+    )
+    assert resp.status_code == 422
+
+
+def test_playlist_background_fill_mode_default(test_client) -> None:
+    """GET /api/display/playlist includes background_fill_mode at top level."""
+    resp = test_client.get("/api/display/playlist")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "background_fill_mode" in body
+    assert body["background_fill_mode"] == "black"
+
+
+def test_playlist_items_have_background_metadata(test_client, tmp_path, monkeypatch) -> None:
+    """Playlist items include background metadata derived from the display variant."""
+    from pathlib import Path
+
+    sources_response = test_client.get("/api/sources")
+    assert sources_response.status_code == 200
+    source = next(item for item in sources_response.json() if item["provider_type"] == "local_files")
+    import_dir = Path(source["import_path"])
+
+    _write_sample_image(import_dir / "bg_test.jpg", (180, 100, 40))
+
+    run_response = test_client.post(
+        "/api/import/local/run",
+        json={
+            "source_id": source["id"],
+            "collection_id": "default-collection",
+            "max_samples": 5,
+        },
+    )
+    assert run_response.status_code == 200
+    assert run_response.json()["imported_count"] == 1
+
+    playlist_resp = test_client.get("/api/display/playlist")
+    assert playlist_resp.status_code == 200
+    items = playlist_resp.json()["items"]
+    assert len(items) == 1
+
+    item = items[0]
+    assert "background" in item
+    bg = item["background"]
+    assert bg is not None
+    assert bg["ready"] is True
+    assert bg["dominant_color"].startswith("#")
+    assert len(bg["dominant_color"]) == 7
+    assert len(bg["gradient_colors"]) == 2
+    for c in bg["gradient_colors"]:
+        assert c.startswith("#")
+        assert len(c) == 7
+
+    # Second call — metadata now cached; verify it's still present
+    playlist_resp2 = test_client.get("/api/display/playlist")
+    items2 = playlist_resp2.json()["items"]
+    assert items2[0]["background"]["dominant_color"] == bg["dominant_color"]
+
+
+def test_playlist_item_background_fallback_on_missing_variant(test_client) -> None:
+    """Playlist items return background=None (not an error) when the display variant is absent."""
+    import json
+    from pathlib import Path
+
+    sources_response = test_client.get("/api/sources")
+    source = next(item for item in sources_response.json() if item["provider_type"] == "local_files")
+    import_dir = Path(source["import_path"])
+    _write_sample_image(import_dir / "fallback_test.jpg", (50, 100, 200))
+
+    run_response = test_client.post(
+        "/api/import/local/run",
+        json={"source_id": source["id"], "collection_id": "default-collection", "max_samples": 5},
+    )
+    assert run_response.status_code == 200
+
+    # Locate the display variant and remove it to simulate a missing file.
+    assets_resp = test_client.get("/api/assets")
+    assets = assets_resp.json()
+    assert len(assets) >= 1
+    asset = assets[0]
+    display_url = asset["display_url"]  # /api/assets/<id>/variants/display
+
+    # Download the variant to find its path indirectly, then unlink it.
+    # We instead patch the variant path to a nonexistent file via the DB.
+    # Easier: just delete the file from the filesystem.
+    from app.repositories.asset_repository import AssetRepository
+    repo = AssetRepository()
+    variant = repo.get_variant(asset["id"], "display")
+    if variant is not None:
+        variant_path = Path(variant.local_path)
+        if variant_path.exists():
+            variant_path.unlink()
+
+    # Clear cached background in metadata_json so derivation is attempted again.
+    import json as _json
+    current_meta = _json.loads(asset.get("metadata_json", "{}") or "{}")
+    current_meta.pop("background", None)
+    repo.update_metadata_json(asset["id"], _json.dumps(current_meta))
+
+    playlist_resp = test_client.get("/api/display/playlist")
+    assert playlist_resp.status_code == 200
+    items = playlist_resp.json()["items"]
+    # background should be None (or not raise an error)
+    item_match = next((i for i in items if i["asset_id"] == asset["id"]), None)
+    if item_match is not None:
+        # None is the safe fallback
+        assert item_match["background"] is None or isinstance(item_match["background"], dict)

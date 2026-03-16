@@ -24,7 +24,7 @@ class SettingsRepository:
             if is_null_connection(conn):
                 return defaults
             cursor = conn.execute(
-                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     "frame_name",
                     "display_variant_width",
@@ -37,6 +37,7 @@ class SettingsRepository:
                     "shuffle_enabled",
                     "selected_collection_id",
                     "active_display_profile_id",
+                    "background_fill_mode",
                 ),
             )
             rows = cursor.fetchall()
@@ -53,6 +54,7 @@ class SettingsRepository:
                 shuffle_enabled=bool(int(values.get("shuffle_enabled", 1 if defaults.shuffle_enabled else 0))),
                 selected_collection_id=str(values.get("selected_collection_id", defaults.selected_collection_id)),
                 active_display_profile_id=str(values.get("active_display_profile_id", defaults.active_display_profile_id)),
+                background_fill_mode=str(values.get("background_fill_mode", defaults.background_fill_mode)),
             )
 
     def update_settings(self, frame_settings: FrameSettings) -> FrameSettings:
@@ -72,6 +74,7 @@ class SettingsRepository:
                 "shuffle_enabled": "1" if frame_settings.shuffle_enabled else "0",
                 "selected_collection_id": frame_settings.selected_collection_id,
                 "active_display_profile_id": frame_settings.active_display_profile_id,
+                "background_fill_mode": frame_settings.background_fill_mode,
             }
             for key, value in updates.items():
                 existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()

@@ -13,6 +13,7 @@ SPF5000 V1 consists of:
 - DecentDB-backed bootstrap state plus a single local admin user
 - filesystem-backed originals and generated image variants
 - provider-backed offline sync metadata for Google Photos auth/device/source state
+- configurable background presentation modes for display, with cached color metadata plus render-time image-based treatments
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
 The architecture follows the accepted ADR set in `design/adr/0001` through `0015`.
@@ -41,6 +42,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - provide a dedicated fullscreen `/display` route with no admin chrome
 - consume backend API endpoints through typed helpers under `frontend/src/api/`
 - keep display playback independent from the admin shell layout
+- render configurable background presentation behind slideshow images using cached playlist metadata plus the display variant when needed
 - render a configurable weather widget plus alert badge/banner/fullscreen overlays from cached backend data
 
 ### Persistence split
@@ -133,6 +135,7 @@ Key/value device settings, including:
 - `shuffle_enabled`
 - `selected_collection_id`
 - `active_display_profile_id`
+- `background_fill_mode`
 - `sleep_schedule_enabled`
 - `sleep_start_local_time`
 - `sleep_end_local_time`
@@ -171,6 +174,7 @@ Canonical imported image records, including:
 - imported-from path
 - managed original path
 - metadata JSON
+- cached color metadata derived from display variants for color-based background modes
 - imported timestamps
 - active flag
 
@@ -320,10 +324,11 @@ Import failures do not stop the display route from continuing to run with the ex
 ### Route separation
 
 - `/display` is intentionally independent from the admin shell
-- the display route renders on a black background with a hidden cursor
+- the display route renders with a hidden cursor and a black fallback background
 - the display route shows a calm idle state when no assets are available
 - the display route can intentionally render a solid black fullscreen sleep state during the configured sleep window
 - the display route can render a cached weather widget and alert overlays without changing slideshow layer ownership
+- the display route can render `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, or `adaptive_auto` background presentation behind the slideshow image when configured
 
 ### Dual-layer renderer
 
@@ -334,6 +339,10 @@ The slideshow uses two persistent absolutely positioned layers:
 - motion begins only after the next image is ready
 - the outgoing slide moves to the right while the incoming slide enters from the left
 - the backing black background never becomes the intended transition state
+
+Background treatment is rendered in separate persistent layers behind the slideshow image layers. Cached display-variant metadata remains the source for color-based modes such as `dominant_color`, `gradient`, `soft_vignette`, and `palette_wash`, and that metadata is persisted with asset records and lazily backfilled for older assets that predate the feature. Image-based treatments such as `blurred_backdrop` and `mirrored_edges` may reuse the display variant directly at render time.
+
+`adaptive_auto` is a display-behavior policy. It chooses among supported treatments based on the current asset's aspect mismatch and the cached metadata available for that asset, favoring richer treatments when the data is ready and falling back to simpler supported options when it is not.
 
 This preserves the ADR 0008 requirement to avoid a visible full-black frame between slides.
 
@@ -358,6 +367,7 @@ V1 supports these end-to-end settings:
 - transition duration in milliseconds
 - transition type (`slide` today)
 - fit mode (`contain` or `cover`)
+- background fill mode (`black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, or `adaptive_auto`)
 - shuffle enabled/disabled
 - selected collection
 - idle message

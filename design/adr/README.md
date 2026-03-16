@@ -15,3 +15,5 @@
 - 0013 Use provider abstraction and cached state for weather and alerts
 - 0014 Use National Weather Service as the initial weather provider
 - 0015 Use alert escalation and visible takeover behavior on the display
+- 0016 Use cached image-derived background fill for display presentation
+- 0017 Refine display background fill modes, cached-vs-render-time treatments, and adaptive policy

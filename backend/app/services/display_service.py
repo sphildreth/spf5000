@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
+from pathlib import Path
 
+from app.models.asset import AssetBackground
 from app.models.display import DisplayPlaylist, DisplayProfile, PlaylistItem
 from app.models.settings import FrameSettings
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.collection_repository import CollectionRepository
 from app.repositories.display_repository import DisplayRepository
 from app.repositories.settings_repository import SettingsRepository
+from app.services.background_service import (
+    VALID_BACKGROUND_FILL_MODES,
+    background_meta_from_dict,
+    derive_background_meta,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DisplayService:
@@ -24,6 +35,7 @@ class DisplayService:
         self.settings_repo = settings_repo or SettingsRepository()
 
     def get_config(self) -> DisplayProfile:
+        background_fill_mode = self.settings_repo.get_settings().background_fill_mode
         profile = self.display_repo.get_default_profile()
         if profile is None:
             settings = self.settings_repo.get_settings()
@@ -41,10 +53,20 @@ class DisplayService:
                 is_default=True,
                 created_at="",
                 updated_at="",
+                background_fill_mode=settings.background_fill_mode,
             )
+        profile.background_fill_mode = background_fill_mode
         return profile
 
     def update_config(self, updates: dict[str, object]) -> DisplayProfile:
+        # Handle background_fill_mode separately — persisted in settings, not display_profiles table.
+        if "background_fill_mode" in updates and updates["background_fill_mode"] is not None:
+            mode = str(updates["background_fill_mode"])
+            if mode in VALID_BACKGROUND_FILL_MODES:
+                frame_settings = self.settings_repo.get_settings()
+                frame_settings.background_fill_mode = mode
+                self.settings_repo.update_settings(frame_settings)
+
         profile = self.get_config()
         for field_name in (
             "name",
@@ -69,6 +91,8 @@ class DisplayService:
         settings.selected_collection_id = updated_profile.selected_collection_id or ""
         settings.active_display_profile_id = updated_profile.id
         self.settings_repo.update_settings(settings)
+        # Ensure background_fill_mode is fresh on the returned profile.
+        updated_profile.background_fill_mode = self.settings_repo.get_settings().background_fill_mode
         return updated_profile
 
     def get_playlist(self, collection_id: str | None = None) -> DisplayPlaylist:
@@ -91,6 +115,7 @@ class DisplayService:
 
         items = []
         for asset in assets:
+            background = self._resolve_background(asset)
             items.append(
                 PlaylistItem(
                     asset_id=asset.id,
@@ -101,6 +126,7 @@ class DisplayService:
                     height=asset.height,
                     checksum_sha256=asset.checksum_sha256,
                     mime_type=asset.mime_type,
+                    background=background,
                 )
             )
         return DisplayPlaylist(
@@ -109,6 +135,49 @@ class DisplayService:
             collection_name=None if collection is None else collection.name,
             shuffle_enabled=profile.shuffle_enabled,
             playlist_revision=playlist_revision,
+            background_fill_mode=profile.background_fill_mode,
             sleep_schedule=self.settings_repo.get_sleep_schedule(),
             items=items,
         )
+
+    def _resolve_background(self, asset: object) -> AssetBackground | None:
+        """Return the background metadata for *asset*, deriving and caching it lazily.
+
+        Returns ``None`` on any failure so playlist assembly is never blocked.
+        """
+        try:
+            meta: dict[str, object] = json.loads(getattr(asset, "metadata_json", "{}") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            meta = {}
+
+        stored_background = meta.get("background")
+        if isinstance(stored_background, dict):
+            return background_meta_from_dict(stored_background)
+
+        # Lazy derivation — find the display variant path and compute colours.
+        try:
+            display_variant = next(
+                (variant for variant in getattr(asset, "variants", []) if getattr(variant, "kind", "") == "display"),
+                None,
+            )
+            if display_variant is None:
+                display_variant = self.asset_repo.get_variant(asset.id, "display")  # type: ignore[union-attr]
+            if display_variant is None:
+                return None
+            variant_path = Path(display_variant.local_path)
+            if not variant_path.is_file():
+                return None
+
+            bg = derive_background_meta(variant_path)
+
+            # Persist so subsequent requests skip derivation.
+            meta["background"] = {
+                "dominant_color": bg.dominant_color,
+                "gradient_colors": bg.gradient_colors,
+            }
+            self.asset_repo.update_metadata_json(asset.id, json.dumps(meta, sort_keys=True))  # type: ignore[union-attr]
+
+            return bg
+        except Exception:
+            LOGGER.warning("Background derivation failed for asset %s", getattr(asset, "id", "?"), exc_info=True)
+            return None

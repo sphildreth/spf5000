@@ -185,6 +185,16 @@ class AssetRepository:
             cursor = conn.execute("select count(*) from assets where is_active = 1")
             return int(cursor.fetchone()[0])
 
+    def update_metadata_json(self, asset_id: str, metadata_json: str) -> None:
+        """Persist an updated metadata_json blob for an existing asset."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return
+            conn.execute(
+                "update assets set metadata_json = ?, updated_at = ? where id = ?",
+                (metadata_json, utc_now(), asset_id),
+            )
+
     def _attach_related(self, assets: list[Asset]) -> list[Asset]:
         if not assets:
             return assets

@@ -1,5 +1,14 @@
 export type FitMode = 'contain' | 'cover'
 export type PlaybackMode = 'shuffle' | 'sequential'
+export type BackgroundFillMode =
+  | 'black'
+  | 'dominant_color'
+  | 'gradient'
+  | 'blurred_backdrop'
+  | 'mirrored_edges'
+  | 'soft_vignette'
+  | 'palette_wash'
+  | 'adaptive_auto'
 export type DisplayTransitionMode =
   | 'slide'
   | 'slide-right-to-left'
@@ -45,6 +54,45 @@ export function getDisplayTransitionModeLabel(value: DisplayTransitionMode): str
   return DISPLAY_TRANSITION_MODE_LABELS[value]
 }
 
+const BACKGROUND_FILL_MODE_LABELS: Record<BackgroundFillMode, string> = {
+  black: 'Black',
+  dominant_color: 'Dominant Color',
+  gradient: 'Gradient',
+  blurred_backdrop: 'Blurred Backdrop',
+  mirrored_edges: 'Mirrored Edges',
+  soft_vignette: 'Soft Vignette',
+  palette_wash: 'Palette Wash',
+  adaptive_auto: 'Adaptive Auto',
+}
+
+export const BACKGROUND_FILL_MODE_OPTIONS: ReadonlyArray<{
+  value: BackgroundFillMode
+  label: string
+}> = Object.entries(BACKGROUND_FILL_MODE_LABELS).map(([value, label]) => ({
+  value: value as BackgroundFillMode,
+  label,
+}))
+
+export function asBackgroundFillMode(value: unknown, fallback: BackgroundFillMode = 'black'): BackgroundFillMode {
+  switch (value) {
+    case 'black':
+    case 'dominant_color':
+    case 'gradient':
+    case 'blurred_backdrop':
+    case 'mirrored_edges':
+    case 'soft_vignette':
+    case 'palette_wash':
+    case 'adaptive_auto':
+      return value
+    default:
+      return fallback
+  }
+}
+
+export function getBackgroundFillModeLabel(value: BackgroundFillMode): string {
+  return BACKGROUND_FILL_MODE_LABELS[value]
+}
+
 export interface FrameSettings {
   frame_name: string
   display_variant_width: number
@@ -57,6 +105,7 @@ export interface FrameSettings {
   shuffle_enabled: boolean
   selected_collection_id: string
   active_display_profile_id: string
+  background_fill_mode: BackgroundFillMode
 }
 
 export interface ImportJobSummary {
@@ -281,6 +330,7 @@ export interface DisplayConfig {
   shuffle_enabled: boolean
   idle_message: string
   refresh_interval_seconds: number
+  background_fill_mode: BackgroundFillMode
   is_default: boolean
   created_at: string
   updated_at: string
@@ -296,6 +346,13 @@ export interface DisplayConfigUpdateRequest {
   shuffle_enabled?: boolean
   idle_message?: string
   refresh_interval_seconds?: number
+  background_fill_mode?: BackgroundFillMode
+}
+
+export interface PlaylistItemBackground {
+  ready: boolean
+  dominant_color: string | null
+  gradient_colors: string[] | null
 }
 
 export interface PlaylistItem {
@@ -309,6 +366,7 @@ export interface PlaylistItem {
   mime_type: string
   collection_name?: string
   source_name?: string
+  background: PlaylistItemBackground | null
 }
 
 export interface SleepSchedule {

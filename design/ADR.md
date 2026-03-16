@@ -38,6 +38,11 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0014-use-national-weather-service-as-the-initial-weather-provider.md` - first weather provider choice
 - `0015-use-alert-escalation-and-visible-takeover-behavior-on-the-display.md` - alert escalation and display takeover policy
 
+## Proposed ADRs
+
+- `0016-use-cached-image-derived-background-fill-for-display-presentation.md` - initial cached color-based background fill modes for `/display`
+- `0017-refine-display-background-fill-modes-and-adaptive-policy.md` - expanded display background modes, cached-vs-render-time treatment split, and adaptive selection policy for `/display`
+
 ## V1 implementation status
 
 The current V1 implementation is expected to conform to ADRs `0001` through `0015`:

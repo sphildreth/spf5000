@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import shutil
 from dataclasses import dataclass
@@ -13,6 +14,9 @@ from app.models.asset import Asset, AssetVariant
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.base import json_dumps, utc_now
 from app.repositories.settings_repository import SettingsRepository
+from app.services.background_service import derive_background_meta
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -109,6 +113,9 @@ class AssetIngestService:
                 max_width=device_settings.display_variant_width,
                 max_height=device_settings.display_variant_height,
             )
+            background_metadata = self._derive_background_metadata(display_variant)
+            if background_metadata is not None:
+                complete_metadata["background"] = background_metadata
 
         now = utc_now()
         original_name = Path(filename).name
@@ -167,6 +174,21 @@ class AssetIngestService:
             size_bytes=destination.stat().st_size,
             created_at=now,
         )
+
+    def _derive_background_metadata(self, display_variant: AssetVariant) -> dict[str, object] | None:
+        try:
+            background = derive_background_meta(Path(display_variant.local_path))
+        except Exception:
+            LOGGER.warning(
+                "Background derivation failed during ingest for display variant %s",
+                display_variant.local_path,
+                exc_info=True,
+            )
+            return None
+        return {
+            "dominant_color": background.dominant_color,
+            "gradient_colors": background.gradient_colors,
+        }
 
     @staticmethod
     def _build_managed_path(base_dir: Path, checksum: str, extension: str) -> Path:

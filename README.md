@@ -56,6 +56,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🔌 **Offline-First by Design** — Playback stays local and cached instead of depending on live cloud responses.
 - 🖼️ **Appliance-Oriented UX** — The Pi boots directly into a dedicated, gorgeous fullscreen slideshow at `/display`.
 - 🚀 **Smooth Transitions** — Say goodbye to jarring black flashes! The display route uses a dual-layer renderer that preloads the next image before animating.
+- 🎨 **Expanded Background Presentation** — Portrait and mixed-aspect slides support `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto`; cached display-variant metadata drives color-based modes while image-based treatments can reuse the display variant at render time.
 - 📱 **LAN-Managed Admin** — Setup, login, settings, import, and diagnostics are seamlessly available from a browser on your local network.
 - ☁️ **Google Photos Integration** — First-class Google Photos provider using the Ambient API for offline-cached local playback.
 - 🌦️ **Weather & Alerts** — Built-in National Weather Service integration for real-time widget overlays and fullscreen alerts.
@@ -98,7 +99,7 @@ LocalFilesProvider      GooglePhotosProvider
 
 ### Display behavior
 
-The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a black background with a hidden cursor, preloads the next slide before transitioning, and can render an intentional black fullscreen sleep state during configured quiet hours.
+The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a hidden cursor, preloads the next slide before transitioning, supports configurable `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` background presentation, keeps cached display-variant metadata as the source for color-based modes, may reuse the display variant directly for image-based modes, and can render an intentional black fullscreen sleep state during configured quiet hours.
 
 Weather and alert overlays are also display concerns, but they still follow the same appliance rules: weather and alerts are fetched and cached by the backend, `/display` consumes only cached data, and sleep mode remains the highest-precedence fullscreen state.
 
@@ -372,7 +373,7 @@ Design and operational docs live in-repo:
 - [`design/PRD.md`](design/PRD.md) — product goals and scope
 - [`design/SPEC.md`](design/SPEC.md) — technical specification
 - [`design/ADR.md`](design/ADR.md) — architecture decision record index
-- [`design/adr/`](design/adr/) — accepted ADRs
+- [`design/adr/`](design/adr/) — accepted and proposed ADRs
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes following Keep a Changelog
 - [`docs/PI_SETUP_GUIDE.md`](docs/PI_SETUP_GUIDE.md) — end-to-end Pi setup
 - [`docs/GOOGLE_PHOTOS_GUIDE.md`](docs/GOOGLE_PHOTOS_GUIDE.md) — Google Photos credential setup, connection flow, and sync behavior

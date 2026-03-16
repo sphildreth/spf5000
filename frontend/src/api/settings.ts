@@ -1,5 +1,6 @@
 import { apiGet, apiPut } from './http'
 import {
+  asBackgroundFillMode,
   asBoolean,
   asDisplayTransitionMode,
   asFitMode,
@@ -55,5 +56,6 @@ function normalizeSettings(payload: unknown): FrameSettings {
     shuffle_enabled: asBoolean(record?.shuffle_enabled, true),
     selected_collection_id: asString(record?.selected_collection_id, 'default-collection'),
     active_display_profile_id: asString(record?.active_display_profile_id, 'default-display-profile'),
+    background_fill_mode: asBackgroundFillMode(record?.background_fill_mode, 'black'),
   }
 }

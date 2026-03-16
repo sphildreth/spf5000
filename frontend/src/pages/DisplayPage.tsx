@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
+import { buildBackgroundStyle, getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
 import { getDisplayAlerts, getDisplayWeather } from '../api/weather'
 import type {
+  BackgroundFillMode,
   DisplayAlerts,
   DisplayConfig,
   DisplayPlaylist,
@@ -17,10 +18,16 @@ import { WeatherAlertOverlay } from '../components/WeatherAlertOverlay'
 import { WeatherWidget } from '../components/WeatherWidget'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
+type ResolvedBackgroundFillMode = Exclude<BackgroundFillMode, 'adaptive_auto'>
 
 interface DisplayLayer {
   item: PlaylistItem | null
   stage: LayerStage
+}
+
+interface DisplayBackgroundPresentation {
+  resolvedMode: ResolvedBackgroundFillMode
+  style: CSSProperties
 }
 
 interface TransitionStyleVars {
@@ -123,6 +130,7 @@ export function DisplayPage() {
   const [isSleeping, setIsSleeping] = useState(false)
   const [isFullscreenAlertActive, setIsFullscreenAlertActive] = useState(false)
   const [bootMessage, setBootMessage] = useState<BootScreenMessage>(INITIAL_BOOT_MESSAGE)
+  const [viewportAspectRatio, setViewportAspectRatio] = useState(() => getViewportAspectRatio())
 
   const configRef = useRef(config)
   const playlistRef = useRef(playlist)
@@ -197,6 +205,16 @@ export function DisplayPage() {
   useEffect(() => {
     layersRef.current = layers
   }, [layers])
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportAspectRatio(getViewportAspectRatio())
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const clearTimers = useCallback(() => {
     if (advanceTimerRef.current !== null) {
@@ -725,6 +743,15 @@ export function DisplayPage() {
     >
       <div className="display-stage" aria-label="SPF5000 fullscreen slideshow">
         {layers.map((layer, index) => (
+          <DisplayBackgroundLayer
+            key={`bg-${index}`}
+            layer={layer}
+            mode={config.background_fill_mode}
+            viewportAspectRatio={viewportAspectRatio}
+          />
+        ))}
+
+        {layers.map((layer, index) => (
           <div key={index} className={`display-layer display-layer--${layer.stage}`}>
             {layer.item ? (
               <figure className="display-media">
@@ -743,6 +770,52 @@ export function DisplayPage() {
         {isSleeping ? <div className="display-sleep-overlay" aria-hidden="true" /> : null}
       </div>
     </main>
+  )
+}
+
+function DisplayBackgroundLayer({
+  layer,
+  mode,
+  viewportAspectRatio,
+}: {
+  layer: DisplayLayer
+  mode: BackgroundFillMode
+  viewportAspectRatio: number
+}) {
+  const presentation = getDisplayBackgroundPresentation(mode, layer.item, viewportAspectRatio)
+  const usesBackdropImage =
+    presentation.resolvedMode === 'blurred_backdrop' ||
+    presentation.resolvedMode === 'mirrored_edges' ||
+    presentation.resolvedMode === 'soft_vignette'
+  const usesMirroredEdges = presentation.resolvedMode === 'mirrored_edges'
+  const usesPaletteWash = presentation.resolvedMode === 'palette_wash'
+  const showsVignette =
+    presentation.resolvedMode === 'soft_vignette' ||
+    presentation.resolvedMode === 'palette_wash' ||
+    presentation.resolvedMode === 'blurred_backdrop' ||
+    presentation.resolvedMode === 'mirrored_edges'
+
+  return (
+    <div
+      className={`display-bg-layer display-bg-layer--${layer.stage} display-bg-layer--mode-${presentation.resolvedMode}`}
+      style={presentation.style}
+      aria-hidden="true"
+    >
+      {usesBackdropImage ? <div className="display-bg-image display-bg-image--backdrop" /> : null}
+      {usesMirroredEdges ? (
+        <>
+          <div className="display-bg-mirror display-bg-mirror--left" />
+          <div className="display-bg-mirror display-bg-mirror--right" />
+          <div className="display-bg-image display-bg-image--center" />
+        </>
+      ) : null}
+      {usesPaletteWash ? <div className="display-bg-overlay display-bg-overlay--wash" /> : null}
+      {showsVignette ? <div className="display-bg-overlay display-bg-overlay--vignette" /> : null}
+      {(presentation.resolvedMode === 'blurred_backdrop' || presentation.resolvedMode === 'mirrored_edges') && (
+        <div className="display-bg-overlay display-bg-overlay--tint" />
+      )}
+      {presentation.resolvedMode === 'soft_vignette' ? <div className="display-bg-overlay display-bg-overlay--soft-glow" /> : null}
+    </div>
   )
 }
 
@@ -798,6 +871,113 @@ function preloadImage(src: string): Promise<void> {
     image.onerror = () => reject(new Error(`Could not load image: ${src}`))
     image.src = src
   })
+}
+
+function getDisplayBackgroundPresentation(
+  mode: BackgroundFillMode,
+  item: PlaylistItem | null,
+  viewportAspectRatio: number,
+): DisplayBackgroundPresentation {
+  const resolvedMode = resolveBackgroundFillMode(mode, item, viewportAspectRatio)
+  const background = item?.background
+  const palette = getBackgroundPalette(background)
+  const dominant = background?.dominant_color ?? palette[0] ?? '#000'
+
+  return {
+    resolvedMode,
+    style: {
+      background: buildBackgroundStyle(resolvedMode, background),
+      ['--display-bg-image' as string]: item?.display_url ? `url("${item.display_url}")` : 'none',
+      ['--display-bg-dominant' as string]: dominant,
+      ['--display-bg-color-1' as string]: palette[0] ?? dominant,
+      ['--display-bg-color-2' as string]: palette[1] ?? dominant,
+      ['--display-bg-color-3' as string]: palette[2] ?? dominant,
+    },
+  }
+}
+
+function resolveBackgroundFillMode(
+  mode: BackgroundFillMode,
+  item: PlaylistItem | null,
+  viewportAspectRatio: number,
+): ResolvedBackgroundFillMode {
+  if (mode !== 'adaptive_auto') {
+    return mode
+  }
+
+  const background = item?.background
+  if (!background?.ready) {
+    return 'black'
+  }
+
+  const imageAspectRatio = getImageAspectRatio(item)
+  const mismatch = Math.max(imageAspectRatio / viewportAspectRatio, viewportAspectRatio / imageAspectRatio)
+  const paletteSize = background.gradient_colors?.filter((color) => color.length > 0).length ?? 0
+
+  if (mismatch >= 1.55) {
+    return 'blurred_backdrop'
+  }
+
+  if (mismatch >= 1.28) {
+    return 'mirrored_edges'
+  }
+
+  if (paletteSize >= 2) {
+    return 'palette_wash'
+  }
+
+  if (background.dominant_color) {
+    return 'soft_vignette'
+  }
+
+  return paletteSize > 0 ? 'gradient' : 'black'
+}
+
+function getImageAspectRatio(item: PlaylistItem | null): number {
+  if (!item || item.width <= 0 || item.height <= 0) {
+    return 16 / 9
+  }
+
+  return item.width / item.height
+}
+
+function getViewportAspectRatio(): number {
+  if (typeof window === 'undefined' || window.innerWidth <= 0 || window.innerHeight <= 0) {
+    return 16 / 9
+  }
+
+  return window.innerWidth / window.innerHeight
+}
+
+function getBackgroundPalette(itemBackground: PlaylistItem['background'] | undefined): string[] {
+  const colors = itemBackground?.gradient_colors?.filter((color) => color.length > 0) ?? []
+  const dominant = itemBackground?.dominant_color ?? null
+
+  if (colors.length >= 3) {
+    return colors.slice(0, 3)
+  }
+
+  if (colors.length === 2 && dominant) {
+    return [colors[0], colors[1], dominant]
+  }
+
+  if (colors.length === 1 && dominant) {
+    return [colors[0], dominant, dominant]
+  }
+
+  if (dominant) {
+    return [dominant, dominant, dominant]
+  }
+
+  if (colors.length === 2) {
+    return [colors[0], colors[1], colors[1]]
+  }
+
+  if (colors.length === 1) {
+    return [colors[0], colors[0], colors[0]]
+  }
+
+  return ['#000', '#000', '#000']
 }
 
 function getTransitionStyleVars(mode: DisplayTransitionMode): TransitionStyleVars {

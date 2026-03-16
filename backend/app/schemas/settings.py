@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.settings import FrameSettings
 from app.models.sleep_schedule import SleepSchedule, normalize_hhmm, normalize_sleep_schedule
+from app.services.background_service import VALID_BACKGROUND_FILL_MODES
 
 _HHMM_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
@@ -23,6 +24,7 @@ class SettingsResponse(BaseModel):
     shuffle_enabled: bool
     selected_collection_id: str
     active_display_profile_id: str
+    background_fill_mode: str
 
     @classmethod
     def from_domain(cls, value: FrameSettings) -> "SettingsResponse":
@@ -41,6 +43,16 @@ class SettingsUpdateRequest(BaseModel):
     shuffle_enabled: bool
     selected_collection_id: str
     active_display_profile_id: str
+    background_fill_mode: str = "black"
+
+    @field_validator("background_fill_mode")
+    @classmethod
+    def validate_background_fill_mode(cls, v: str) -> str:
+        if v not in VALID_BACKGROUND_FILL_MODES:
+            raise ValueError(
+                f"background_fill_mode must be one of {sorted(VALID_BACKGROUND_FILL_MODES)!r}, got {v!r}"
+            )
+        return v
 
 
 def _validate_hhmm(value: str, field_name: str) -> str:

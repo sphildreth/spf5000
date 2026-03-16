@@ -4,8 +4,11 @@ import { getCollections } from '../api/collections'
 import { getDisplayConfig, updateDisplayConfig } from '../api/display'
 import { getSleepSchedule, updateSleepSchedule } from '../api/settings'
 import {
+  asBackgroundFillMode,
   asDisplayTransitionMode,
+  BACKGROUND_FILL_MODE_OPTIONS,
   DISPLAY_TRANSITION_MODE_OPTIONS,
+  getBackgroundFillModeLabel,
   getDisplayTransitionModeLabel,
   type DisplayConfig,
   type DisplayConfigUpdateRequest,
@@ -105,6 +108,7 @@ export function DisplaySettingsPage() {
         shuffle_enabled: draft.shuffle_enabled,
         idle_message: draft.idle_message,
         refresh_interval_seconds: draft.refresh_interval_seconds,
+        background_fill_mode: draft.background_fill_mode,
       }
       const updated = await updateDisplayConfig(request)
       setData((current) => (current ? { ...current, config: updated } : current))
@@ -263,6 +267,28 @@ export function DisplaySettingsPage() {
                 </select>
               </label>
               <label>
+                <span>Image background fill</span>
+                <select
+                  value={draft.background_fill_mode}
+                  onChange={(event) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            background_fill_mode: asBackgroundFillMode(event.target.value, current.background_fill_mode),
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  {BACKGROUND_FILL_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
                 <span>Refresh playlist every (seconds)</span>
                 <input
                   type="number"
@@ -340,6 +366,10 @@ export function DisplaySettingsPage() {
               <div>
                 <dt>Transition</dt>
                 <dd>{getDisplayTransitionModeLabel(draft.transition_mode)}</dd>
+              </div>
+              <div>
+                <dt>Background fill</dt>
+                <dd>{getBackgroundFillModeLabel(draft.background_fill_mode)}</dd>
               </div>
               <div>
                 <dt>Playlist refresh</dt>

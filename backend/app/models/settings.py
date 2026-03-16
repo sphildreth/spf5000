@@ -18,3 +18,4 @@ class FrameSettings:
     shuffle_enabled: bool = True
     selected_collection_id: str = DEFAULT_COLLECTION_ID
     active_display_profile_id: str = DEFAULT_DISPLAY_PROFILE_ID
+    background_fill_mode: str = "black"

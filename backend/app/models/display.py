@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.models.asset import AssetBackground
 from app.models.sleep_schedule import SleepSchedule
 
 
@@ -20,6 +21,7 @@ class DisplayProfile:
     is_default: bool
     created_at: str
     updated_at: str
+    background_fill_mode: str = "black"
 
 
 @dataclass(slots=True)
@@ -32,6 +34,7 @@ class PlaylistItem:
     height: int
     checksum_sha256: str
     mime_type: str
+    background: AssetBackground | None = None
 
 
 @dataclass(slots=True)
@@ -41,5 +44,6 @@ class DisplayPlaylist:
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    background_fill_mode: str = "black"
     sleep_schedule: SleepSchedule = field(default_factory=SleepSchedule)
     items: list[PlaylistItem] = field(default_factory=list)

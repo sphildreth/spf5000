@@ -29,6 +29,7 @@ The target household wants a frame that behaves like an appliance, not a service
 7. Support user-selected Google Photos ambient sources through a first-class provider flow.
 8. Present transitions that feel polished and continuous, without a visible black flash between images.
 9. Provide calm ambient weather plus serious weather-alert behavior without breaking the frame's appliance feel.
+10. Present portrait and mixed-aspect images with tasteful background treatment that keeps the photo as the focal point.
 
 ## Non-Goals for v1
 
@@ -53,6 +54,7 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want the frame to keep showing photos even if the network is temporarily unavailable.
 - As a household member, I want portrait and landscape images to display cleanly.
 - As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
+- As a household member, I want portrait and mixed-aspect photos to use a tasteful image-derived background instead of always showing hard black bars.
 - As a household member, I want the frame to go dark automatically during configured quiet hours and wake back up on its own.
 - As a household member, I want a compact weather widget so the frame is useful even when nothing needs urgent attention.
 - As a household member, I want severe weather alerts to become highly visible without looking like a broken slideshow.
@@ -81,6 +83,10 @@ Technical household member who installs, configures, and maintains the device.
 - Automatic resume after reboot.
 - Default transition mode should support horizontal slide animation with no visible full-black frame.
 - Playback should use preloaded assets and never intentionally blank the screen during normal image-to-image transitions.
+- Provide configurable display background modes of `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` for letterboxed or aspect-mismatched display space.
+- Keep cached display-variant metadata as the source for color-based modes such as `dominant_color`, `gradient`, `soft_vignette`, and `palette_wash`.
+- Allow image-based presentation modes such as `blurred_backdrop` and `mirrored_edges` to reuse the cached display variant at render time instead of requiring live full-original analysis.
+- Treat `adaptive_auto` as a display-behavior policy that chooses among supported treatments based on aspect mismatch and available cached metadata.
 - Support a configurable sleep window based on the device's local time, with an inclusive start time and exclusive end time.
 - During the sleep window, render a solid black fullscreen state, pause slideshow advancement, and resume automatically when the window ends.
 - Render an optional weather widget from cached backend weather state without blocking slideshow playback.
@@ -126,6 +132,7 @@ Technical household member who installs, configures, and maintains the device.
 - Store the sleep schedule in DecentDB application settings rather than OS schedulers or runtime config files.
 - Store weather settings plus cached weather and alert state in DecentDB.
 - Store image binaries and resized variants on local disk.
+- Store the selected display background mode in DecentDB and cached per-asset color metadata alongside asset metadata, while allowing image-based presentation modes to reuse display variants at render time.
 
 ## Quality Attributes
 
@@ -165,3 +172,4 @@ Technical household member who installs, configures, and maintains the device.
 - Admin can connect Google Photos, select ambient media sources, and see sync status without affecting cached playback.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
 - Transitions feel smooth and continuous, with no obvious black flash between images.
+- Admin can choose a display background mode, including `adaptive_auto`, and portrait or mixed-aspect images render with the expected treatment without breaking slideshow smoothness.
