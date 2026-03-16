@@ -13,6 +13,7 @@ set -- \
   __DISPLAY_URL__
 
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+  export XCURSOR_THEME=empty
   set -- --ozone-platform-hint=auto "$@"
 elif [ -x /usr/bin/unclutter ]; then
   /usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork >/dev/null 2>&1

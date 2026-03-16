@@ -458,6 +458,74 @@ EOF
   chmod 0640 "${CONFIG_PATH}"
 }
 
+install_empty_cursor() {
+  local icons_dir="${RUNTIME_HOME}/.icons"
+  local theme_dir="${icons_dir}/empty"
+  local cursors_dir="${theme_dir}/cursors"
+
+  log "Installing empty cursor theme to hide cursor on Wayland."
+  mkdir -p "${cursors_dir}" "${icons_dir}/default"
+
+  cat <<EOF >"${theme_dir}/index.theme"
+[Icon Theme]
+Name=Empty
+Comment=Empty cursor theme
+EOF
+
+  python3 -c '
+import struct
+import sys
+
+def write_xcursor(filename):
+    with open(filename, "wb") as f:
+        f.write(b"Xcur")
+        f.write(struct.pack("<I", 16))
+        f.write(struct.pack("<I", 0x10000))
+        f.write(struct.pack("<I", 1))
+        f.write(struct.pack("<I", 0xfffd0002))
+        f.write(struct.pack("<I", 1))
+        f.write(struct.pack("<I", 28))
+        f.write(struct.pack("<I", 36))
+        f.write(struct.pack("<I", 0xfffd0002))
+        f.write(struct.pack("<I", 1))
+        f.write(struct.pack("<I", 1))
+        f.write(struct.pack("<IIII", 1, 1, 0, 0))
+        f.write(struct.pack("<I", 0))
+        f.write(struct.pack("<I", 0x00000000))
+
+write_xcursor(sys.argv[1])
+' "${cursors_dir}/left_ptr"
+
+  # Link common cursor names
+  for name in default pointer right_ptr crosshair x-cursor; do
+    ln -sf left_ptr "${cursors_dir}/${name}"
+  done
+
+  # Make it the default for this user
+  cat <<EOF >"${icons_dir}/default/index.theme"
+[Icon Theme]
+Inherits=empty
+EOF
+
+  chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${icons_dir}"
+
+  # Configure labwc and wayfire to use the empty cursor
+  local labwc_env="${RUNTIME_HOME}/.config/labwc/environment"
+  local wayfire_ini="${RUNTIME_HOME}/.config/wayfire.ini"
+
+  mkdir -p "$(dirname "${labwc_env}")" "$(dirname "${wayfire_ini}")"
+  
+  if [[ ! -f "${labwc_env}" ]] || ! grep -q "XCURSOR_THEME" "${labwc_env}"; then
+    echo "XCURSOR_THEME=empty" >> "${labwc_env}"
+  fi
+  
+  if [[ ! -f "${wayfire_ini}" ]] || ! grep -q "cursor_theme" "${wayfire_ini}"; then
+    echo -e "\n[input]\ncursor_theme = empty" >> "${wayfire_ini}"
+  fi
+
+  chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${RUNTIME_HOME}/.config/labwc" "${RUNTIME_HOME}/.config/wayfire.ini" 2>/dev/null || true
+}
+
 install_service_file() {
   local service_template="${APP_ROOT}/deploy/systemd/spf5000.service.template"
   local python_bin="${APP_ROOT}/backend/.venv/bin/python"
@@ -589,6 +657,7 @@ main() {
   ensure_decentdb_runtime
   build_frontend
   write_config_if_needed
+  install_empty_cursor
   install_service_file
   install_autostart_file
   enable_service
