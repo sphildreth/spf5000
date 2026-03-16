@@ -13,6 +13,8 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.bootstrap import initialize_runtime
+from app.services.google_photos_service import GooglePhotosService
+from app.services.google_photos_sync_coordinator import GooglePhotosSyncCoordinator
 
 _LOG = logging.getLogger(__name__)
 
@@ -30,10 +32,16 @@ def _resolve_session_secret() -> str:
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     configure_logging()
     initialize_runtime()
-    yield
+    coordinator = GooglePhotosSyncCoordinator(service_factory=GooglePhotosService)
+    coordinator.start()
+    app.state.google_photos_sync_coordinator = coordinator
+    try:
+        yield
+    finally:
+        coordinator.stop()
 
 
 def create_app() -> FastAPI:

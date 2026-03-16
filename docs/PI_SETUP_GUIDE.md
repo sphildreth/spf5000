@@ -18,9 +18,9 @@ Do this:
 sudo raspi-config
 sudo raspi-config nonint do_blanking 1
 
-# You can clearly use whatever user you like just keep it consistent below for the user "pi"
-sudo useradd -M /bin/bash pi
-sudo passwd pi
+# Use an existing Raspberry Pi desktop user, or create one with a home directory.
+# If you pick a different username, replace "pi" consistently below.
+sudo adduser pi
 
 sudo mkdir -p /opt
 cd /opt
@@ -83,6 +83,8 @@ It does not try to reconfigure every Raspberry Pi OS desktop setting for you. Th
 - cloning or copying the SPF5000 repository onto the Pi
 
 ## 4. Prepare the Pi OS desktop session
+
+The runtime user should be a normal desktop account with a home directory. SPF5000 installs the Chromium kiosk autostart entry into that user's `~/.config/autostart/` directory, and Raspberry Pi OS Desktop autologin should target that same user.
 
 Enable desktop autologin:
 
@@ -238,7 +240,31 @@ The installer manages these key files and paths:
 
 The repository itself remains in the chosen app root, and the backend still uses `backend/.venv` plus `frontend/dist` inside that checkout.
 
-## 11. Sleep schedule behavior
+## 11. Updating an existing install
+
+To update a Pi that is already running SPF5000, update the repository checkout and then re-run the installer.
+
+`git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
+
+Typical update flow:
+
+```bash
+cd /opt/spf5000
+git pull
+
+if [ -d /opt/decentdb/.git ]; then
+  cd /opt/decentdb
+  git pull
+fi
+
+cd /opt/spf5000
+sudo ./scripts/install-pi.sh --user pi
+sudo ./scripts/doctor.sh --user pi
+```
+
+The runtime config at `/var/lib/spf5000/spf5000.toml` is preserved on re-run unless you explicitly use `--force`.
+
+## 12. Sleep schedule behavior
 
 SPF5000's quiet-hours behavior is controlled by application settings stored in DecentDB, not by the installer, `spf5000.toml`, `systemd`, cron, or Chromium flags.
 
@@ -253,7 +279,7 @@ The recommended model remains:
 
 That preserves the appliance feel without adding brittle reboot or monitor-power choreography.
 
-## 12. Uninstalling the appliance wiring
+## 13. Uninstalling the appliance wiring
 
 To remove the `systemd` unit and Chromium autostart entry while keeping the runtime database, cache, and imported media:
 
@@ -269,7 +295,7 @@ sudo ./scripts/uninstall-pi.sh --user pi --purge
 
 The uninstaller intentionally leaves the repository checkout alone.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 ### Doctor reports that the backend is loopback-only
 
@@ -307,13 +333,14 @@ Confirm all of the following:
 - `sudo systemctl status spf5000.service` is healthy
 - `sudo ./scripts/doctor.sh --user pi` does not report service or health failures
 
-## 14. Quick command summary
+## 15. Quick command summary
 
 ```bash
 sudo raspi-config
 sudo raspi-config nonint do_blanking 1
 
 cd /opt/spf5000
+git pull
 sudo ./scripts/install-pi.sh --user pi
 sudo ./scripts/doctor.sh --user pi
 

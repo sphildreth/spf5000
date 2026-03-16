@@ -365,6 +365,7 @@ def bootstrap_database() -> None:
         _ensure_column(conn, "provider_accounts", "last_completed_sync_at", "text")
         _ensure_column(conn, "provider_assets", "cached_original_path", "text")
         _ensure_column(conn, "provider_assets", "checksum_sha256", "text")
+        _ensure_column(conn, "provider_sync_runs", "duplicate_count", "integer not null default 0")
 
         now = utc_now()
         for key, value in DEFAULT_SETTINGS.items():

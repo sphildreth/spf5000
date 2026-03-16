@@ -21,3 +21,10 @@ level = "INFO"
 data_dir = "./backend/data"
 cache_dir = "./backend/cache"
 database_path = "./backend/data/spf5000.ddb"
+
+[providers.google_photos]
+# Google Photos Ambient API OAuth client for TVs and limited-input devices.
+# client_id = "replace-with-google-oauth-client-id"
+# client_secret = "replace-with-google-oauth-client-secret"
+provider_display_name = "Google Photos"
+sync_cadence_seconds = 3600

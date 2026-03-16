@@ -45,6 +45,8 @@ Common options:
 - `--skip-apt` - skip apt installation and validate only
 - `--force` - overwrite an existing generated config and bypass the non-Pi hardware guard
 
+The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
+
 The installer defaults to `--host 0.0.0.0` so another device on the LAN can still reach `/setup`, `/login`, and `/admin`. Chromium still opens the local `http://127.0.0.1:8000/display` route when the host is the wildcard bind.
 
 ## Managed files and paths
@@ -144,6 +146,7 @@ sudo ./scripts/uninstall-pi.sh --user pi --purge
 
 The installer deliberately does not try to own every desktop-session knob. You should still verify:
 
+- the runtime user is a normal desktop account with a home directory
 - Desktop Autologin is enabled in `raspi-config`
 - screen blanking is disabled
 - any desired X11 anti-blanking settings are present

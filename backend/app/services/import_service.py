@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from uuid import uuid4
 
-from app.core.config import settings
 from app.models.import_job import ImportJob
 from app.providers.base import ProviderScanResult
 from app.repositories.asset_repository import AssetRepository

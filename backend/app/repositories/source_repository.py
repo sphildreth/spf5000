@@ -26,7 +26,7 @@ class SourceRepository:
                 from sources s
                 left join assets a on a.source_id = s.id and a.is_active = 1
                 group by s.id, s.name, s.provider_type, s.import_path, s.enabled, s.created_at, s.updated_at, s.last_scan_at, s.last_import_at
-                order by s.name asc
+                order by case when s.provider_type = 'local_files' then 0 else 1 end asc, s.name asc
                 """
             )
             return [self._to_model(row) for row in rows_to_dicts(cursor, cursor.fetchall())]

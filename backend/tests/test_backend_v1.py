@@ -16,8 +16,8 @@ def test_status_bootstrap_and_settings_update(test_client) -> None:
     assert status_response.status_code == 200
     status_body = status_response.json()
     assert status_body["status"] == "ready"
-    assert status_body["source_count"] == 1
-    assert status_body["collection_count"] == 1
+    assert status_body["source_count"] >= 1
+    assert status_body["collection_count"] >= 1
     assert "warnings" in status_body
     assert status_body["active_display_profile"]["selected_collection_id"] == "default-collection"
 
@@ -86,7 +86,7 @@ def test_collections_crud(test_client) -> None:
 def test_local_scan_import_assets_and_playlist(test_client) -> None:
     sources_response = test_client.get("/api/sources")
     assert sources_response.status_code == 200
-    source = sources_response.json()[0]
+    source = next(item for item in sources_response.json() if item["provider_type"] == "local_files")
     import_dir = Path(source["import_path"])
 
     _write_sample_image(import_dir / "one.jpg", (255, 0, 0))
