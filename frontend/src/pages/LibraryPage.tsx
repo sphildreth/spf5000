@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getAssets, uploadAssets } from '../api/assets'
+import { getAssets, removeAssetFromCollection, removeAssetsFromCollection, uploadAssets } from '../api/assets'
 import { getCollections } from '../api/collections'
-import type { AssetUploadSummary, CollectionSummary } from '../api/types'
+import type { AssetCollectionBulkDeleteSummary, AssetSummary, AssetUploadSummary, CollectionSummary } from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -29,9 +29,14 @@ export function LibraryPage() {
   const [collectionFilter, setCollectionFilter] = useState(INITIAL_COLLECTION_FILTER)
   const [uploadCollectionId, setUploadCollectionId] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [assetActionFeedback, setAssetActionFeedback] = useState<{ title: string; detail?: string } | null>(null)
+  const [assetActionError, setAssetActionError] = useState<{ title: string; detail?: string } | null>(null)
+  const [removingMembershipKey, setRemovingMembershipKey] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const uploadableCollections = useMemo(
@@ -52,6 +57,15 @@ export function LibraryPage() {
     () => selectedFiles.reduce((total, file) => total + file.size, 0),
     [selectedFiles],
   )
+
+  const collectionNamesById = useMemo(
+    () => new Map((collections ?? []).map((collection) => [collection.id, collection.name])),
+    [collections],
+  )
+  const selectedAssetIdSet = useMemo(() => new Set(selectedAssetIds), [selectedAssetIds])
+  const isCollectionScopedFilter = collectionFilter !== INITIAL_COLLECTION_FILTER
+  const activeCollectionName =
+    (collections ?? []).find((collection) => collection.id === collectionFilter)?.name ?? collectionFilter
 
   const filteredAssets = useMemo(() => {
     const sourceAssets = assets ?? []
@@ -75,6 +89,13 @@ export function LibraryPage() {
       return haystack.includes(normalizedQuery)
     })
   }, [assets, collectionFilter, query])
+  const allVisibleAssetsSelected =
+    isCollectionScopedFilter && filteredAssets.length > 0 && filteredAssets.every((asset) => selectedAssetIdSet.has(asset.id))
+  const assetSelectionDisabled = bulkDeleting || removingMembershipKey !== null
+
+  useEffect(() => {
+    setSelectedAssetIds((current) => (current.length > 0 ? [] : current))
+  }, [collectionFilter, filteredAssets, query])
 
   async function handleRefresh() {
     await Promise.allSettled([reloadAssets(), reloadCollections()])
@@ -96,6 +117,8 @@ export function LibraryPage() {
       setUploading(true)
       setUploadError(null)
       setUploadFeedback(null)
+      setAssetActionError(null)
+      setAssetActionFeedback(null)
       const summary = await uploadAssets(selectedFiles, uploadCollectionId)
       const collectionName =
         uploadableCollections.find((collection) => collection.id === summary.collection_id)?.name ?? 'the selected collection'
@@ -110,11 +133,138 @@ export function LibraryPage() {
     }
   }
 
+  async function handleRemoveFromCollection(assetId: string, collectionId: string, assetTitle: string, collectionName: string) {
+    if (!window.confirm(`Remove "${assetTitle}" from ${collectionName}?`)) {
+      return
+    }
+
+    const membershipKey = `${assetId}:${collectionId}`
+    try {
+      setRemovingMembershipKey(membershipKey)
+      setAssetActionError(null)
+      setAssetActionFeedback(null)
+      setUploadError(null)
+      setUploadFeedback(null)
+      await removeAssetFromCollection(assetId, collectionId)
+      setSelectedAssetIds((current) => current.filter((id) => id !== assetId))
+      setAssetActionFeedback({
+        title: `Removed "${assetTitle}" from ${collectionName}.`,
+      })
+      await Promise.allSettled([reloadAssets(), reloadCollections()])
+    } catch (caught) {
+      setAssetActionError({
+        title: 'Could not remove photo',
+        detail: caught instanceof Error ? caught.message : 'Could not remove the photo from the collection.',
+      })
+    } finally {
+      setRemovingMembershipKey(null)
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!isCollectionScopedFilter) {
+      setAssetActionFeedback(null)
+      setAssetActionError({
+        title: 'Choose a specific collection first',
+        detail: 'Bulk removal only works when the browser is filtered to one collection.',
+      })
+      return
+    }
+
+    const selectedAssets = filteredAssets.filter((asset) => selectedAssetIdSet.has(asset.id))
+    if (selectedAssets.length === 0) {
+      setAssetActionFeedback(null)
+      setAssetActionError({
+        title: 'No photos selected',
+        detail: 'Select one or more visible photos before trying to remove them from the collection.',
+      })
+      return
+    }
+
+    const confirmationTarget = activeCollectionName || 'the selected collection'
+    if (
+      !window.confirm(
+        `Remove ${formatCount(selectedAssets.length, 'selected photo')} from ${confirmationTarget}? This only removes the collection membership.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      setBulkDeleting(true)
+      setAssetActionError(null)
+      setAssetActionFeedback(null)
+      setUploadError(null)
+      setUploadFeedback(null)
+
+      const summary = await removeAssetsFromCollection(
+        selectedAssets.map((asset) => asset.id),
+        collectionFilter,
+      )
+      const failureDetail = buildBulkDeleteFailureDetail(summary, selectedAssets)
+
+      if (summary.removed_count > 0) {
+        const detailParts: string[] = []
+        if (summary.deactivated_count > 0) {
+          detailParts.push(`${formatCount(summary.deactivated_count, 'photo')} no longer belongs to any collection and was deactivated.`)
+        }
+        if (summary.errors.length > 0) {
+          detailParts.push(`${formatCount(summary.errors.length, 'photo')} could not be removed in the same request.`)
+        }
+
+        setAssetActionFeedback({
+          title: `Removed ${formatCount(summary.removed_count, 'photo')} from ${confirmationTarget}.`,
+          detail: detailParts.length > 0 ? detailParts.join(' ') : undefined,
+        })
+      } else {
+        setAssetActionFeedback(null)
+      }
+
+      if (summary.errors.length > 0) {
+        setAssetActionError({
+          title:
+            summary.removed_count > 0 ? 'Some selected photos could not be removed' : 'Could not remove selected photos',
+          detail: failureDetail,
+        })
+      } else {
+        setAssetActionError(null)
+      }
+
+      setSelectedAssetIds([])
+      await Promise.allSettled([reloadAssets(), reloadCollections()])
+    } catch (caught) {
+      setAssetActionFeedback(null)
+      setAssetActionError({
+        title: 'Could not remove selected photos',
+        detail: caught instanceof Error ? caught.message : 'The selected photos could not be removed from the collection.',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   function clearSelectedFiles() {
     setSelectedFiles([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
+  }
+
+  function toggleAssetSelection(assetId: string) {
+    setSelectedAssetIds((current) =>
+      current.includes(assetId) ? current.filter((existingId) => existingId !== assetId) : [...current, assetId],
+    )
+  }
+
+  function clearSelectedAssets() {
+    setSelectedAssetIds([])
+  }
+
+  function selectAllVisibleAssets() {
+    if (!isCollectionScopedFilter) {
+      return
+    }
+    setSelectedAssetIds(filteredAssets.map((asset) => asset.id))
   }
 
   return (
@@ -131,6 +281,12 @@ export function LibraryPage() {
 
       {uploadFeedback ? <StatusNotice variant="success" title={uploadFeedback} /> : null}
       {uploadError ? <StatusNotice variant="error" title="Upload finished with issues" detail={uploadError} /> : null}
+      {assetActionFeedback ? (
+        <StatusNotice variant="success" title={assetActionFeedback.title} detail={assetActionFeedback.detail} />
+      ) : null}
+      {assetActionError ? (
+        <StatusNotice variant="error" title={assetActionError.title} detail={assetActionError.detail} />
+      ) : null}
       {collectionsError ? <StatusNotice variant="error" title="Could not load collections" detail={collectionsError} /> : null}
 
       <div className="two-column-grid">
@@ -264,6 +420,49 @@ export function LibraryPage() {
           <span className="pill pill--muted">{formatNumber(filteredAssets.length)} shown</span>
         </div>
 
+        <div className="asset-bulk-bar">
+          <div className="asset-bulk-bar__summary">
+            <strong>
+              {isCollectionScopedFilter
+                ? `Bulk remove from ${activeCollectionName || 'the selected collection'}`
+                : 'Bulk remove requires a collection filter'}
+            </strong>
+            <span className="pill pill--muted">{formatNumber(selectedAssetIds.length)} selected</span>
+          </div>
+          {isCollectionScopedFilter ? (
+            <div className="button-row">
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={selectAllVisibleAssets}
+                disabled={assetSelectionDisabled || filteredAssets.length === 0 || allVisibleAssetsSelected}
+              >
+                Select all shown
+              </button>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={clearSelectedAssets}
+                disabled={assetSelectionDisabled || selectedAssetIds.length === 0}
+              >
+                Clear selection
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={() => void handleBulkDelete()}
+                disabled={assetSelectionDisabled || selectedAssetIds.length === 0}
+              >
+                {bulkDeleting ? 'Removing selected photos…' : 'Remove selected photos'}
+              </button>
+            </div>
+          ) : (
+            <p className="asset-bulk-bar__copy">
+              Choose a specific collection to multi-select visible photos and remove them together.
+            </p>
+          )}
+        </div>
+
         {assetsLoading ? <StatusNotice variant="loading" title="Loading assets…" /> : null}
         {assetsError ? <StatusNotice variant="error" title="Could not load assets" detail={assetsError} /> : null}
         {!assetsLoading && !assetsError && filteredAssets.length === 0 ? (
@@ -276,10 +475,25 @@ export function LibraryPage() {
 
         <div className="asset-grid">
           {filteredAssets.map((asset) => {
-            const collectionLabels = asset.collection_names.length > 0 ? asset.collection_names : asset.collection_ids
+            const collectionIds = asset.collection_ids
+            const collectionLabels = collectionIds.map(
+              (collectionId, index) => asset.collection_names[index] ?? collectionNamesById.get(collectionId) ?? collectionId,
+            )
+            const isSelected = selectedAssetIdSet.has(asset.id)
             return (
-              <article key={asset.id} className="asset-card">
+              <article key={asset.id} className={`asset-card${isSelected ? ' asset-card--selected' : ''}`}>
                 <div className="asset-preview">
+                  {isCollectionScopedFilter ? (
+                    <label className="asset-selection-toggle">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleAssetSelection(asset.id)}
+                        disabled={assetSelectionDisabled}
+                      />
+                      <span>Select</span>
+                    </label>
+                  ) : null}
                   {asset.thumbnail_url || asset.image_url ? (
                     <img src={asset.thumbnail_url ?? asset.image_url} alt={asset.title} loading="lazy" />
                   ) : (
@@ -312,6 +526,29 @@ export function LibraryPage() {
                       </span>
                     ))}
                   </div>
+                  <div className="asset-collection-actions">
+                    {collectionIds.map((collectionId, index) => {
+                      if (collectionFilter !== INITIAL_COLLECTION_FILTER && collectionFilter !== collectionId) {
+                        return null
+                      }
+
+                      const collectionName = collectionLabels[index] ?? collectionId
+                      const membershipKey = `${asset.id}:${collectionId}`
+                      const isRemoving = removingMembershipKey === membershipKey
+
+                      return (
+                        <button
+                          key={membershipKey}
+                          type="button"
+                          className="button button--ghost asset-remove-button"
+                          onClick={() => void handleRemoveFromCollection(asset.id, collectionId, asset.title, collectionName)}
+                          disabled={isRemoving || bulkDeleting}
+                        >
+                          {isRemoving ? `Removing from ${collectionName}…` : `Remove from ${collectionName}`}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               </article>
             )
@@ -340,6 +577,21 @@ function buildUploadFeedback(summary: AssetUploadSummary, collectionName: string
   }
 
   return parts.join(' ')
+}
+
+function buildBulkDeleteFailureDetail(summary: AssetCollectionBulkDeleteSummary, selectedAssets: AssetSummary[]): string {
+  const selectedAssetsById = new Map(selectedAssets.map((asset) => [asset.id, asset]))
+  const details = summary.errors.slice(0, 3).map((failure) => {
+    const asset = selectedAssetsById.get(failure.asset_id)
+    const label = asset?.title || asset?.filename || failure.asset_id
+    return `${label}: ${failure.reason}`
+  })
+
+  if (summary.errors.length > 3) {
+    details.push(`+${formatNumber(summary.errors.length - 3)} more.`)
+  }
+
+  return details.join(' ')
 }
 
 function formatCount(value: number, singular: string): string {

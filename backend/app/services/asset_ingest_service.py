@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -146,8 +147,12 @@ class AssetIngestService:
         destination = self._build_managed_path(target_dir, checksum, ".jpg")
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        working = image.copy()
-        working.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+        if kind == "display":
+            working = self._resize_display_variant(image, max_width=max_width, max_height=max_height)
+        else:
+            working = image.copy()
+            working.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
         rendered = self._to_rgb(working)
         rendered.save(destination, format="JPEG", quality=settings.jpeg_quality, optimize=True)
         now = utc_now()
@@ -166,6 +171,20 @@ class AssetIngestService:
     @staticmethod
     def _build_managed_path(base_dir: Path, checksum: str, extension: str) -> Path:
         return base_dir / checksum[:2] / f"{checksum}{extension}"
+
+    @staticmethod
+    def _resize_display_variant(image: Image.Image, *, max_width: int, max_height: int) -> Image.Image:
+        width, height = image.size
+        if width <= 0 or height <= 0:
+            return image.copy()
+
+        scale = min(1.0, max(max_width / width, max_height / height))
+        if scale >= 1.0:
+            return image.copy()
+
+        resized_width = max(1, math.ceil(width * scale))
+        resized_height = max(1, math.ceil(height * scale))
+        return image.resize((resized_width, resized_height), Image.Resampling.LANCZOS)
 
     @staticmethod
     def _to_rgb(image: Image.Image) -> Image.Image:

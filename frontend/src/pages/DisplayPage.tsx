@@ -377,11 +377,15 @@ export function DisplayPage() {
 
   useEffect(() => {
     document.body.classList.add('display-body')
+    document.documentElement.style.cursor = 'none'
+    document.body.style.cursor = 'none'
     if (showBootDemo) {
       clearTimers()
       setLoading(false)
       setError(null)
       return () => {
+        document.documentElement.style.removeProperty('cursor')
+        document.body.style.removeProperty('cursor')
         document.body.classList.remove('display-body')
         clearTimers()
       }
@@ -390,6 +394,8 @@ export function DisplayPage() {
     void syncDisplayData(true)
 
     return () => {
+      document.documentElement.style.removeProperty('cursor')
+      document.body.style.removeProperty('cursor')
       document.body.classList.remove('display-body')
       clearTimers()
     }

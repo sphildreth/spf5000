@@ -21,9 +21,10 @@ class CollectionRepository:
                     c.is_active,
                     c.created_at,
                     c.updated_at,
-                    count(ca.asset_id) as asset_count
+                    sum(case when ca.asset_id is not null and a.is_active = 1 then 1 else 0 end) as asset_count
                 from collections c
                 left join collection_assets ca on ca.collection_id = c.id
+                left join assets a on a.id = ca.asset_id
                 group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.created_at, c.updated_at
                 order by c.is_default desc, c.name asc
                 """
@@ -45,9 +46,10 @@ class CollectionRepository:
                     c.is_active,
                     c.created_at,
                     c.updated_at,
-                    count(ca.asset_id) as asset_count
+                    sum(case when ca.asset_id is not null and a.is_active = 1 then 1 else 0 end) as asset_count
                 from collections c
                 left join collection_assets ca on ca.collection_id = c.id
+                left join assets a on a.id = ca.asset_id
                 where c.id = ?
                 group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.created_at, c.updated_at
                 """,

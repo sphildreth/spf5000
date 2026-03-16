@@ -1,10 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.api.deps import require_admin
-from app.schemas.asset import AssetResponse, AssetUploadResponse
+from app.schemas.asset import AssetResponse, AssetUploadResponse, BulkRemoveRequest, BulkRemoveResponse
 from app.services.asset_service import AssetService
 
 router = APIRouter()
@@ -38,6 +38,38 @@ def upload_assets(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return AssetUploadResponse.from_domain(summary)
+
+
+@router.post("/bulk-remove", response_model=BulkRemoveResponse, dependencies=_admin_dep)
+def bulk_remove_assets(body: BulkRemoveRequest) -> BulkRemoveResponse:
+    try:
+        summary = service.bulk_remove_from_collection(
+            collection_id=body.collection_id,
+            asset_ids=body.asset_ids,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return BulkRemoveResponse(
+        removed_count=summary.removed_count,
+        deactivated_count=summary.deactivated_count,
+        errors=summary.errors,
+    )
+
+
+@router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=_admin_dep)
+def remove_asset_from_collection(
+    asset_id: str,
+    collection_id: Annotated[str, Query(description="Collection membership to remove")],
+) -> Response:
+    try:
+        service.remove_from_collection(asset_id=asset_id, collection_id=collection_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{asset_id}/variants/{kind}")  # intentionally public — served to the display client

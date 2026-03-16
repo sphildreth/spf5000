@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Sequence
@@ -21,6 +22,14 @@ from app.repositories.source_repository import SourceRepository
 from app.services.asset_ingest_service import AssetIngestService
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class BulkRemoveSummary:
+    removed_count: int
+    deactivated_count: int
+    errors: list[dict[str, str]] = field(default_factory=list)
+
 
 class AssetService:
     def __init__(
@@ -67,6 +76,60 @@ class AssetService:
         if not path.exists():
             return None
         return path, variant.mime_type
+
+    def remove_from_collection(self, asset_id: str, collection_id: str) -> None:
+        asset_id = asset_id.strip()
+        collection_id = collection_id.strip()
+        asset = self.repo.get_asset(asset_id)
+        if asset is None:
+            raise LookupError("Asset not found.")
+
+        collection = self.collection_repo.get_collection(collection_id)
+        if collection is None:
+            raise LookupError("Collection not found.")
+
+        if collection_id not in asset.collection_ids:
+            raise ValueError("Asset is not assigned to the specified collection.")
+
+        self.repo.remove_asset_from_collection(asset_id, collection_id)
+        self.repo.deactivate_asset_if_unassigned(asset_id)
+
+    def bulk_remove_from_collection(self, collection_id: str, asset_ids: list[str]) -> BulkRemoveSummary:
+        collection_id = collection_id.strip()
+        normalized_asset_ids = self._normalize_asset_ids(asset_ids)
+        if not collection_id:
+            raise ValueError("Collection ID is required.")
+        if not normalized_asset_ids:
+            raise ValueError("Select at least one photo to remove.")
+
+        collection = self.collection_repo.get_collection(collection_id)
+        if collection is None:
+            raise LookupError("Collection not found.")
+
+        removed_count = 0
+        deactivated_count = 0
+        errors: list[dict[str, str]] = []
+
+        for asset_id in normalized_asset_ids:
+            asset = self.repo.get_asset(asset_id)
+            if asset is None:
+                errors.append({"asset_id": asset_id, "reason": "Asset not found."})
+                continue
+            if collection_id not in asset.collection_ids:
+                errors.append({"asset_id": asset_id, "reason": "Asset is not assigned to the specified collection."})
+                continue
+            remaining = [cid for cid in asset.collection_ids if cid != collection_id]
+            self.repo.remove_asset_from_collection(asset_id, collection_id)
+            self.repo.deactivate_asset_if_unassigned(asset_id)
+            removed_count += 1
+            if not remaining:
+                deactivated_count += 1
+
+        return BulkRemoveSummary(
+            removed_count=removed_count,
+            deactivated_count=deactivated_count,
+            errors=errors,
+        )
 
     def upload_files(self, files: Sequence[UploadFile], collection_id: str | None = None) -> AssetUploadSummary:
         if not files:
@@ -163,3 +226,15 @@ class AssetService:
             return "the file could not be read as a supported image"
         message = str(exc).strip()
         return message or "the file could not be imported"
+
+    @staticmethod
+    def _normalize_asset_ids(asset_ids: Sequence[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for asset_id in asset_ids:
+            candidate = asset_id.strip()
+            if not candidate or candidate in seen:
+                continue
+            normalized.append(candidate)
+            seen.add(candidate)
+        return normalized

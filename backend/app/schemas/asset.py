@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.asset import Asset, AssetVariant
 from app.models.asset_upload import AssetUploadSummary
@@ -95,3 +96,41 @@ class AssetUploadResponse(BaseModel):
             error_count=summary.error_count,
             errors=summary.errors,
         )
+
+
+class BulkRemoveRequest(BaseModel):
+    collection_id: str
+    asset_ids: Annotated[list[str], Field(min_length=1, description="Asset IDs to remove from the collection")]
+
+    @field_validator("collection_id")
+    @classmethod
+    def collection_id_not_empty(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("collection_id must not be empty")
+        return value
+
+    @field_validator("asset_ids")
+    @classmethod
+    def normalize_asset_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for asset_id in value:
+            candidate = asset_id.strip()
+            if not candidate:
+                raise ValueError("asset_ids must not contain empty values")
+            if candidate not in seen:
+                normalized.append(candidate)
+                seen.add(candidate)
+        return normalized
+
+
+class BulkRemoveFailure(BaseModel):
+    asset_id: str
+    reason: str
+
+
+class BulkRemoveResponse(BaseModel):
+    removed_count: int
+    deactivated_count: int
+    errors: list[BulkRemoveFailure]

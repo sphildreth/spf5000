@@ -108,6 +108,10 @@ export function apiPut<TRequest, TResponse>(path: string, body: TRequest): Promi
   return request<TResponse>(path, { method: 'PUT', body })
 }
 
+export function apiDeleteEmpty(path: string): Promise<void> {
+  return request<undefined>(path, { method: 'DELETE' }).then(() => undefined)
+}
+
 export function apiPostEmpty<TResponse>(path: string): Promise<TResponse> {
   return request<TResponse>(path, { method: 'POST' })
 }

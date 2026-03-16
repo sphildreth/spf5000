@@ -1,4 +1,4 @@
-import { apiGet, apiPostFormData } from './http'
+import { apiDeleteEmpty, apiGet, apiPost, apiPostFormData } from './http'
 import {
   asArray,
   asOptionalNumber,
@@ -6,6 +6,9 @@ import {
   asRecord,
   asString,
   asStringArray,
+  type AssetCollectionBulkDeleteFailure,
+  type AssetCollectionBulkDeleteRequest,
+  type AssetCollectionBulkDeleteSummary,
   type AssetSummary,
   type AssetUploadSummary,
 } from './types'
@@ -25,6 +28,33 @@ export async function uploadAssets(files: File[], collectionId?: string): Promis
   }
   const payload = await apiPostFormData<unknown>('/api/assets/upload', formData)
   return normalizeAssetUploadSummary(payload)
+}
+
+export async function removeAssetFromCollection(assetId: string, collectionId: string): Promise<void> {
+  const params = new URLSearchParams({ collection_id: collectionId })
+  await apiDeleteEmpty(`/api/assets/${encodeURIComponent(assetId)}?${params.toString()}`)
+}
+
+export async function removeAssetsFromCollection(
+  assetIds: string[],
+  collectionId: string,
+): Promise<AssetCollectionBulkDeleteSummary> {
+  const uniqueAssetIds = Array.from(new Set(assetIds.map((assetId) => assetId.trim()).filter(Boolean)))
+
+  if (uniqueAssetIds.length === 0) {
+    return {
+      removed_count: 0,
+      deactivated_count: 0,
+      errors: [],
+    }
+  }
+
+  const request: AssetCollectionBulkDeleteRequest = {
+    collection_id: collectionId,
+    asset_ids: uniqueAssetIds,
+  }
+  const payload = await apiPost<AssetCollectionBulkDeleteRequest, unknown>('/api/assets/bulk-remove', request)
+  return normalizeAssetCollectionBulkDeleteSummary(payload)
 }
 
 function normalizeAsset(item: unknown, index: number): AssetSummary {
@@ -61,5 +91,24 @@ function normalizeAssetUploadSummary(item: unknown): AssetUploadSummary {
     duplicate_count: asOptionalNumber(record?.duplicate_count) ?? 0,
     error_count: asOptionalNumber(record?.error_count) ?? 0,
     errors: asStringArray(record?.errors),
+  }
+}
+
+function normalizeAssetCollectionBulkDeleteSummary(item: unknown): AssetCollectionBulkDeleteSummary {
+  const record = asRecord(item)
+
+  return {
+    removed_count: asOptionalNumber(record?.removed_count) ?? 0,
+    deactivated_count: asOptionalNumber(record?.deactivated_count) ?? 0,
+    errors: asArray(record?.errors, normalizeAssetCollectionBulkDeleteFailure),
+  }
+}
+
+function normalizeAssetCollectionBulkDeleteFailure(item: unknown): AssetCollectionBulkDeleteFailure {
+  const record = asRecord(item)
+
+  return {
+    asset_id: asString(record?.asset_id, ''),
+    reason: asString(record?.reason, 'Could not remove the photo from the collection.'),
   }
 }

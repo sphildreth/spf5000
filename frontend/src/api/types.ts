@@ -100,6 +100,22 @@ export interface AssetUploadSummary {
   errors: string[]
 }
 
+export interface AssetCollectionBulkDeleteRequest {
+  collection_id: string
+  asset_ids: string[]
+}
+
+export interface AssetCollectionBulkDeleteFailure {
+  asset_id: string
+  reason: string
+}
+
+export interface AssetCollectionBulkDeleteSummary {
+  removed_count: number
+  deactivated_count: number
+  errors: AssetCollectionBulkDeleteFailure[]
+}
+
 export interface CollectionSummary {
   id: string
   name: string
