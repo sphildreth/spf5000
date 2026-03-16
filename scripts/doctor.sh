@@ -382,6 +382,14 @@ check_browser_runtime() {
     if [[ -f "${AUTOSTART_FILE}" ]]; then
       pass_check "Chromium autostart entry exists at ${AUTOSTART_FILE}."
 
+      if command -v desktop-file-validate >/dev/null 2>&1; then
+        if desktop-file-validate "${AUTOSTART_FILE}" >/dev/null 2>&1; then
+          pass_check "Chromium autostart entry is a valid desktop file."
+        else
+          fail_check "Chromium autostart entry is not a valid desktop file: ${AUTOSTART_FILE}."
+        fi
+      fi
+
       autostart_exec_line="$(grep '^Exec=' "${AUTOSTART_FILE}" 2>/dev/null || true)"
 
       if [[ "${autostart_exec_line}" == *"/usr/bin/unclutter"* ]]; then

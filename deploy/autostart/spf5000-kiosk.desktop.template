@@ -2,7 +2,7 @@
 Type=Application
 Name=SPF5000 Kiosk
 Comment=Launch the SPF5000 display in Chromium kiosk mode
-Exec=/bin/sh -lc "sleep __KIOSK_DELAY_SECONDS__; set -- --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --password-store=basic --incognito __DISPLAY_URL__; if [ \"${XDG_SESSION_TYPE:-}\" = \"wayland\" ] || [ -n \"${WAYLAND_DISPLAY:-}\" ]; then set -- --ozone-platform-hint=auto \"$@\"; elif [ -x /usr/bin/unclutter ]; then /usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork >/dev/null 2>&1; fi; exec __CHROMIUM_BINARY__ \"$@\""
+Exec=/bin/sh -lc "sleep __KIOSK_DELAY_SECONDS__; set -- --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --password-store=basic --incognito __DISPLAY_URL__; if [ \"\\${XDG_SESSION_TYPE:-}\" = \"wayland\" ] || [ -n \"\\${WAYLAND_DISPLAY:-}\" ]; then set -- --ozone-platform-hint=auto \"\\$@\"; elif [ -x /usr/bin/unclutter ]; then /usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork >/dev/null 2>&1; fi; exec __CHROMIUM_BINARY__ \"\\$@\""
 Terminal=false
 StartupNotify=false
 X-GNOME-Autostart-enabled=true
