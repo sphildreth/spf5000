@@ -59,7 +59,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - **LAN-managed admin** — setup, login, settings, import, and diagnostics are available from a browser on your local network.
 - **No intentional black-frame transitions** — the display route uses a dual-layer slideshow renderer that preloads the next image before animating.
 - **Clear storage boundaries** — DecentDB stores metadata and settings, while the filesystem stores originals and generated variants.
-- **Future-friendly provider model** — source integrations live behind a provider abstraction, with `LocalFilesProvider` implemented first.
+- **Future-friendly provider model** — source integrations live behind a provider abstraction, with managed local files and Google Photos Ambient API support.
 
 ## What ships in 1.0.0
 
@@ -70,6 +70,7 @@ Release `1.0.0` includes:
 - **DecentDB-backed** metadata, bootstrap state, settings, sleep schedule, and single-admin account storage
 - **filesystem-backed originals and variants**, including generated display-sized images and thumbnails
 - a **managed local import workflow** via `LocalFilesProvider`
+- a **first-class Google Photos provider** using the Ambient API device flow, Google-managed source selection, and offline local cache playback
 - **SHA-256 duplicate detection** during import
 - **session-cookie admin auth** for protected routes while keeping `/display` public
 - an **app-managed sleep schedule** stored in DecentDB and enforced by the display client
@@ -88,21 +89,23 @@ Release `1.0.0` includes:
 ### Runtime flow
 
 ```text
-Local import folder
-        │
-        ▼
-LocalFilesProvider
-        │
-        ▼
-Import service ──► DecentDB metadata/settings/bootstrap state
-        │
-        └───────► Filesystem originals + display/thumbnail variants
-                               │
-                               ▼
-                     /api/display/playlist
-                               │
-                               ▼
-                 Chromium kiosk at /display on the Pi
+Local import folder      Google Photos Ambient API
+        │                         │
+        ▼                         ▼
+LocalFilesProvider      GooglePhotosProvider
+        │                         │
+        └──────────────► import / sync services
+                                  │
+                ┌─────────────────┴─────────────────┐
+                ▼                                   ▼
+      DecentDB metadata/settings/bootstrap   Filesystem originals +
+                state                        display/thumbnail variants
+                                                        │
+                                                        ▼
+                                              /api/display/playlist
+                                                        │
+                                                        ▼
+                                          Chromium kiosk at /display
 ```
 
 ### Display behavior
@@ -191,6 +194,13 @@ level = "INFO"
 data_dir = "./backend/data"
 cache_dir = "./backend/cache"
 database_path = "./backend/data/spf5000.ddb"
+
+[providers.google_photos]
+# Google Photos Ambient API OAuth client for TVs and limited-input devices.
+client_id = "your-google-client-id"
+client_secret = "your-google-client-secret"
+provider_display_name = "Google Photos"
+sync_cadence_seconds = 3600
 ```
 
 Important notes:
@@ -199,6 +209,8 @@ Important notes:
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
 - Sleep scheduling is managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
+- Google Photos credentials live in `spf5000.toml`, while linked-account state, selected media sources, sync runs, and provider asset mappings live in DecentDB.
+- Google Photos playback stays offline-first: the frame syncs media into managed local storage and `/display` plays from the local cache.
 
 ### Default managed storage layout
 
@@ -207,7 +219,9 @@ By default, the backend manages these paths:
 - `backend/data/spf5000.ddb`
 - `backend/data/fallback/empty-display.jpg`
 - `backend/data/sources/local-files/import/`
+- `backend/data/sources/google-photos/import/`
 - `backend/data/staging/imports/`
+- `backend/data/staging/google-photos/`
 - `backend/data/storage/originals/`
 - `backend/data/storage/variants/display/`
 - `backend/data/storage/variants/thumbnails/`

@@ -36,11 +36,10 @@ sudo reboot
 ```
 
 Then from another machine do this:
+
 ```text
 http://<pi-hostname-or-ip>:8000/setup
 ```
-
-
 
 ## 1. Goal
 
@@ -183,6 +182,8 @@ sudo ./scripts/install-pi.sh \
 ```
 
 Use `--host 127.0.0.1` only if you intentionally want a loopback-only backend and do not need LAN admin access.
+
+If you plan to use Google Photos on the frame, edit the generated `spf5000.toml` and fill in the `[providers.google_photos]` block with your Ambient API OAuth client ID and client secret before you start the connection flow from the admin UI.
 
 ## 8. Verify with doctor
 

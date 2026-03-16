@@ -75,6 +75,7 @@ class GooglePhotosMediaSourceResponse(BaseModel):
     display_name: str
     is_selected: bool
     last_seen_at: str
+    asset_count: int = 0
 
     @classmethod
     def from_domain(cls, media_source: GooglePhotosMediaSource) -> "GooglePhotosMediaSourceResponse":
@@ -83,6 +84,7 @@ class GooglePhotosMediaSourceResponse(BaseModel):
             display_name=media_source.display_name,
             is_selected=media_source.is_selected,
             last_seen_at=media_source.last_seen_at,
+            asset_count=getattr(media_source, "asset_count", 0),
         )
 
 
@@ -96,6 +98,8 @@ class GooglePhotosSyncRunResponse(BaseModel):
     discovered_count: int
     imported_count: int
     duplicate_count: int
+    updated_count: int
+    removed_count: int
     skipped_count: int
     error_count: int
     started_at: str
@@ -103,7 +107,10 @@ class GooglePhotosSyncRunResponse(BaseModel):
 
     @classmethod
     def from_domain(cls, sync_run: GooglePhotosSyncRun) -> "GooglePhotosSyncRunResponse":
-        return cls(**asdict(sync_run))
+        payload = asdict(sync_run)
+        payload["updated_count"] = sync_run.duplicate_count
+        payload["removed_count"] = 0
+        return cls(**payload)
 
 
 class GooglePhotosDeviceResponse(BaseModel):
@@ -115,6 +122,7 @@ class GooglePhotosDeviceResponse(BaseModel):
     poll_interval_seconds: int
     device_created_at: str | None = None
     last_polled_at: str | None = None
+    selected_media_sources: list[GooglePhotosMediaSourceResponse] = []
 
 
 class GooglePhotosStatusResponse(BaseModel):
@@ -122,16 +130,23 @@ class GooglePhotosStatusResponse(BaseModel):
     provider_display_name: str
     available: bool
     configured: bool
+    provider_available: bool
+    provider_configured: bool
     sync_cadence_seconds: int
     connection_state: str
     auth_flow: GooglePhotosAuthFlowResponse | None = None
+    pending_auth: GooglePhotosAuthFlowResponse | None = None
     linked_account: GooglePhotosAccountSummaryResponse | None = None
+    account: GooglePhotosAccountSummaryResponse | None = None
     device: GooglePhotosDeviceResponse | None = None
     selected_media_sources: list[GooglePhotosMediaSourceResponse]
     latest_sync_run: GooglePhotosSyncRunResponse | None = None
     cached_asset_count: int
     current_error: str | None = None
+    error: str | None = None
     warnings: list[str]
+    warning: str | None = None
+    last_successful_sync_at: str | None = None
 
 
 class GooglePhotosSyncRequestResponse(BaseModel):

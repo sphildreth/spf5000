@@ -7,9 +7,11 @@ SPF5000 V1 consists of:
 - a Python FastAPI backend
 - a React + TypeScript + Vite frontend
 - a minimal `spf5000.toml` runtime config for host/port/paths/logging/session secret
+- Google Photos Ambient API runtime credentials and sync cadence in `spf5000.toml`
 - DecentDB for metadata, settings, display profiles, and import job history
 - DecentDB-backed bootstrap state plus a single local admin user
 - filesystem-backed originals and generated image variants
+- provider-backed offline sync metadata for Google Photos auth/device/source state
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
 The architecture follows the accepted ADR set in `design/adr/0001` through `0011`.
@@ -21,9 +23,11 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0011
 - bootstrap runtime directories and DecentDB schema at startup
 - load startup/runtime settings from `spf5000.toml`
 - expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, imports, and display state
+- expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
 - manage local import, duplicate detection, original-file storage, and derivative generation
+- manage Google Photos Ambient API device registration, media-source state, and background sync into the local asset pipeline
 - protect admin APIs with signed session cookies while keeping display APIs public
 - serve built frontend assets from `frontend/dist` when available
 
@@ -59,7 +63,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0011
 - initialize storage directories
 - create the fallback idle asset
 - create missing DecentDB tables and indexes
-- ensure default settings, the default local source, the default collection, the default display profile, and auth/bootstrap tables exist
+- ensure default settings, default local and Google sources, default collections, the default display profile, and auth/bootstrap/provider tables exist
 
 If the DecentDB binding is unavailable, the app preserves the existing `NullConnection` fallback path instead of crashing during import time.
 
@@ -71,6 +75,7 @@ If the DecentDB binding is unavailable, the app preserves the existing `NullConn
 - runtime storage paths
 - log level
 - optional session-cookie signing secret
+- Google Photos OAuth client credentials and provider sync cadence
 
 Application settings such as slideshow timing, transition behavior, selected collection, sleep schedule, bootstrap completion, and admin users remain in DecentDB.
 
@@ -86,8 +91,11 @@ backend/data/
   sources/
     local-files/
       import/
+    google-photos/
+      import/
   staging/
     imports/
+    google-photos/
   storage/
     originals/
     variants/
@@ -127,11 +135,11 @@ Key/value device settings, including:
 
 ### `sources`
 
-Configured provider sources. V1 seeds a default `local_files` source with the managed import path.
+Configured provider sources. V1 seeds a default `local_files` source plus a Google Photos source used for offline-cached provider sync.
 
 ### `collections`
 
-Logical groupings of imported assets. V1 seeds a default collection used by import and display flows.
+Logical groupings of imported assets. V1 seeds a default collection for local media plus an aggregate Google Photos collection for synced playback.
 
 ### `assets`
 
@@ -161,6 +169,30 @@ Join table mapping assets into collections with stable sort order.
 ### `import_jobs`
 
 Scan/import job history with discovered/imported/duplicate/skipped/error counters plus sample filenames and completion status.
+
+### `provider_auth_flows`
+
+Persisted Google Photos device-code OAuth state, including verification URI, user code, polling cadence, and completion/error details.
+
+### `provider_accounts`
+
+Persisted provider account and device state, including linked Google identity metadata, access/refresh tokens, Google `settingsUri`, device polling guidance, and last sync timestamps.
+
+### `provider_media_sources`
+
+Persisted Google-managed media-source selections returned by the Ambient API device state.
+
+### `provider_sync_runs`
+
+Sync-run history for Google Photos provider activity, including import/duplicate/skipped/error counts and warning messages.
+
+### `provider_assets`
+
+Mappings from Google remote media IDs to locally managed SPF5000 assets and cached originals.
+
+### `provider_asset_media_sources`
+
+Join table mapping synced provider assets back to the Google media sources that surfaced them.
 
 ### `display_profiles`
 
@@ -195,7 +227,7 @@ Small key/value runtime metadata such as:
 
 ### Provider boundary
 
-Providers implement the protocol in `backend/app/providers/base.py`. V1 includes `LocalFilesProvider` only, while preserving the abstraction boundary for future providers.
+Providers implement the protocol in `backend/app/providers/base.py`. SPF5000 ships with `LocalFilesProvider` plus a Google Photos provider that uses the Ambient API device model and syncs media into the same local playback pipeline.
 
 ### Local import workflow
 
@@ -208,6 +240,15 @@ Providers implement the protocol in `backend/app/providers/base.py`. V1 includes
 7. DecentDB records the asset, variants, collection membership, and job history.
 
 Import failures do not stop the display route from continuing to run with the existing library.
+
+## Google Photos provider and sync flow
+
+1. The admin starts Google Photos connection from the Sources page.
+2. SPF5000 starts the OAuth device flow and shows the Google verification code/URI.
+3. After approval, SPF5000 registers an Ambient device and persists the returned `settingsUri`.
+4. The admin opens the Google-managed `settingsUri` to choose what the frame should show.
+5. The backend periodically syncs selected Google media into managed local storage and normalizes them into standard assets/variants.
+6. `/display` continues to read only local playlist data and cached assets, even if Google is temporarily unavailable.
 
 ## Display rendering strategy
 

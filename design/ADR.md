@@ -20,10 +20,6 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - statuses include `Proposed`, `Accepted`, `Superseded`, and `Deprecated`
 - meaningful architectural deviations should be captured in a new ADR rather than rewriting accepted history away
 
-## Proposed ADRs
-
-- `0012-use-google-photos-ambient-api-for-offline-first-local-sync.md` - Google Photos Ambient API integration with offline-first local sync
-
 ## Accepted ADR set
 
 - `0001-use-fastapi-for-backend.md` - backend framework choice
@@ -37,10 +33,11 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0009-use-runtime-config-and-single-admin-bootstrap-auth.md` - runtime config, bootstrap flow, and admin auth boundary
 - `0010-use-pi-specific-appliance-installer-toolchain.md` - Pi deployment automation strategy
 - `0011-use-app-managed-sleep-schedule-for-display-quiet-hours.md` - app-managed display quiet-hours behavior
+- `0012-use-google-photos-ambient-api-for-offline-first-local-sync.md` - Google Photos Ambient API integration with offline-first local sync
 
 ## V1 implementation status
 
-The current V1 implementation is expected to conform to ADRs `0001` through `0011`:
+The current V1 implementation is expected to conform to ADRs `0001` through `0012`:
 
 - FastAPI remains the backend entrypoint and API host
 - React + TypeScript + Vite remain the frontend stack

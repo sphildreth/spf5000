@@ -26,7 +26,7 @@ The target household wants a frame that behaves like an appliance, not a service
 4. Prioritize offline-first behavior and cached playback.
 5. Make the system resilient to power loss and temporary network failure.
 6. Allow local image management directly on the device.
-7. Allow future integration with user-selected Google Photos albums or ambient sources.
+7. Support user-selected Google Photos ambient sources through a first-class provider flow.
 8. Present transitions that feel polished and continuous, without a visible black flash between images.
 
 ## Non-Goals for v1
@@ -59,6 +59,7 @@ Technical household member who installs, configures, and maintains the device.
 - As an administrator, I want to configure the display sleep schedule from the admin UI instead of editing OS timers or browser flags.
 - As an administrator, I want to upload, remove, and organize pictures stored on the frame.
 - As an administrator, I want to see sync and device health information.
+- As an administrator, I want to connect Google Photos, finish the device approval flow, and choose what the frame should show.
 - As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
 - As an administrator, I want the admin UI to require a local sign-in without affecting the public slideshow display.
 
@@ -102,6 +103,7 @@ Technical household member who installs, configures, and maintains the device.
 - Sync status persistence
 - Cached local copies of remote images
 - Graceful degradation when provider unavailable
+- Google Photos support via the Ambient API device flow and Google-managed source-selection UI
 
 ### Persistence
 - Store settings, metadata, sync state, and source mappings in DecentDB.
@@ -144,5 +146,6 @@ Technical household member who installs, configures, and maintains the device.
 - Fresh installs guide the administrator through first-run setup before normal login.
 - Admin routes require local authentication while `/display` remains usable without sign-in.
 - Cached playback continues if remote source is unavailable.
+- Admin can connect Google Photos, select ambient media sources, and see sync status without affecting cached playback.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
 - Transitions feel smooth and continuous, with no obvious black flash between images.

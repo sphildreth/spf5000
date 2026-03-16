@@ -29,15 +29,9 @@ def _status_response(payload: dict[str, object]) -> GooglePhotosStatusResponse:
     latest_sync_run = payload.get("latest_sync_run")
     device_payload = payload.get("device")
     media_sources = payload.get("selected_media_sources") or []
-    return GooglePhotosStatusResponse(
-        provider=str(payload["provider"]),
-        provider_display_name=str(payload["provider_display_name"]),
-        available=bool(payload["available"]),
-        configured=bool(payload["configured"]),
-        sync_cadence_seconds=int(payload["sync_cadence_seconds"]),
-        connection_state=str(payload["connection_state"]),
-        auth_flow=None if auth_flow is None else GooglePhotosAuthFlowResponse.from_domain(auth_flow),
-        linked_account=None
+    auth_flow_response = None if auth_flow is None else GooglePhotosAuthFlowResponse.from_domain(auth_flow)
+    account_response = (
+        None
         if linked_account is None
         else GooglePhotosAccountSummaryResponse(
             subject=linked_account.get("subject"),
@@ -45,7 +39,22 @@ def _status_response(payload: dict[str, object]) -> GooglePhotosStatusResponse:
             display_name=linked_account.get("display_name"),
             picture_url=linked_account.get("picture_url"),
             connected_at=linked_account.get("connected_at"),
-        ),
+        )
+    )
+    warnings = [str(item) for item in payload.get("warnings", [])]
+    return GooglePhotosStatusResponse(
+        provider=str(payload["provider"]),
+        provider_display_name=str(payload["provider_display_name"]),
+        available=bool(payload["available"]),
+        configured=bool(payload["configured"]),
+        provider_available=bool(payload["available"]),
+        provider_configured=bool(payload["configured"]),
+        sync_cadence_seconds=int(payload["sync_cadence_seconds"]),
+        connection_state=str(payload["connection_state"]),
+        auth_flow=auth_flow_response,
+        pending_auth=auth_flow_response,
+        linked_account=account_response,
+        account=account_response,
         device=None
         if device_payload is None
         else GooglePhotosDeviceResponse(
@@ -57,12 +66,20 @@ def _status_response(payload: dict[str, object]) -> GooglePhotosStatusResponse:
             poll_interval_seconds=int(device_payload.get("poll_interval_seconds") or 30),
             device_created_at=device_payload.get("device_created_at"),
             last_polled_at=device_payload.get("last_polled_at"),
+            selected_media_sources=[GooglePhotosMediaSourceResponse.from_domain(item) for item in media_sources],
         ),
         selected_media_sources=[GooglePhotosMediaSourceResponse.from_domain(item) for item in media_sources],
         latest_sync_run=None if latest_sync_run is None else GooglePhotosSyncRunResponse.from_domain(latest_sync_run),
         cached_asset_count=int(payload["cached_asset_count"]),
         current_error=None if payload.get("current_error") is None else str(payload["current_error"]),
-        warnings=[str(item) for item in payload.get("warnings", [])],
+        error=None if payload.get("current_error") is None else str(payload["current_error"]),
+        warnings=warnings,
+        warning=warnings[0] if warnings else None,
+        last_successful_sync_at=(
+            None
+            if latest_sync_run is None or latest_sync_run.status == "failed"
+            else latest_sync_run.completed_at
+        ),
     )
 
 

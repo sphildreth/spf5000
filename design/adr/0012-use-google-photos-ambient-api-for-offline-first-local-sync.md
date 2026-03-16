@@ -1,6 +1,6 @@
 # ADR 0012: Use Google Photos Ambient API for Offline-First Local Asset Sync
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-03-16
 
 ## Context
