@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import PurePosixPath
 
 from fastapi import FastAPI
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -17,6 +19,24 @@ from app.services.google_photos_service import GooglePhotosService
 from app.services.google_photos_sync_coordinator import GooglePhotosSyncCoordinator
 
 _LOG = logging.getLogger(__name__)
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve built frontend assets and fall back to index.html for SPA routes."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404:
+                raise
+
+            # Only treat extensionless paths as client-side routes. Missing asset files
+            # should stay 404 so browser/network errors remain obvious.
+            if PurePosixPath(path).suffix:
+                raise
+
+            return await super().get_response("index.html", scope)
 
 
 def _resolve_session_secret() -> str:
@@ -75,7 +95,7 @@ def create_app() -> FastAPI:
 
     static_dir = settings.frontend_dist_dir if settings.frontend_dist_dir.exists() else settings.legacy_frontend_dist_dir
     if static_dir.exists():
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
+        app.mount("/", SPAStaticFiles(directory=static_dir, html=True), name="frontend")
 
     return app
 
