@@ -55,13 +55,14 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want portrait and landscape images to display cleanly.
 - As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
 - As a household member, I want portrait and mixed-aspect photos to use a tasteful image-derived background instead of always showing hard black bars.
-- As a household member, I want the frame to go dark automatically during configured quiet hours and wake back up on its own.
+- As a household member, I want the frame to go dark automatically during configured quiet hours in the intended display timezone and wake back up on its own.
 - As a household member, I want a compact weather widget so the frame is useful even when nothing needs urgent attention.
 - As a household member, I want severe weather alerts to become highly visible without looking like a broken slideshow.
 
 ### Administration
 - As an administrator, I want to configure slideshow timing and display behavior from a simple web page.
 - As an administrator, I want to configure the display sleep schedule from the admin UI instead of editing OS timers or browser flags.
+- As an administrator, I want to choose the display timezone in the admin UI and see both Pi-local and configured display time so quiet hours are easy to reason about.
 - As an administrator, I want to upload, remove, and organize pictures stored on the frame.
 - As an administrator, I want to see sync and device health information.
 - As an administrator, I want to connect Google Photos, finish the device approval flow, and choose what the frame should show.
@@ -87,7 +88,7 @@ Technical household member who installs, configures, and maintains the device.
 - Keep cached display-variant metadata as the source for color-based modes such as `dominant_color`, `gradient`, `soft_vignette`, and `palette_wash`.
 - Allow image-based presentation modes such as `blurred_backdrop` and `mirrored_edges` to reuse the cached display variant at render time instead of requiring live full-original analysis.
 - Treat `adaptive_auto` as a display-behavior policy that chooses among supported treatments based on aspect mismatch and available cached metadata.
-- Support a configurable sleep window based on the device's local time, with an inclusive start time and exclusive end time.
+- Support a configurable sleep window evaluated in an app-selected display timezone, defaulting to the Pi-local timezone when no explicit display timezone is set, with an inclusive start time and exclusive end time.
 - During the sleep window, render a solid black fullscreen state, pause slideshow advancement, and resume automatically when the window ends.
 - Render an optional weather widget from cached backend weather state without blocking slideshow playback.
 - Render badge, banner, fullscreen, and repeating-fullscreen weather alert behaviors based on deterministic escalation rules.
@@ -98,7 +99,7 @@ Technical household member who installs, configures, and maintains the device.
 - Login page
 - Protected admin shell
 - Settings page
-- Display settings page with sleep schedule controls
+- Display settings page with sleep schedule controls, display timezone selection, and Pi-local/configured display-time clarity
 - Weather and alerts page for configuration and visibility
 - Sources page
 - Albums page
@@ -129,7 +130,7 @@ Technical household member who installs, configures, and maintains the device.
 ### Persistence
 - Store settings, metadata, sync state, and source mappings in DecentDB.
 - Store bootstrap state and single-admin credentials in DecentDB.
-- Store the sleep schedule in DecentDB application settings rather than OS schedulers or runtime config files.
+- Store the sleep schedule and optional display timezone in DecentDB application settings rather than OS schedulers or runtime config files.
 - Store weather settings plus cached weather and alert state in DecentDB.
 - Store image binaries and resized variants on local disk.
 - Store the selected display background mode in DecentDB and cached per-asset color metadata alongside asset metadata, while allowing image-based presentation modes to reuse display variants at render time.
@@ -165,7 +166,7 @@ Technical household member who installs, configures, and maintains the device.
 ## Success Criteria
 - Device boots to slideshow after power cycle.
 - Admin can change settings and manage local images via browser on LAN.
-- Admin can configure quiet hours in the app and the display wakes automatically at the configured end time.
+- Admin can configure quiet hours and the display timezone in the app, and the display wakes automatically at the configured end time.
 - Fresh installs guide the administrator through first-run setup before normal login.
 - Admin routes require local authentication while `/display` remains usable without sign-in.
 - Cached playback continues if remote source is unavailable.

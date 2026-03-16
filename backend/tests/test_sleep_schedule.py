@@ -1,15 +1,19 @@
 """Tests for the sleep schedule domain logic and API endpoints."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.models.sleep_schedule import (
     SleepSchedule,
     is_in_sleep_window,
+    normalize_display_timezone,
     normalize_hhmm,
     normalize_sleep_schedule,
     parse_hhmm,
 )
+from app.services.timezone_service import build_sleep_schedule_time_reference, get_effective_display_timezone
 
 
 # ---------------------------------------------------------------------------
@@ -25,6 +29,18 @@ def test_parse_hhmm_valid() -> None:
 
 def test_normalize_hhmm_returns_canonical_value() -> None:
     assert normalize_hhmm("08:30") == "08:30"
+
+
+def test_normalize_display_timezone_accepts_none_blank_and_iana_name() -> None:
+    assert normalize_display_timezone(None) is None
+    assert normalize_display_timezone("") is None
+    assert normalize_display_timezone("  ") is None
+    assert normalize_display_timezone("America/New_York") == "America/New_York"
+
+
+def test_normalize_display_timezone_rejects_invalid_value() -> None:
+    with pytest.raises(ValueError, match="valid IANA timezone name"):
+        normalize_display_timezone("Mars/Olympus")
 
 
 @pytest.mark.parametrize(
@@ -56,6 +72,28 @@ def test_normalize_sleep_schedule_rejects_equal_start_end_when_enabled() -> None
                 sleep_end_local_time="08:00",
             )
         )
+
+
+def test_get_effective_display_timezone_prefers_configured_value() -> None:
+    schedule = SleepSchedule(display_timezone="America/Los_Angeles")
+    assert get_effective_display_timezone(schedule, "Europe/Berlin") == "America/Los_Angeles"
+
+
+def test_get_effective_display_timezone_falls_back_to_pi_local() -> None:
+    schedule = SleepSchedule(display_timezone=None)
+    assert get_effective_display_timezone(schedule, "Europe/Berlin") == "Europe/Berlin"
+
+
+def test_build_sleep_schedule_time_reference_uses_configured_timezone() -> None:
+    reference = build_sleep_schedule_time_reference(
+        SleepSchedule(display_timezone="America/Chicago"),
+        now_utc=datetime(2026, 3, 16, 12, 34, 56, tzinfo=UTC),
+    )
+    assert reference.current_server_utc_timestamp == "2026-03-16T12:34:56+00:00"
+    assert reference.pi_local_timezone in reference.available_timezones
+    assert reference.configured_display_timezone == "America/Chicago"
+    assert reference.effective_display_timezone == "America/Chicago"
+    assert "UTC" in reference.available_timezones
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +179,7 @@ def test_get_sleep_schedule_defaults(test_client) -> None:
     assert body["sleep_schedule_enabled"] is False
     assert body["sleep_start_local_time"] == "22:00"
     assert body["sleep_end_local_time"] == "08:00"
+    assert body["display_timezone"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +192,7 @@ def test_update_sleep_schedule(test_client) -> None:
         "sleep_schedule_enabled": True,
         "sleep_start_local_time": "23:00",
         "sleep_end_local_time": "07:00",
+        "display_timezone": "America/New_York",
     }
     put_response = test_client.put("/api/settings/sleep-schedule", json=payload)
     assert put_response.status_code == 200
@@ -160,6 +200,7 @@ def test_update_sleep_schedule(test_client) -> None:
     assert body["sleep_schedule_enabled"] is True
     assert body["sleep_start_local_time"] == "23:00"
     assert body["sleep_end_local_time"] == "07:00"
+    assert body["display_timezone"] == "America/New_York"
 
     # Verify GET returns the persisted value
     get_response = test_client.get("/api/settings/sleep-schedule")
@@ -217,6 +258,18 @@ def test_update_sleep_schedule_rejects_out_of_range_time(test_client) -> None:
     assert response.status_code == 422
 
 
+def test_update_sleep_schedule_rejects_invalid_timezone(test_client) -> None:
+    payload = {
+        "sleep_schedule_enabled": False,
+        "sleep_start_local_time": "22:00",
+        "sleep_end_local_time": "08:00",
+        "display_timezone": "Mars/Olympus",
+    }
+    response = test_client.put("/api/settings/sleep-schedule", json=payload)
+    assert response.status_code == 422
+    assert "valid IANA timezone name" in str(response.json())
+
+
 # ---------------------------------------------------------------------------
 # API: sleep-schedule routes require authentication
 # ---------------------------------------------------------------------------
@@ -224,8 +277,6 @@ def test_update_sleep_schedule_rejects_out_of_range_time(test_client) -> None:
 
 def test_sleep_schedule_routes_require_auth(fresh_client) -> None:
     """Both GET and PUT must return 401 when the user is not authenticated."""
-    from app.core.config import settings as app_settings
-
     # Bootstrap admin so auth is available (otherwise returns 503)
     fresh_client.post(
         "/api/setup",
@@ -235,6 +286,48 @@ def test_sleep_schedule_routes_require_auth(fresh_client) -> None:
 
     assert fresh_client.get("/api/settings/sleep-schedule").status_code == 401
     assert fresh_client.put("/api/settings/sleep-schedule", json={}).status_code == 401
+    assert fresh_client.get("/api/settings/time-reference").status_code == 401
+
+
+def test_get_sleep_schedule_time_reference(test_client) -> None:
+    response = test_client.get("/api/settings/time-reference")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "current_server_utc_timestamp",
+        "pi_local_timezone",
+        "configured_display_timezone",
+        "effective_display_timezone",
+        "available_timezones",
+    }
+    assert body["configured_display_timezone"] is None
+    assert body["effective_display_timezone"] == body["pi_local_timezone"]
+    assert isinstance(body["pi_local_timezone"], str)
+    assert body["pi_local_timezone"] != ""
+    assert body["pi_local_timezone"] in body["available_timezones"]
+    assert "UTC" in body["available_timezones"]
+    parsed = datetime.fromisoformat(body["current_server_utc_timestamp"])
+    assert parsed.tzinfo is not None
+    assert parsed.utcoffset() == UTC.utcoffset(parsed)
+
+
+def test_get_sleep_schedule_time_reference_reflects_configured_timezone(test_client) -> None:
+    update_response = test_client.put(
+        "/api/settings/sleep-schedule",
+        json={
+            "sleep_schedule_enabled": True,
+            "sleep_start_local_time": "22:00",
+            "sleep_end_local_time": "08:00",
+            "display_timezone": "America/Chicago",
+        },
+    )
+    assert update_response.status_code == 200
+
+    response = test_client.get("/api/settings/time-reference")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["configured_display_timezone"] == "America/Chicago"
+    assert body["effective_display_timezone"] == "America/Chicago"
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +344,8 @@ def test_display_playlist_includes_sleep_schedule(test_client) -> None:
     assert "sleep_schedule_enabled" in ss
     assert "sleep_start_local_time" in ss
     assert "sleep_end_local_time" in ss
+    assert "display_timezone" in ss
+    assert ss["display_timezone"] is None
 
 
 def test_display_playlist_sleep_schedule_reflects_update(test_client) -> None:
@@ -269,3 +364,20 @@ def test_display_playlist_sleep_schedule_reflects_update(test_client) -> None:
     assert ss["sleep_schedule_enabled"] is True
     assert ss["sleep_start_local_time"] == "21:30"
     assert ss["sleep_end_local_time"] == "06:30"
+    assert ss["display_timezone"] is None
+
+
+def test_display_playlist_sleep_schedule_exposes_display_timezone(test_client) -> None:
+    payload = {
+        "sleep_schedule_enabled": True,
+        "sleep_start_local_time": "21:30",
+        "sleep_end_local_time": "06:30",
+        "display_timezone": "America/Denver",
+    }
+    put_response = test_client.put("/api/settings/sleep-schedule", json=payload)
+    assert put_response.status_code == 200
+
+    playlist_response = test_client.get("/api/display/playlist")
+    assert playlist_response.status_code == 200
+    ss = playlist_response.json()["sleep_schedule"]
+    assert ss["display_timezone"] == "America/Denver"

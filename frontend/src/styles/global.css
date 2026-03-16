@@ -486,6 +486,51 @@ textarea {
   line-height: 1.45;
 }
 
+.settings-inline-hint {
+  margin: -0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.timezone-clock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.timezone-clock {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(10, 13, 18, 0.56);
+}
+
+.timezone-clock__eyebrow,
+.timezone-clock__meta,
+.timezone-clock__date {
+  color: var(--muted);
+}
+
+.timezone-clock__eyebrow {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.timezone-clock__time {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  line-height: 1.1;
+}
+
+.timezone-clock__date,
+.timezone-clock__meta {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .form-actions,
 .toolbar {
   display: flex;

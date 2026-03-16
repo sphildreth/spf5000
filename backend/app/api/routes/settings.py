@@ -2,7 +2,13 @@ from fastapi import APIRouter
 
 from app.models.settings import FrameSettings
 from app.models.sleep_schedule import SleepSchedule
-from app.schemas.settings import SettingsResponse, SettingsUpdateRequest, SleepScheduleResponse, SleepScheduleUpdateRequest
+from app.schemas.settings import (
+    SettingsResponse,
+    SettingsUpdateRequest,
+    SleepScheduleResponse,
+    SleepScheduleTimeReferenceResponse,
+    SleepScheduleUpdateRequest,
+)
 from app.services.settings_service import SettingsService
 
 router = APIRouter()
@@ -33,6 +39,12 @@ def update_sleep_schedule(request: SleepScheduleUpdateRequest) -> SleepScheduleR
         sleep_schedule_enabled=request.sleep_schedule_enabled,
         sleep_start_local_time=request.sleep_start_local_time,
         sleep_end_local_time=request.sleep_end_local_time,
+        display_timezone=request.display_timezone,
     )
     updated = service.update_sleep_schedule(schedule)
     return SleepScheduleResponse.from_domain(updated)
+
+
+@router.get("/time-reference", response_model=SleepScheduleTimeReferenceResponse)
+def get_sleep_schedule_time_reference() -> SleepScheduleTimeReferenceResponse:
+    return SleepScheduleTimeReferenceResponse.from_domain(service.get_sleep_schedule_time_reference())

@@ -17,3 +17,4 @@
 - 0015 Use alert escalation and visible takeover behavior on the display
 - 0016 Use cached image-derived background fill for display presentation
 - 0017 Refine display background fill modes, cached-vs-render-time treatments, and adaptive policy
+- 0018 Use app-selected display timezone for sleep schedule evaluation

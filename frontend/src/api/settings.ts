@@ -7,7 +7,9 @@ import {
   asNumber,
   asRecord,
   asString,
+  asStringArray,
   type FrameSettings,
+  type SettingsTimeReference,
   type SleepSchedule,
   type SleepScheduleUpdateRequest,
 } from './types'
@@ -32,13 +34,37 @@ export async function updateSleepSchedule(request: SleepScheduleUpdateRequest): 
   return normalizeSleepSchedule(payload)
 }
 
+export async function getSettingsTimeReference(): Promise<SettingsTimeReference> {
+  const payload = await apiGet<unknown>('/api/settings/time-reference')
+  return normalizeSettingsTimeReference(payload)
+}
+
 export function normalizeSleepSchedule(payload: unknown): SleepSchedule {
   const record = asRecord(payload)
   return {
     sleep_schedule_enabled: asBoolean(record?.sleep_schedule_enabled, false),
     sleep_start_local_time: asString(record?.sleep_start_local_time, '22:00'),
     sleep_end_local_time: asString(record?.sleep_end_local_time, '08:00'),
+    display_timezone: normalizeDisplayTimezone(record?.display_timezone),
   }
+}
+
+function normalizeSettingsTimeReference(payload: unknown): SettingsTimeReference {
+  const record = asRecord(payload)
+  const piLocalTimezone = asString(record?.pi_local_timezone, 'UTC')
+
+  return {
+    current_server_utc_timestamp: asString(record?.current_server_utc_timestamp, ''),
+    pi_local_timezone: piLocalTimezone,
+    configured_display_timezone: normalizeDisplayTimezone(record?.configured_display_timezone),
+    effective_display_timezone: asString(record?.effective_display_timezone, piLocalTimezone),
+    available_timezones: asStringArray(record?.available_timezones),
+  }
+}
+
+function normalizeDisplayTimezone(value: unknown): string | null {
+  const normalized = asString(value, '').trim()
+  return normalized.length > 0 ? normalized : null
 }
 
 function normalizeSettings(payload: unknown): FrameSettings {

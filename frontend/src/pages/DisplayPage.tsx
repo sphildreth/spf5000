@@ -162,7 +162,7 @@ export function DisplayPage() {
       },
       {
         title: 'Checking schedule',
-        detail: 'Comparing quiet hours against the frame’s local clock.',
+        detail: 'Comparing quiet hours against the configured display timezone.',
         secondary: 'Quiet hours 23:00 → 07:00 are configured but inactive right now.',
         tone: 'booting',
         animateDots: true,
@@ -578,7 +578,7 @@ export function DisplayPage() {
         setBootMessage({
           kicker: 'SPF5000',
           title: 'Checking schedule',
-          detail: 'Comparing quiet hours against the frame’s local device time.',
+          detail: 'Comparing quiet hours against the configured display timezone.',
           secondary: describeSleepSchedule(nextPlaylist.sleep_schedule),
           tone: 'booting',
           animateDots: true,
@@ -644,8 +644,10 @@ export function DisplayPage() {
     }
   }, [clearAlertTimers, clearTimers, showBootDemo, syncDisplayData])
 
-  // Evaluate sleep schedule using the kiosk browser's local device time so the
-  // display can enter and leave sleep mode without waiting for a playlist refresh.
+  // Evaluate sleep schedule on the display using the configured timezone when
+  // available, with a fallback to device-local time if the browser cannot
+  // resolve that timezone. This keeps sleep/wake transitions responsive without
+  // waiting for a playlist refresh.
   useEffect(() => {
     if (showBootDemo) {
       return
@@ -886,17 +888,18 @@ function selectNextIndex(currentIndex: number, length: number): number {
 }
 
 /**
- * Returns true when the current device-local browser time falls inside the
- * configured sleep window. The start time is inclusive and the end time is
- * exclusive, so a schedule ending at 08:00 wakes at 08:00.
+ * Returns true when the current time in the configured display timezone falls
+ * inside the sleep window. If the timezone is missing or unsupported by the
+ * browser, this safely falls back to the device-local clock. The start time is
+ * inclusive and the end time is exclusive, so a schedule ending at 08:00 wakes
+ * at 08:00.
  */
 function isInSleepWindow(schedule: SleepSchedule): boolean {
   if (!schedule.sleep_schedule_enabled) {
     return false
   }
 
-  const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const currentMinutes = getCurrentMinutesForSchedule(schedule)
 
   const [startH = 0, startM = 0] = schedule.sleep_start_local_time.split(':').map(Number)
   const [endH = 0, endM = 0] = schedule.sleep_end_local_time.split(':').map(Number)
@@ -1118,7 +1121,46 @@ function describeSleepSchedule(schedule: SleepSchedule | null): string {
     return 'No quiet hours are active for this frame.'
   }
 
-  return `Quiet hours ${schedule.sleep_start_local_time} → ${schedule.sleep_end_local_time} are configured on this frame.`
+  const displayTimezone = normalizeDisplayTimezone(schedule.display_timezone)
+  const timezoneLabel = displayTimezone ? `${displayTimezone} time` : 'the display device local time'
+
+  return `Quiet hours ${schedule.sleep_start_local_time} → ${schedule.sleep_end_local_time} use ${timezoneLabel}.`
+}
+
+function getCurrentMinutesForSchedule(schedule: SleepSchedule, now = new Date()): number {
+  const displayTimezone = normalizeDisplayTimezone(schedule.display_timezone)
+  if (!displayTimezone) {
+    return now.getHours() * 60 + now.getMinutes()
+  }
+
+  try {
+    return getCurrentMinutesInTimezone(now, displayTimezone)
+  } catch {
+    return now.getHours() * 60 + now.getMinutes()
+  }
+}
+
+function getCurrentMinutesInTimezone(now: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now)
+
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? Number.NaN)
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? Number.NaN)
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    throw new RangeError(`Could not resolve time for timezone: ${timeZone}`)
+  }
+
+  return hour * 60 + minute
+}
+
+function normalizeDisplayTimezone(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? ''
+  return normalized.length > 0 ? normalized : null
 }
 
 function usesShuffleBag(config: Pick<DisplayConfig, 'shuffle_enabled' | 'shuffle_bag_enabled'>): boolean {

@@ -33,6 +33,7 @@ DEFAULT_SETTINGS = {
     "sleep_schedule_enabled": "0",
     "sleep_start_local_time": "22:00",
     "sleep_end_local_time": "08:00",
+    "display_timezone": "",
     "weather_enabled": "0",
     "weather_provider": "nws",
     "weather_location": '{"label":"","latitude":null,"longitude":null}',

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from app.models.settings import FrameSettings
 from app.models.sleep_schedule import SleepSchedule, normalize_sleep_schedule
+from app.models.time_reference import SleepScheduleTimeReference
 from app.repositories.display_repository import DisplayRepository
 from app.repositories.settings_repository import SettingsRepository
+from app.services.timezone_service import build_sleep_schedule_time_reference
 
 
 class SettingsService:
@@ -36,3 +38,6 @@ class SettingsService:
 
     def update_sleep_schedule(self, schedule: SleepSchedule) -> SleepSchedule:
         return self.repo.update_sleep_schedule(normalize_sleep_schedule(schedule))
+
+    def get_sleep_schedule_time_reference(self) -> SleepScheduleTimeReference:
+        return build_sleep_schedule_time_reference(self.get_sleep_schedule())

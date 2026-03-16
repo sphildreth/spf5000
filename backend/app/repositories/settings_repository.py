@@ -10,6 +10,7 @@ _SLEEP_SCHEDULE_KEYS = (
     "sleep_schedule_enabled",
     "sleep_start_local_time",
     "sleep_end_local_time",
+    "display_timezone",
 )
 _SLEEP_SCHEDULE_DEFAULTS = SleepSchedule()
 
@@ -99,7 +100,7 @@ class SettingsRepository:
             if is_null_connection(conn):
                 return d
             cursor = conn.execute(
-                "select key, value from settings where key in (?, ?, ?)",
+                "select key, value from settings where key in (?, ?, ?, ?)",
                 _SLEEP_SCHEDULE_KEYS,
             )
             rows = cursor.fetchall()
@@ -109,6 +110,7 @@ class SettingsRepository:
                     sleep_schedule_enabled=bool(int(values.get("sleep_schedule_enabled", "0"))),
                     sleep_start_local_time=str(values.get("sleep_start_local_time", d.sleep_start_local_time)),
                     sleep_end_local_time=str(values.get("sleep_end_local_time", d.sleep_end_local_time)),
+                    display_timezone=values.get("display_timezone"),
                 )
             )
 
@@ -122,6 +124,7 @@ class SettingsRepository:
                 "sleep_schedule_enabled": "1" if normalized.sleep_schedule_enabled else "0",
                 "sleep_start_local_time": normalized.sleep_start_local_time,
                 "sleep_end_local_time": normalized.sleep_end_local_time,
+                "display_timezone": normalized.display_timezone or "",
             }
             for key, value in updates.items():
                 existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()

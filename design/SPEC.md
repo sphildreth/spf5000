@@ -16,7 +16,7 @@ SPF5000 V1 consists of:
 - configurable background presentation modes for display, with cached color metadata plus render-time image-based treatments
 - a fullscreen `/display` route optimized for kiosk playback on Raspberry Pi
 
-The architecture follows the accepted ADR set in `design/adr/0001` through `0015`.
+The architecture follows the accepted ADR set in `design/adr/0001` through `0015` plus `0018`.
 
 ## Implemented architecture
 
@@ -25,6 +25,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - bootstrap runtime directories and DecentDB schema at startup
 - load startup/runtime settings from `spf5000.toml`
 - expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, uploads/imports, and display state
+- expose an authenticated sleep-schedule time-reference API so admin clients can compare server UTC, Pi-local timezone, and configured display timezone
 - expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
 - expose weather settings, weather status, weather alert, and display-facing weather APIs
 - keep routes thin and place orchestration in services
@@ -83,7 +84,7 @@ If the DecentDB binding is unavailable, the app preserves the existing `NullConn
 - optional session-cookie signing secret
 - Google Photos OAuth client credentials and provider sync cadence
 
-Application settings such as slideshow timing, transition behavior, selected collection, sleep schedule, bootstrap completion, and admin users remain in DecentDB.
+Application settings such as slideshow timing, transition behavior, selected collection, sleep schedule, optional display timezone, bootstrap completion, and admin users remain in DecentDB.
 
 ## Filesystem layout
 
@@ -136,6 +137,7 @@ Key/value device settings, including:
 - `selected_collection_id`
 - `active_display_profile_id`
 - `background_fill_mode`
+- `display_timezone`
 - `sleep_schedule_enabled`
 - `sleep_start_local_time`
 - `sleep_end_local_time`
@@ -351,9 +353,9 @@ Scheduled sleep is the only intentional full-black display state. Entering or le
 ### Scheduled sleep behavior
 
 - the sleep schedule is stored in DecentDB-backed application settings, not in `spf5000.toml`, `systemd`, cron, or Chromium flags
-- authenticated administrators manage the schedule from the admin UI through dedicated sleep-schedule settings APIs
-- `/api/display/playlist` includes the effective sleep schedule so the public `/display` route can enforce it without requiring admin auth
-- the display evaluates the schedule against the local device time on the display hardware
+- authenticated administrators manage the schedule and optional display timezone from the admin UI through dedicated sleep-schedule settings APIs
+- `/api/display/playlist` includes the effective sleep schedule plus the configured display timezone so the public `/display` route can enforce it without requiring admin auth
+- the display evaluates the schedule against the configured display timezone and falls back to the Pi-local timezone when no explicit display timezone is set
 - sleep start time is inclusive and sleep end time is exclusive, so the frame wakes at the configured end time
 - overnight windows are supported
 - when sleep is active, the display renders a solid black fullscreen overlay, pauses slideshow timers and transitions, and resumes playback automatically after the sleep window ends
@@ -373,7 +375,8 @@ V1 supports these end-to-end settings:
 - idle message
 - playlist refresh interval seconds
 - sleep schedule enabled/disabled
-- sleep start and end times in local device time
+- display timezone selection with Pi-local fallback
+- sleep start and end times evaluated in the configured display timezone
 - weather widget enabled/disabled
 - weather widget position and units
 - weather detail toggles for precipitation, humidity, and wind
@@ -399,7 +402,7 @@ The React admin shell currently includes:
 - `Library` for batch uploading, filtering, and browsing imported assets and variants
 - `Collections` for collection management
 - `Sources` for local source configuration plus scan/import actions
-- `Display Settings` for slideshow behavior and the sleep schedule
+- `Display Settings` for slideshow behavior, the sleep schedule, display timezone selection, and Pi-local/configured display-time clarity
 - `Weather` for weather widget settings, provider/cache status, and alert visibility
 
 Frontend API access stays under `frontend/src/api/` and uses relative `/api/...` paths so the Vite proxy works in development and the same routes work when FastAPI serves the production build.

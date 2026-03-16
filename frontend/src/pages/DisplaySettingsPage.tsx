@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { getCollections } from '../api/collections'
 import { getDisplayConfig, updateDisplayConfig } from '../api/display'
-import { getSleepSchedule, updateSleepSchedule } from '../api/settings'
+import { getSettingsTimeReference, getSleepSchedule, updateSleepSchedule } from '../api/settings'
 import {
   asBackgroundFillMode,
   asDisplayTransitionMode,
@@ -13,6 +13,7 @@ import {
   getDisplayTransitionModeLabel,
   type DisplayConfig,
   type DisplayConfigUpdateRequest,
+  type SettingsTimeReference,
   type SleepSchedule,
   type SleepScheduleUpdateRequest,
 } from '../api/types'
@@ -26,13 +27,19 @@ interface DisplaySettingsData {
   config: DisplayConfig
   collections: Awaited<ReturnType<typeof getCollections>>
   sleepSchedule: SleepSchedule
+  timeReference: SettingsTimeReference
 }
 
 export function DisplaySettingsPage() {
   const { data, loading, error, reload, setData } = useAsyncData<DisplaySettingsData>(
     async () => {
-      const [config, collections, sleepSchedule] = await Promise.all([getDisplayConfig(), getCollections(), getSleepSchedule()])
-      return { config, collections, sleepSchedule }
+      const [config, collections, sleepSchedule, timeReference] = await Promise.all([
+        getDisplayConfig(),
+        getCollections(),
+        getSleepSchedule(),
+        getSettingsTimeReference(),
+      ])
+      return { config, collections, sleepSchedule, timeReference }
     },
     [],
   )
@@ -43,6 +50,7 @@ export function DisplaySettingsPage() {
   const [sleepDraft, setSleepDraft] = useState<SleepSchedule | null>(null)
   const [sleepSaveError, setSleepSaveError] = useState<string | null>(null)
   const [sleepSaved, setSleepSaved] = useState(false)
+  const [clockElapsedMs, setClockElapsedMs] = useState(0)
 
   useEffect(() => {
     if (data) {
@@ -74,6 +82,45 @@ export function DisplaySettingsPage() {
     return 'Uses the current shuffled playlist order, which can feel repetitive after a restart or refresh.'
   }, [draft])
 
+  useEffect(() => {
+    const utcTimestamp = data?.timeReference.current_server_utc_timestamp
+    if (!utcTimestamp) {
+      return
+    }
+
+    setClockElapsedMs(0)
+    const startedAtMs = Date.now()
+    const timer = window.setInterval(() => {
+      setClockElapsedMs(Date.now() - startedAtMs)
+    }, 1_000)
+
+    return () => window.clearInterval(timer)
+  }, [data?.timeReference.current_server_utc_timestamp])
+
+  const serverNow = useMemo(() => {
+    const utcTimestamp = data?.timeReference.current_server_utc_timestamp
+    if (!utcTimestamp) {
+      return null
+    }
+
+    const baseUtcMs = Date.parse(utcTimestamp)
+    if (Number.isNaN(baseUtcMs)) {
+      return null
+    }
+
+    return new Date(baseUtcMs + clockElapsedMs)
+  }, [clockElapsedMs, data?.timeReference.current_server_utc_timestamp])
+
+  const selectedDisplayTimezone = useMemo(() => normalizeTimezone(sleepDraft?.display_timezone), [sleepDraft?.display_timezone])
+
+  const effectiveDisplayTimezone =
+    selectedDisplayTimezone ?? data?.timeReference.effective_display_timezone ?? data?.timeReference.pi_local_timezone ?? null
+  const piClock = useMemo(
+    () => formatClockForTimezone(serverNow, data?.timeReference.pi_local_timezone ?? null),
+    [data?.timeReference.pi_local_timezone, serverNow],
+  )
+  const displayClock = useMemo(() => formatClockForTimezone(serverNow, effectiveDisplayTimezone), [effectiveDisplayTimezone, serverNow])
+
   async function handleSleepSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!sleepDraft) {
@@ -92,9 +139,10 @@ export function DisplaySettingsPage() {
         sleep_schedule_enabled: sleepDraft.sleep_schedule_enabled,
         sleep_start_local_time: sleepDraft.sleep_start_local_time,
         sleep_end_local_time: sleepDraft.sleep_end_local_time,
+        display_timezone: selectedDisplayTimezone,
       }
-      const updated = await updateSleepSchedule(request)
-      setData((current) => (current ? { ...current, sleepSchedule: updated } : current))
+      const [updated, timeReference] = await Promise.all([updateSleepSchedule(request), getSettingsTimeReference()])
+      setData((current) => (current ? { ...current, sleepSchedule: updated, timeReference } : current))
       setSleepDraft(updated)
       setSleepSaved(true)
     } catch (caught) {
@@ -455,7 +503,7 @@ export function DisplaySettingsPage() {
                   <span>Enable sleep schedule</span>
                 </label>
                 <label>
-                  <span>Sleep start (local time)</span>
+                  <span>Sleep start</span>
                   <input
                     type="time"
                     value={sleepDraft.sleep_start_local_time}
@@ -465,7 +513,7 @@ export function DisplaySettingsPage() {
                   />
                 </label>
                 <label>
-                  <span>Sleep end (local time)</span>
+                  <span>Sleep end</span>
                   <input
                     type="time"
                     value={sleepDraft.sleep_end_local_time}
@@ -474,9 +522,62 @@ export function DisplaySettingsPage() {
                     }
                   />
                 </label>
+                <label className="field-span-full">
+                  <span>Display timezone</span>
+                  <select
+                    value={sleepDraft.display_timezone ?? ''}
+                    onChange={(event) =>
+                      setSleepDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              display_timezone: normalizeTimezone(event.target.value),
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="">Use Pi local timezone ({data?.timeReference.pi_local_timezone ?? 'Pi local timezone'})</option>
+                    {(data?.timeReference.available_timezones ?? []).map((timezone) => (
+                      <option key={timezone} value={timezone}>
+                        {timezone}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="field-span-full settings-inline-hint">
+                  Quiet hours are evaluated in the selected display timezone. Leave this blank to follow the Pi local timezone.
+                </p>
+                <div className="field-span-full timezone-clock-grid" aria-label="Sleep schedule timezone reference clocks">
+                  <div className="timezone-clock">
+                    <span className="timezone-clock__eyebrow">Pi local time</span>
+                    <strong className="timezone-clock__time">{piClock.time}</strong>
+                    <span className="timezone-clock__date">{piClock.date}</span>
+                    <span className="timezone-clock__meta">{data?.timeReference.pi_local_timezone ?? 'Pi local timezone'}</span>
+                  </div>
+                  <div className="timezone-clock">
+                    <span className="timezone-clock__eyebrow">Display timezone time</span>
+                    <strong className="timezone-clock__time">{displayClock.time}</strong>
+                    <span className="timezone-clock__date">{displayClock.date}</span>
+                    <span className="timezone-clock__meta">
+                      {effectiveDisplayTimezone ?? 'Pi local timezone'}
+                      {selectedDisplayTimezone ? '' : ' · following Pi local timezone'}
+                    </span>
+                  </div>
+                </div>
+                <dl className="field-span-full detail-list detail-list--compact">
+                  <div>
+                    <dt>Configured timezone</dt>
+                    <dd>{selectedDisplayTimezone ?? 'Follow Pi local timezone'}</dd>
+                  </div>
+                  <div>
+                    <dt>Effective display timezone</dt>
+                    <dd>{effectiveDisplayTimezone ?? 'Pi local timezone'}</dd>
+                  </div>
+                </dl>
                 <p className="card-muted">
-                  SPF5000 compares these times against the frame&apos;s local device time on the display hardware. Overnight
-                  windows (for example 22:00 → 06:00) are supported, and the frame wakes at the configured end time.
+                  SPF5000 compares these times against the configured display timezone for quiet hours. Overnight windows
+                  (for example 22:00 → 06:00) are supported, and the display wakes at the configured end time.
                 </p>
                 <div className="form-actions">
                   <button type="submit" className="button">
@@ -490,4 +591,50 @@ export function DisplaySettingsPage() {
       ) : null}
     </div>
   )
+}
+
+function normalizeTimezone(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? ''
+  return normalized.length > 0 ? normalized : null
+}
+
+function formatClockForTimezone(date: Date | null, timeZone: string | null): { time: string; date: string } {
+  if (!date) {
+    return {
+      time: '—',
+      date: 'Waiting for server time',
+    }
+  }
+
+  const options = timeZone ? { timeZone } : undefined
+
+  try {
+    return {
+      time: new Intl.DateTimeFormat(undefined, {
+        ...options,
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(date),
+      date: new Intl.DateTimeFormat(undefined, {
+        ...options,
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).format(date),
+    }
+  } catch {
+    return {
+      time: new Intl.DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(date),
+      date: new Intl.DateTimeFormat(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }).format(date),
+    }
+  }
 }

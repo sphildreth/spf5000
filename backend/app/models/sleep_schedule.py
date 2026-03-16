@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 @dataclass(slots=True)
@@ -8,6 +9,7 @@ class SleepSchedule:
     sleep_schedule_enabled: bool = False
     sleep_start_local_time: str = "22:00"
     sleep_end_local_time: str = "08:00"
+    display_timezone: str | None = None
 
 
 def parse_hhmm(time_str: str) -> tuple[int, int]:
@@ -41,11 +43,28 @@ def normalize_hhmm(time_str: str) -> str:
     return f"{hour:02d}:{minute:02d}"
 
 
+def normalize_display_timezone(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    try:
+        ZoneInfo(normalized)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(
+            "display_timezone must be a valid IANA timezone name "
+            f"(for example 'America/New_York'), got {value!r}"
+        ) from exc
+    return normalized
+
+
 def normalize_sleep_schedule(schedule: SleepSchedule) -> SleepSchedule:
     normalized = replace(
         schedule,
         sleep_start_local_time=normalize_hhmm(schedule.sleep_start_local_time),
         sleep_end_local_time=normalize_hhmm(schedule.sleep_end_local_time),
+        display_timezone=normalize_display_timezone(schedule.display_timezone),
     )
     if (
         normalized.sleep_schedule_enabled

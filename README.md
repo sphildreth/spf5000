@@ -28,9 +28,6 @@
 </p>
 
 SPF5000 is a self-hosted, LAN-manageable digital picture frame stack for Raspberry Pi-class hardware. It is built for households that want an appliance-like frame without subscriptions, vendor lock-in, fragile mobile apps, cloud dependency, or visible black flashes between slides.
-
-Version `1.0.0` ships a complete end-to-end local picture-frame workflow: first-run setup, single-admin sign-in, local source scanning and import, managed image storage, a dedicated fullscreen slideshow route, app-managed quiet hours, and Pi-specific appliance tooling.
-
 <details>
 <summary>Table of contents</summary>
 
@@ -62,7 +59,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🌦️ **Weather & Alerts** — Built-in National Weather Service integration for real-time widget overlays and fullscreen alerts.
 - 🛠️ **Modern Stack** — Built with a snappy **FastAPI backend** and a polished **React 19 + TypeScript + Vite frontend**.
 - 🔒 **Secure & Private** — Single-admin session auth, clear storage boundaries with **DecentDB**, and locally managed files with SHA-256 duplicate detection.
-- 🌙 **Smart Scheduling** — App-managed sleep schedule stored in DecentDB and enforced by the display client.
+- 🌙 **Smart Scheduling** — App-managed sleep schedule stored in DecentDB, evaluated in a configurable display timezone with Pi-local fallback, and surfaced in the admin UI with both Pi-local and display-time clocks.
 - 🍓 **Pi-Ready** — Includes appliance scripts for install, uninstall, and health checks on Raspberry Pi OS Desktop.
 
 ## Architecture at a glance
@@ -99,7 +96,7 @@ LocalFilesProvider      GooglePhotosProvider
 
 ### Display behavior
 
-The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a hidden cursor, preloads the next slide before transitioning, supports configurable `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` background presentation, keeps cached display-variant metadata as the source for color-based modes, may reuse the display variant directly for image-based modes, and can render an intentional black fullscreen sleep state during configured quiet hours.
+The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a hidden cursor, preloads the next slide before transitioning, supports configurable `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` background presentation, keeps cached display-variant metadata as the source for color-based modes, may reuse the display variant directly for image-based modes, and can render an intentional black fullscreen sleep state during configured quiet hours evaluated in the configured display timezone or the Pi-local timezone when none is set.
 
 Weather and alert overlays are also display concerns, but they still follow the same appliance rules: weather and alerts are fetched and cached by the backend, `/display` consumes only cached data, and sleep mode remains the highest-precedence fullscreen state.
 
@@ -177,7 +174,7 @@ npm run build
 
 ## Configuration
 
-SPF5000 keeps startup and runtime wiring in `spf5000.toml`. Application settings such as slideshow timing, selected collection, bootstrap completion, admin credentials, and the display sleep schedule live in DecentDB.
+SPF5000 keeps startup and runtime wiring in `spf5000.toml`. Application settings such as slideshow timing, selected collection, bootstrap completion, admin credentials, the display sleep schedule, and the optional display timezone live in DecentDB.
 
 Example config:
 
@@ -211,7 +208,7 @@ Important notes:
 - Set `SPF5000_CONFIG` to use a different runtime config path.
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
-- Sleep scheduling is managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
+- Sleep scheduling and the optional display timezone are managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
 - Google Photos credentials live in `spf5000.toml`, while linked-account state, selected media sources, sync runs, and provider asset mappings live in DecentDB.
 - Google Photos playback stays offline-first: the frame syncs media into managed local storage and `/display` plays from the local cache.
 - Weather settings, cached conditions, active alerts, and refresh history live in DecentDB-backed application state rather than the runtime config file.
@@ -342,7 +339,7 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 
 - health and system status
 - setup and auth/session
-- settings and sleep schedule
+- settings, display timezone, and sleep schedule
 - weather settings, cached conditions, and alert status
 - collections and assets
 - sources and local import

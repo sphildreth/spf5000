@@ -391,12 +391,22 @@ export interface SleepSchedule {
   sleep_schedule_enabled: boolean
   sleep_start_local_time: string // HH:MM
   sleep_end_local_time: string // HH:MM
+  display_timezone: string | null
 }
 
 export interface SleepScheduleUpdateRequest {
   sleep_schedule_enabled: boolean
   sleep_start_local_time: string // HH:MM
   sleep_end_local_time: string // HH:MM
+  display_timezone: string | null
+}
+
+export interface SettingsTimeReference {
+  current_server_utc_timestamp: string
+  pi_local_timezone: string
+  configured_display_timezone: string | null
+  effective_display_timezone: string
+  available_timezones: string[]
 }
 
 export interface DisplayPlaylist {
