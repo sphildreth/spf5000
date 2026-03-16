@@ -2,7 +2,7 @@
 Type=Application
 Name=SPF5000 Kiosk
 Comment=Launch the SPF5000 display in Chromium kiosk mode
-Exec=/bin/sh -lc "sleep __KIOSK_DELAY_SECONDS__; exec __CHROMIUM_BINARY__ --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --incognito __DISPLAY_URL__"
+Exec=/bin/sh -lc "sleep __KIOSK_DELAY_SECONDS__; unclutter -idle 0.5 -root >/dev/null 2>&1 & exec __CHROMIUM_BINARY__ --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --no-default-browser-check --password-store=basic --incognito __DISPLAY_URL__"
 Terminal=false
 StartupNotify=false
 X-GNOME-Autostart-enabled=true

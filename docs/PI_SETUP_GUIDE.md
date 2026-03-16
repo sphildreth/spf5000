@@ -110,10 +110,9 @@ You may also want the usual X11 anti-blanking settings in the runtime user's ses
 @xset s off
 @xset -dpms
 @xset s noblank
-@unclutter -idle 0.5 -root
 ```
 
-Those settings are still environment-specific enough that they remain a documented manual step.
+Cursor hiding is handled by the managed SPF5000 Chromium autostart entry, so `unclutter` no longer needs to be added separately as a manual session tweak.
 
 ## 5. Put the repository on the Pi
 
@@ -314,13 +313,25 @@ If the installer says no compatible DecentDB release asset is available for your
 
 The installed autostart entry already includes a short delay. If you still need more startup padding, edit the installed `.desktop` entry or rerun the installer after updating the template under `deploy/autostart/`.
 
+### Chromium asks for "Choose password for new keyring"
+
+That prompt comes from Chromium trying to use the desktop keyring. The managed kiosk autostart entry should now launch Chromium with `--password-store=basic` so the prompt does not appear.
+
+Re-run the installer to rewrite the autostart entry, then log out or reboot the Pi.
+
 ### The screen still blanks or powers down
 
 Re-check:
 
 - `raspi-config nonint do_blanking 1`
 - your X11 session autostart entries for `xset`
-- optional `unclutter` / desktop-session tweaks
+- that the managed `~/.config/autostart/spf5000-kiosk.desktop` file still exists and has not been replaced by another desktop-session entry
+
+### The mouse cursor is still visible
+
+The managed kiosk autostart entry should already launch `unclutter -idle 0.5 -root`.
+
+Re-run the installer to refresh the managed autostart file, then log out or reboot the Pi. `doctor.sh` now warns if the installed autostart entry is missing the cursor-hiding command.
 
 ### The admin UI is not reachable from another device
 

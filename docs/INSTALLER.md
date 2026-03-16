@@ -21,7 +21,7 @@ These scripts are intentionally Pi-specific and opinionated. They automate the s
 7. builds `frontend/dist`
 8. creates a runtime `spf5000.toml` if needed
 9. installs the `systemd` unit
-10. installs the Chromium kiosk autostart entry
+10. installs the Chromium kiosk autostart entry, including automatic cursor hiding and a password-store setting that avoids desktop keyring prompts
 11. enables and starts the backend service
 
 When installing Chromium, the script automatically chooses the distro-supported package name (`chromium` or `chromium-browser`) based on the apt candidate available on the target system.
@@ -50,6 +50,8 @@ Common options:
 The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to pin a specific DecentDB release.
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
+
+The managed Chromium autostart entry launches `unclutter -idle 0.5 -root` to hide the mouse cursor and sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode.
 
 The installer defaults to `--host 0.0.0.0` so another device on the LAN can still reach `/setup`, `/login`, and `/admin`. Chromium still opens the local `http://127.0.0.1:8000/display` route when the host is the wildcard bind.
 

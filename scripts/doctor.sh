@@ -362,6 +362,7 @@ check_browser_runtime() {
   local default_target=""
   local throttled=""
   local lan_ip=""
+  local autostart_exec_line=""
 
   printf '\n== Browser kiosk runtime ==\n'
 
@@ -375,6 +376,20 @@ check_browser_runtime() {
   if [[ -n "${AUTOSTART_FILE}" ]]; then
     if [[ -f "${AUTOSTART_FILE}" ]]; then
       pass_check "Chromium autostart entry exists at ${AUTOSTART_FILE}."
+
+      autostart_exec_line="$(grep '^Exec=' "${AUTOSTART_FILE}" 2>/dev/null || true)"
+
+      if [[ "${autostart_exec_line}" == *"unclutter -idle 0.5 -root"* ]]; then
+        pass_check "Chromium autostart entry launches unclutter to hide the mouse cursor."
+      else
+        warn_check "Chromium autostart entry does not appear to launch unclutter; the mouse cursor may remain visible."
+      fi
+
+      if [[ "${autostart_exec_line}" == *"--password-store=basic"* ]]; then
+        pass_check "Chromium autostart entry avoids desktop keyring prompts with --password-store=basic."
+      else
+        warn_check "Chromium autostart entry does not set --password-store=basic; Chromium may prompt for a new keyring password."
+      fi
     else
       fail_check "Chromium autostart entry is missing: ${AUTOSTART_FILE}."
     fi
@@ -402,7 +417,7 @@ check_browser_runtime() {
     fi
   fi
 
-  warn_check "Desktop autologin and X11 blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled."
+  warn_check "Desktop autologin and X11 blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled. The managed autostart entry should now handle cursor hiding and avoid Chromium keyring prompts."
 
   lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [[ "${HOST}" == "127.0.0.1" || "${HOST}" == "localhost" ]]; then
