@@ -118,9 +118,11 @@ The fullscreen `/display` route is intentionally separate from the admin shell. 
 
 - Python `3.11+`
 - Node.js and npm
-- a local **DecentDB checkout** so you can install the Python binding and build the native library
+- for source-based local development, a local **DecentDB checkout** so you can install the Python binding and build the native library
 
 SPF5000 does **not** install DecentDB from `backend/requirements.txt`. You must make both the editable Python binding and the native library available separately.
+
+For local development in this repo, the expected DecentDB path is still a source checkout. The Raspberry Pi appliance installer uses a different path: it downloads the matching DecentDB release bundle for the native library and the matching source archive for the Python binding.
 
 ### 1. Start the backend
 
@@ -149,6 +151,8 @@ export DECENTDB_NATIVE_LIB=$PWD/build/libc_api.so
 cd ../spf5000/backend
 python -m app
 ```
+
+When running from a DecentDB source checkout, `build/libc_api.so` is the normal Linux output. Release bundles may instead ship `libdecentdb.so`; the Python binding accepts either filename, and `DECENTDB_NATIVE_LIB` can point to either one.
 
 The backend reads `spf5000.toml` from the repo root by default. Override the config path with `SPF5000_CONFIG=/path/to/spf5000.toml`.
 
@@ -269,8 +273,7 @@ sudo raspi-config nonint do_blanking 1
 sudo mkdir -p /opt
 cd /opt
 sudo git clone https://github.com/sphildreth/spf5000.git
-sudo git clone <your DecentDB repo URL> decentdb
-sudo chown -R pi:pi /opt/spf5000 /opt/decentdb
+sudo chown -R pi:pi /opt/spf5000
 
 cd /opt/spf5000
 sudo ./scripts/install-pi.sh --user pi
@@ -291,7 +294,7 @@ http://<pi-hostname-or-ip>:8000/setup
 
 - apt package installation for the supported Pi runtime
 - `backend/.venv` creation and backend dependency installation
-- DecentDB editable binding installation plus native-library build from a nearby checkout
+- DecentDB binding installation from the matching source archive plus native-library download from the matching release bundle
 - `frontend/dist` creation
 - runtime `spf5000.toml` generation
 - `systemd` service installation and startup

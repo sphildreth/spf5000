@@ -25,8 +25,11 @@ DISPLAY_URL=""
 HEALTH_HOST=""
 SERVICE_FILE=""
 AUTOSTART_FILE=""
-DECENTDB_ROOT=""
-DECENTDB_BINDINGS_PATH=""
+DECENTDB_RELEASE_TAG="${DECENTDB_RELEASE_TAG:-latest}"
+DECENTDB_RELEASE_ASSET_NAME=""
+DECENTDB_RELEASE_ASSET_URL=""
+DECENTDB_SOURCE_ARCHIVE_URL=""
+DECENTDB_VENDOR_DIR=""
 DECENTDB_NATIVE_LIB=""
 
 usage() {
@@ -50,7 +53,8 @@ Options:
 Notes:
   - The installer expects an existing SPF5000 checkout at --app-root.
   - A stable security.session_secret is generated only when a new config file is created.
-  - The installer expects a nearby DecentDB checkout so it can install the Python binding and build the native library.
+  - The installer downloads a matching DecentDB native release plus the matching source archive for the Python binding.
+  - Set DECENTDB_RELEASE_TAG=vX.Y.Z to pin a specific DecentDB release instead of using the latest release.
 EOF
 }
 
@@ -199,12 +203,11 @@ install_packages() {
   DEBIAN_FRONTEND=noninteractive apt-get update
 
   chromium_package="$(detect_chromium_package)" || fail "Unable to determine whether this Pi uses the chromium or chromium-browser package."
+
   packages=(
     build-essential
     ca-certificates
     curl
-    libpg-query-dev
-    nim
     nodejs
     npm
     python3
@@ -221,8 +224,7 @@ install_packages() {
 ensure_required_binaries() {
   require_command python3
   require_command curl
-  require_command nim
-  require_command nimble
+  require_command tar
 
   if ! detect_chromium_binary >/dev/null 2>&1; then
     fail "Chromium is not installed or not on PATH. Install it or omit --skip-apt."
@@ -264,17 +266,98 @@ ensure_backend_venv() {
   run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install -r requirements.txt"
 }
 
-find_decentdb_checkout() {
-  local candidate_roots=(
-    "${APP_ROOT}/../decentdb"
-    "${APP_ROOT}/decentdb"
-    "${PI_REPO_ROOT}/../decentdb"
-  )
-  local candidate_root=""
+decentdb_release_asset_suffix() {
+  case "$(uname -m)" in
+    aarch64|arm64)
+      printf '%s\n' 'Linux-arm64.tar.gz'
+      ;;
+    x86_64|amd64)
+      printf '%s\n' 'Linux-x64.tar.gz'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
-  for candidate_root in "${candidate_roots[@]}"; do
-    if [[ -f "${candidate_root}/decentdb.nimble" && -f "${candidate_root}/bindings/python/pyproject.toml" ]]; then
-      printf '%s\n' "${candidate_root}"
+resolve_decentdb_release() {
+  local asset_suffix=""
+  local release_info=()
+
+  asset_suffix="$(decentdb_release_asset_suffix)" || fail "No supported prebuilt DecentDB release is available for architecture $(uname -m). Use a 64-bit Raspberry Pi OS image or install DecentDB manually from source."
+
+  mapfile -t release_info < <(python3 - "${DECENTDB_RELEASE_TAG}" "${asset_suffix}" <<'PY'
+import json
+import sys
+import urllib.parse
+import urllib.request
+
+requested_tag = sys.argv[1]
+asset_suffix = sys.argv[2]
+
+if requested_tag == "latest":
+    api_url = "https://api.github.com/repos/sphildreth/decentdb/releases/latest"
+else:
+    api_url = "https://api.github.com/repos/sphildreth/decentdb/releases/tags/" + urllib.parse.quote(requested_tag, safe="")
+
+request = urllib.request.Request(
+    api_url,
+    headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "spf5000-install-pi",
+    },
+)
+
+with urllib.request.urlopen(request) as response:
+    release = json.load(response)
+
+tag_name = release["tag_name"]
+asset_name = None
+asset_url = None
+for asset in release.get("assets", []):
+    name = asset.get("name", "")
+    if name.endswith(asset_suffix):
+        asset_name = name
+        asset_url = asset.get("browser_download_url")
+        break
+
+if not asset_name or not asset_url:
+    raise SystemExit(f"Missing DecentDB release asset matching *{asset_suffix} for {tag_name}")
+
+source_url = f"https://github.com/sphildreth/decentdb/archive/refs/tags/{tag_name}.tar.gz"
+
+print(tag_name)
+print(asset_name)
+print(asset_url)
+print(source_url)
+PY
+)
+
+[[ "${#release_info[@]}" -eq 4 ]] || fail "Could not resolve DecentDB release metadata from GitHub."
+
+DECENTDB_RELEASE_TAG="${release_info[0]}"
+DECENTDB_RELEASE_ASSET_NAME="${release_info[1]}"
+DECENTDB_RELEASE_ASSET_URL="${release_info[2]}"
+DECENTDB_SOURCE_ARCHIVE_URL="${release_info[3]}"
+}
+
+download_and_extract_tarball() {
+  local url="$1"
+  local output_dir="$2"
+
+  mkdir -p "${output_dir}"
+  curl --fail --silent --show-error --location "${url}" | tar -xz -C "${output_dir}" --strip-components=1
+}
+
+find_decentdb_native_lib() {
+  local search_dir="$1"
+  local candidate=""
+
+  for candidate in \
+    "${search_dir}/libdecentdb.so" \
+    "${search_dir}/libc_api.so"; do
+    if [[ -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
       return 0
     fi
   done
@@ -285,24 +368,34 @@ find_decentdb_checkout() {
 ensure_decentdb_runtime() {
   local backend_dir="${APP_ROOT}/backend"
   local venv_python="${backend_dir}/.venv/bin/python"
+  local native_extract_dir="${CACHE_DIR}/tmp/decentdb-native"
+  local source_extract_dir="${CACHE_DIR}/tmp/decentdb-source"
+  local extracted_native_lib=""
 
-  DECENTDB_ROOT="$(find_decentdb_checkout)" || fail "Could not find a DecentDB checkout. Clone DecentDB next to SPF5000 (for example: ${APP_ROOT}/../decentdb) and re-run this installer."
-  DECENTDB_BINDINGS_PATH="${DECENTDB_ROOT}/bindings/python"
-  DECENTDB_NATIVE_LIB="${DECENTDB_ROOT}/build/libc_api.so"
+  resolve_decentdb_release
 
-  if ! run_as_user_shell "${RUNTIME_USER}" "test -w '${DECENTDB_ROOT}'"; then
-    fail "DecentDB checkout ${DECENTDB_ROOT} is not writable by ${RUNTIME_USER}. Fix ownership or permissions and re-run this installer."
-  fi
+  DECENTDB_VENDOR_DIR="${APP_ROOT}/vendor/decentdb"
 
-  log "Installing DecentDB Python binding from ${DECENTDB_BINDINGS_PATH}."
-  run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install -e '${DECENTDB_BINDINGS_PATH}'"
+  log "Downloading DecentDB native release ${DECENTDB_RELEASE_ASSET_NAME}."
+  rm -rf "${native_extract_dir}" "${source_extract_dir}" "${DECENTDB_VENDOR_DIR}"
+  download_and_extract_tarball "${DECENTDB_RELEASE_ASSET_URL}" "${native_extract_dir}"
 
-  log "Building DecentDB native library in ${DECENTDB_ROOT}."
-  if ! run_as_user_shell "${RUNTIME_USER}" "cd '${DECENTDB_ROOT}' && nimble build_lib"; then
-    fail "Failed to build DecentDB native library. Ensure nim, nimble, and libpg-query-dev are installed, then re-run this installer."
-  fi
+  extracted_native_lib="$(find_decentdb_native_lib "${native_extract_dir}")" || fail "Downloaded DecentDB release ${DECENTDB_RELEASE_ASSET_NAME}, but no Linux native library was found inside it."
 
-  [[ -f "${DECENTDB_NATIVE_LIB}" ]] || fail "DecentDB build completed without producing ${DECENTDB_NATIVE_LIB}."
+  mkdir -p "${DECENTDB_VENDOR_DIR}"
+  cp -a "${native_extract_dir}/." "${DECENTDB_VENDOR_DIR}/"
+  chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${DECENTDB_VENDOR_DIR}"
+
+  DECENTDB_NATIVE_LIB="$(find_decentdb_native_lib "${DECENTDB_VENDOR_DIR}")" || fail "Installed DecentDB release bundle, but could not locate the managed native library under ${DECENTDB_VENDOR_DIR}."
+
+  log "Downloading DecentDB source archive ${DECENTDB_RELEASE_TAG} for the Python binding."
+  download_and_extract_tarball "${DECENTDB_SOURCE_ARCHIVE_URL}" "${source_extract_dir}"
+  chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${source_extract_dir}"
+
+  [[ -f "${source_extract_dir}/bindings/python/pyproject.toml" ]] || fail "Downloaded DecentDB source archive ${DECENTDB_RELEASE_TAG}, but bindings/python/pyproject.toml was not found."
+
+  log "Installing DecentDB Python binding from the ${DECENTDB_RELEASE_TAG} source archive."
+  run_as_user_shell "${RUNTIME_USER}" "cd '${backend_dir}' && .venv/bin/python -m pip install --force-reinstall '${source_extract_dir}/bindings/python'"
 
   log "Validating DecentDB runtime with ${DECENTDB_NATIVE_LIB}."
   if ! env DECENTDB_NATIVE_LIB="${DECENTDB_NATIVE_LIB}" "${venv_python}" -c 'import decentdb; conn = decentdb.connect(":memory:"); conn.close()' >/dev/null 2>&1; then
@@ -456,6 +549,7 @@ What was configured
   Service name  : ${SERVICE_NAME}.service
   Kiosk entry   : ${AUTOSTART_FILE}
   Display URL   : ${DISPLAY_URL}
+  DecentDB tag  : ${DECENTDB_RELEASE_TAG}
   DecentDB lib  : ${DECENTDB_NATIVE_LIB}
 
 Useful commands

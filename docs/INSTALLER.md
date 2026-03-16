@@ -17,7 +17,7 @@ These scripts are intentionally Pi-specific and opinionated. They automate the s
 3. creates the runtime directories
 4. creates or refreshes `backend/.venv`
 5. installs backend dependencies
-6. installs the DecentDB Python binding from a nearby checkout and builds the native library
+6. downloads the matching DecentDB release bundle, installs the Python binding, and stages the native library
 7. builds `frontend/dist`
 8. creates a runtime `spf5000.toml` if needed
 9. installs the `systemd` unit
@@ -47,7 +47,7 @@ Common options:
 - `--skip-apt` - skip apt installation and validate only
 - `--force` - overwrite an existing generated config and bypass the non-Pi hardware guard
 
-If you use `--skip-apt`, the DecentDB build prerequisites must already be present on the Pi, including `nim`, `nimble`, and `libpg_query` development files.
+The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to pin a specific DecentDB release.
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
 
@@ -71,6 +71,7 @@ It also manages build/runtime artifacts inside the checkout:
 backend/.venv/
 frontend/dist/
 frontend/node_modules/
+vendor/decentdb/
 ```
 
 Use `deploy/systemd/spf5000.service.template`, `deploy/autostart/spf5000-kiosk.desktop.template`, and `deploy/config/spf5000.toml.example` as the source-of-truth templates.
@@ -79,17 +80,17 @@ Use `deploy/systemd/spf5000.service.template`, `deploy/autostart/spf5000-kiosk.d
 
 The backend needs both parts of the upstream DecentDB Python integration:
 
-- the editable Python binding from `bindings/python`
-- the native C API library produced by `nimble build_lib`
+- the Python binding from `bindings/python`
+- the native C API library from the DecentDB release bundle
 
-The installer now expects a nearby DecentDB checkout such as `../decentdb` or `./decentdb`. On each run it:
+On supported 64-bit Linux architectures, the installer now downloads a matching DecentDB GitHub release plus the matching source archive. On each run it:
 
-- installs or refreshes the editable Python binding into `backend/.venv`
-- runs `nimble build_lib` in the DecentDB checkout
+- extracts the native library into `vendor/decentdb/`
+- installs or refreshes the Python binding into `backend/.venv`
 - validates that `backend/.venv` can open a DecentDB connection
-- writes `DECENTDB_NATIVE_LIB=<checkout>/build/libc_api.so` into the managed `systemd` unit
+- writes `DECENTDB_NATIVE_LIB=<app-root>/vendor/decentdb/libdecentdb.so` into the managed `systemd` unit
 
-If no compatible DecentDB checkout is present, or the native library cannot be built, the installer exits with a clear error instead of silently enabling the backend in degraded `NullConnection` mode.
+The supported prebuilt path is intended for 64-bit Raspberry Pi OS on ARM64. If no compatible DecentDB release asset is available for the current architecture, the installer exits with a clear error instead of silently enabling the backend in degraded `NullConnection` mode.
 
 ## Re-running the installer
 
@@ -97,7 +98,7 @@ If no compatible DecentDB checkout is present, or the native library cannot be b
 
 - apt installs can be repeated
 - the virtualenv can be refreshed
-- the DecentDB binding and native library are refreshed from the nearby checkout each run
+- the DecentDB binding and native library are refreshed from the selected release each run
 - the service and autostart files are rewritten each run
 - the config file is preserved unless `--force` is used
 

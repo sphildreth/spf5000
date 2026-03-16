@@ -390,9 +390,9 @@ Admin routing behavior:
 ### Pi appliance provisioning
 
 - `scripts/install-pi.sh` is the first-pass Pi-specific installer for Raspberry Pi OS Desktop
-- the installer assumes an existing SPF5000 checkout, creates or refreshes `backend/.venv`, installs the DecentDB Python binding from a nearby checkout, builds the DecentDB native library, builds `frontend/dist`, generates a runtime `spf5000.toml`, installs the `systemd` unit, and installs the Chromium autostart entry for the selected non-root user
+- the installer assumes an existing SPF5000 checkout, creates or refreshes `backend/.venv`, installs the DecentDB Python binding from the matching source archive, downloads the DecentDB native library from the matching release bundle, builds `frontend/dist`, generates a runtime `spf5000.toml`, installs the `systemd` unit, and installs the Chromium autostart entry for the selected non-root user
 - default Pi runtime paths are `/opt/spf5000`, `/var/lib/spf5000`, `/var/cache/spf5000`, and `/var/lib/spf5000/spf5000.toml`
-- the generated `systemd` unit runs `cd backend && .venv/bin/python -m app` with `SPF5000_CONFIG` pointing at the generated runtime config and `DECENTDB_NATIVE_LIB` pointing at the built DecentDB C API library
+- the generated `systemd` unit runs `cd backend && .venv/bin/python -m app` with `SPF5000_CONFIG` pointing at the generated runtime config and `DECENTDB_NATIVE_LIB` pointing at the staged DecentDB C API library from the downloaded release bundle
 - the generated Chromium autostart entry launches the local `/display` route in kiosk mode after a short startup delay
 - `scripts/uninstall-pi.sh` removes the service and kiosk autostart while preserving config, database, cache, and imported assets by default
 - `scripts/doctor.sh` checks runtime prerequisites, service state, filesystem paths, local health endpoints, and kiosk wiring

@@ -25,8 +25,7 @@ sudo adduser pi
 sudo mkdir -p /opt
 cd /opt
 sudo git clone https://github.com/sphildreth/spf5000.git
-sudo git clone https://github.com/sphildreth/decentdb.git
-sudo chown -R pi:pi /opt/spf5000 /opt/decentdb
+sudo chown -R pi:pi /opt/spf5000
 
 cd /opt/spf5000
 sudo ./scripts/install-pi.sh --user pi
@@ -58,8 +57,8 @@ This keeps the display appliance-like while preserving a normal web admin flow.
 
 Use:
 
-- Raspberry Pi 3 or Raspberry Pi 4
-- Raspberry Pi OS with desktop
+- Raspberry Pi 3, Raspberry Pi 4, or Raspberry Pi 5
+- Raspberry Pi OS with desktop (64-bit recommended)
 
 Do not use Raspberry Pi OS Lite unless you are intentionally replacing the browser-kiosk runtime described in ADR 0007.
 
@@ -135,31 +134,26 @@ sudo chown -R pi:pi /opt/spf5000
 
 If you use a different checkout path, pass it with `--app-root`.
 
-## 6. Make the DecentDB checkout available
+## 6. Let the installer fetch DecentDB
 
 SPF5000 relies on the upstream DecentDB Python integration, which has two parts:
 
-- the editable Python binding from `bindings/python`
-- the native C API library built with `nimble build_lib`
+- the Python binding from `bindings/python`
+- the native C API library from a DecentDB release bundle
 
 `backend/requirements.txt` does not install either of those pieces for you.
 
-The Pi installer now expects a nearby DecentDB checkout such as:
-
-```text
-/opt/decentdb
-/opt/spf5000/../decentdb
-```
+On supported 64-bit Linux systems, `scripts/install-pi.sh` now downloads the matching DecentDB GitHub release plus the matching source archive automatically. No manual DecentDB clone is required for the supported Pi path.
 
 On each run, `scripts/install-pi.sh` will:
 
-1. install or refresh the editable Python binding from `bindings/python`
-2. install the build prerequisites unless you used `--skip-apt`
-3. run `nimble build_lib` in the DecentDB checkout
+1. resolve the matching DecentDB release for the current architecture
+2. download and stage the native library under `/opt/spf5000/vendor/decentdb/`
+3. download the matching DecentDB source archive and install the Python binding into `backend/.venv`
 4. validate that the backend virtualenv can open a DecentDB connection
-5. write `DECENTDB_NATIVE_LIB=<checkout>/build/libc_api.so` into the managed `systemd` unit
+5. write `DECENTDB_NATIVE_LIB=/opt/spf5000/vendor/decentdb/libdecentdb.so` into the managed `systemd` unit
 
-If you use `--skip-apt`, make sure the Pi already has `nim`, `nimble`, and `libpg_query` development files available before you run the installer.
+The supported prebuilt path is aimed at 64-bit Raspberry Pi OS on ARM64. If you are on an unsupported architecture, switch to a 64-bit Raspberry Pi OS image or handle DecentDB manually.
 
 ## 7. Run the installer
 
@@ -257,20 +251,13 @@ The repository itself remains in the chosen app root, and the backend still uses
 
 To update a Pi that is already running SPF5000, update the repository checkout and then re-run the installer.
 
-`git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, reinstalls the DecentDB Python binding, rebuilds the DecentDB native library, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
+`git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, reinstalls the DecentDB Python binding from the matching source archive, refreshes the staged DecentDB native library from the selected release, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
 
 Typical update flow:
 
 ```bash
 cd /opt/spf5000
 git pull
-
-if [ -d /opt/decentdb/.git ]; then
-  cd /opt/decentdb
-  git pull
-fi
-
-cd /opt/spf5000
 sudo ./scripts/install-pi.sh --user pi
 sudo ./scripts/doctor.sh --user pi
 ```
@@ -316,23 +303,11 @@ That means the config is bound to `127.0.0.1` or `localhost`. Re-run the install
 
 ### Doctor reports that DecentDB is missing
 
-Re-run the installer first. It now handles the supported DecentDB flow automatically when a nearby checkout exists.
+Re-run the installer first. On supported 64-bit systems it now downloads the matching DecentDB release bundle and matching source archive automatically.
 
-If you need to repair it manually, rebuild the native library and reinstall the editable binding:
+The managed service uses `DECENTDB_NATIVE_LIB=/opt/spf5000/vendor/decentdb/libdecentdb.so` by default.
 
-```bash
-sudo apt-get install -y nim libpg-query-dev
-
-cd /opt/decentdb
-nimble build_lib
-
-cd /opt/spf5000/backend
-.venv/bin/python -m pip install -e ../decentdb/bindings/python
-
-sudo systemctl restart spf5000.service
-```
-
-The managed service uses `DECENTDB_NATIVE_LIB=/opt/decentdb/build/libc_api.so` by default.
+If the installer says no compatible DecentDB release asset is available for your architecture, move to a 64-bit Raspberry Pi OS image or handle DecentDB manually outside the supported appliance flow.
 
 ### Chromium opens before the backend is ready
 
