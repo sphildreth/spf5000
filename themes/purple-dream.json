@@ -3,6 +3,7 @@
   "name": "Purple Dream",
   "description": "Rich violet and lavender palette with soft gradients. Elegant and modern.",
   "version": "1.0.0",
+  "mode": "dark",
   "tokens": {
     "colors": {
       "background_primary": "#0e0b1a",
@@ -92,7 +93,7 @@
   },
   "contexts": {
     "home_city_accent": {
-      "style": "glow",
+      "style": "accent_glow",
       "highlight_color": "#c084fc",
       "badge_background": "rgba(192, 132, 252, 0.16)",
       "badge_text": "#c084fc"

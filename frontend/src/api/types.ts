@@ -646,41 +646,23 @@ export function normalizeAuthSessionResponse(value: unknown): AuthSessionRespons
 
 // ─── Theme System ──────────────────────────────────────────────────────────
 
-/** CSS-ready string values for every design token in a theme. */
 export interface ThemeTokens {
-  // Admin shell & UI
-  bg: string
-  panel: string
-  panelStrong: string
-  panelSoft: string
-  border: string
-  text: string
-  muted: string
-  accent: string
-  accentStrong: string
-  ok: string
-  warning: string
-  danger: string
-  shadow: string
-  // Display overlay surfaces (optional; root defaults apply when absent)
-  weatherBg?: string
-  weatherBorder?: string
-  weatherText?: string
-  weatherTextMuted?: string
-  bootGlowDefault?: string
-  bootGlowEmpty?: string
-  bootGlowError?: string
-  idleBg?: string
-  idleBorder?: string
-  /** Accent color used to highlight the home-city label in the weather widget. */
-  accentHomeCityColor?: string
+  colors: Record<string, string>
+  typography: Record<string, string>
+  spacing: Record<string, string>
+  motion: Record<string, string>
+  shape: Record<string, string>
 }
 
 export interface ThemeDefinition {
   id: string
-  label: string
+  name: string
   description: string
+  version: string
+  mode: string
   tokens: ThemeTokens
+  components: JsonRecord
+  contexts: JsonRecord
 }
 
 export interface ThemesResponse {

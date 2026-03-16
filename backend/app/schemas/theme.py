@@ -13,21 +13,16 @@ from app.models.theme import ThemeDefinition, ThemeTokens
 class ThemeTokensSchema(BaseModel):
     """Pydantic validation schema for the tokens block inside a theme file."""
 
-    colors: dict[str, str] = Field(min_length=1)
-    typography: dict[str, str] = Field(min_length=1)
-    spacing: dict[str, str] = Field(default_factory=dict)
-    motion: dict[str, str] = Field(default_factory=dict)
-    shape: dict[str, str] = Field(default_factory=dict)
+    colors: dict[str, str | int | float] = Field(min_length=1)
+    typography: dict[str, str | int | float] = Field(min_length=1)
+    spacing: dict[str, str | int | float] = Field(default_factory=dict)
+    motion: dict[str, str | int | float] = Field(default_factory=dict)
+    shape: dict[str, str | int | float] = Field(default_factory=dict)
 
     @field_validator("colors")
     @classmethod
-    def _require_color_keys(cls, v: dict[str, str]) -> dict[str, str]:
-        required = {
-            "background_primary",
-            "text_primary",
-            "accent_primary",
-            "display_background",
-        }
+    def _require_color_keys(cls, v: dict[str, str | int | float]) -> dict[str, str | int | float]:
+        required = {"background_primary", "text_primary", "accent_primary"}
         missing = required - v.keys()
         if missing:
             raise ValueError(
@@ -37,14 +32,24 @@ class ThemeTokensSchema(BaseModel):
 
     @field_validator("typography")
     @classmethod
-    def _require_typography_keys(cls, v: dict[str, str]) -> dict[str, str]:
-        required = {"font_family_base", "font_size_md", "font_weight_normal"}
+    def _require_typography_keys(
+        cls, v: dict[str, str | int | float]
+    ) -> dict[str, str | int | float]:
+        required = {"font_family_base", "font_weight_normal"}
         missing = required - v.keys()
         if missing:
             raise ValueError(
                 f"tokens.typography is missing required key(s): {sorted(missing)}"
             )
+        if "font_size_md" not in v and "font_size_body" not in v:
+            raise ValueError(
+                "tokens.typography must include at least one of ['font_size_md', 'font_size_body']"
+            )
         return v
+
+
+def _stringify_tokens(values: dict[str, str | int | float]) -> dict[str, str]:
+    return {key: str(value) for key, value in values.items()}
 
 
 # ── Top-level theme file validation schema ────────────────────────────────────
@@ -57,6 +62,7 @@ class ThemeFileSchema(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1, max_length=500)
     version: str = Field(min_length=1, max_length=40)
+    mode: str = Field(min_length=1, max_length=20, pattern=r"^(light|dark)$")
     tokens: ThemeTokensSchema
     components: dict[str, Any] = Field(default_factory=dict)
     contexts: dict[str, Any] = Field(default_factory=dict)
@@ -67,12 +73,13 @@ class ThemeFileSchema(BaseModel):
             name=self.name,
             description=self.description,
             version=self.version,
+            mode=self.mode,
             tokens=ThemeTokens(
-                colors=dict(self.tokens.colors),
-                typography=dict(self.tokens.typography),
-                spacing=dict(self.tokens.spacing),
-                motion=dict(self.tokens.motion),
-                shape=dict(self.tokens.shape),
+                colors=_stringify_tokens(self.tokens.colors),
+                typography=_stringify_tokens(self.tokens.typography),
+                spacing=_stringify_tokens(self.tokens.spacing),
+                motion=_stringify_tokens(self.tokens.motion),
+                shape=_stringify_tokens(self.tokens.shape),
             ),
             components=dict(self.components),
             contexts=dict(self.contexts),
@@ -105,6 +112,7 @@ class ThemeDefinitionResponse(BaseModel):
     name: str
     description: str
     version: str
+    mode: str
     tokens: ThemeTokensResponse
     components: dict[str, Any]
     contexts: dict[str, Any]
@@ -116,6 +124,7 @@ class ThemeDefinitionResponse(BaseModel):
             name=d.name,
             description=d.description,
             version=d.version,
+            mode=d.mode,
             tokens=ThemeTokensResponse.from_domain(d.tokens),
             components=d.components,
             contexts=d.contexts,

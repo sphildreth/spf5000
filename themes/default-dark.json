@@ -3,6 +3,7 @@
   "name": "Default Dark",
   "description": "The default dark theme for SPF5000. Clean, neutral, and unobtrusive.",
   "version": "1.0.0",
+  "mode": "dark",
   "tokens": {
     "colors": {
       "background_primary": "#0f0f0f",

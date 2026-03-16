@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { getSettings, updateSettings } from '../api/settings'
-import type { FrameSettings } from '../api/types'
+import type { FrameSettings, ThemeDefinition } from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -58,6 +58,15 @@ export function SettingsPage() {
     } catch (caught) {
       setSaveState('error')
       setSaveError(caught instanceof Error ? caught.message : 'Unable to save settings.')
+    }
+  }
+
+  function getThemePreview(theme: ThemeDefinition): { background: string; border: string; accent: string } {
+    const colors = theme.tokens.colors
+    return {
+      background: colors.surface_default ?? colors.background_secondary ?? colors.background_primary ?? '#171b24',
+      border: colors.border_default ?? colors.border_strong ?? colors.accent_primary ?? 'rgba(148, 163, 184, 0.18)',
+      accent: colors.accent_primary ?? colors.accent_secondary ?? colors.text_primary ?? '#80aefb',
     }
   }
 
@@ -220,7 +229,7 @@ export function SettingsPage() {
             >
               {themes.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.label}
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -248,20 +257,21 @@ export function SettingsPage() {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {themes.map((t) => {
                 const isActive = t.id === selectedThemeId
+                const preview = getThemePreview(t)
                 return (
                   <button
                     key={t.id}
                     type="button"
-                    title={`${t.label} – ${t.description}`}
+                    title={`${t.name} – ${t.description}`}
                     onClick={() => setSelectedThemeId(t.id)}
                     style={{
                       width: '2.6rem',
                       height: '2.6rem',
                       borderRadius: '10px',
-                      background: t.tokens.panel,
+                      background: preview.background,
                       border: isActive
-                        ? `2px solid ${t.tokens.accent}`
-                        : `2px solid ${t.tokens.border}`,
+                        ? `2px solid ${preview.accent}`
+                        : `2px solid ${preview.border}`,
                       cursor: 'pointer',
                       position: 'relative',
                       overflow: 'hidden',
@@ -276,7 +286,7 @@ export function SettingsPage() {
                         left: 0,
                         right: 0,
                         height: '6px',
-                        background: t.tokens.accent,
+                        background: preview.accent,
                         opacity: 0.9,
                       }}
                     />
@@ -288,7 +298,7 @@ export function SettingsPage() {
               const active = themes.find((t) => t.id === selectedThemeId)
               return active ? (
                 <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
-                  <strong style={{ color: 'var(--text)' }}>{active.label}</strong> — {active.description}
+                  <strong style={{ color: 'var(--text)' }}>{active.name}</strong> — {active.description}
                 </p>
               ) : null
             })()}

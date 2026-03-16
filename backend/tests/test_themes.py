@@ -104,6 +104,7 @@ def test_get_themes_each_has_required_fields(fresh_client: TestClient) -> None:
         assert "name" in theme
         assert "description" in theme
         assert "version" in theme
+        assert "mode" in theme
         assert "tokens" in theme
         tokens = theme["tokens"]
         assert "colors" in tokens
@@ -154,7 +155,7 @@ def test_get_themes_reflects_updated_theme_id(test_client: TestClient) -> None:
             "active_display_profile_id": "default-display-profile",
             "background_fill_mode": "black",
             "theme_id": "retro-neon",
-            "home_city_accent_style": "glow",
+            "home_city_accent_style": "accent_glow",
         },
     )
     assert put_resp.status_code == 200
@@ -163,7 +164,7 @@ def test_get_themes_reflects_updated_theme_id(test_client: TestClient) -> None:
     assert themes_resp.status_code == 200
     body = themes_resp.json()
     assert body["active_theme_id"] == "retro-neon"
-    assert body["home_city_accent_style"] == "glow"
+    assert body["home_city_accent_style"] == "accent_glow"
 
 
 # ── Theme service unit-level: validation of a bad theme file ──────────────────
@@ -184,6 +185,7 @@ def test_theme_service_skips_invalid_theme_file(tmp_path: Path) -> None:
         "name": "My Theme",
         "description": "A test theme",
         "version": "1.0.0",
+        "mode": "dark",
         "tokens": {
             "colors": {
                 "background_primary": "#000",
@@ -206,6 +208,7 @@ def test_theme_service_skips_invalid_theme_file(tmp_path: Path) -> None:
         "name": "Bad",
         "description": "Missing required tokens",
         "version": "1.0.0",
+        "mode": "dark",
         "tokens": {
             "colors": {},
             "typography": {},
@@ -220,6 +223,31 @@ def test_theme_service_skips_invalid_theme_file(tmp_path: Path) -> None:
     ids = [t.id for t in loaded]
     assert "my-theme" in ids
     assert "bad-theme" not in ids
+
+
+def test_all_repository_theme_files_validate() -> None:
+    """Every checked-in theme JSON file should validate with the current schema."""
+    import json
+
+    from app.core.version import REPO_ROOT
+    from app.models.theme import VALID_HOME_CITY_ACCENT_STYLES
+    from app.schemas.theme import ThemeFileSchema
+
+    failures: list[str] = []
+    for path in sorted((REPO_ROOT / "themes").glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        parsed = ThemeFileSchema.model_validate(data)
+
+        if parsed.id != path.stem:
+            failures.append(f"{path.name}: id {parsed.id!r} does not match filename stem {path.stem!r}")
+
+        context = data.get("contexts", {}).get("home_city_accent")
+        if isinstance(context, dict):
+            style = context.get("style")
+            if style is not None and style not in VALID_HOME_CITY_ACCENT_STYLES:
+                failures.append(f"{path.name}: unsupported home_city_accent.style={style!r}")
+
+    assert not failures, "Theme validation failures:\\n" + "\\n".join(failures)
 
 
 def test_theme_service_rejects_id_mismatch(tmp_path: Path) -> None:

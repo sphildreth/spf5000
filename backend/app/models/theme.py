@@ -3,6 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+VALID_HOME_CITY_ACCENT_STYLES = (
+    "default",
+    "subtle_border",
+    "solid_border",
+    "house_icon",
+    "accent_glow",
+    "gradient_border",
+    "rainbow_gradient_border",
+)
+
+
 @dataclass(slots=True)
 class ThemeTokens:
     """Resolved and validated token categories for a single theme."""
@@ -22,6 +33,7 @@ class ThemeDefinition:
     name: str
     description: str
     version: str
+    mode: str
     tokens: ThemeTokens
     components: dict = field(default_factory=dict)
     contexts: dict = field(default_factory=dict)

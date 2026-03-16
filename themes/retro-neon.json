@@ -3,6 +3,7 @@
   "name": "Retro Neon",
   "description": "High-contrast neon glow aesthetic inspired by 1980s CRT displays.",
   "version": "1.0.0",
+  "mode": "dark",
   "tokens": {
     "colors": {
       "background_primary": "#050510",
@@ -95,7 +96,7 @@
   },
   "contexts": {
     "home_city_accent": {
-      "style": "glow",
+      "style": "accent_glow",
       "highlight_color": "#00ffcc",
       "badge_background": "rgba(0, 255, 204, 0.12)",
       "badge_text": "#00ffcc",

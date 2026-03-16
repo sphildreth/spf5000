@@ -12,6 +12,7 @@ from app.models.sleep_schedule import (
     normalize_hhmm,
     normalize_sleep_schedule,
 )
+from app.models.theme import VALID_HOME_CITY_ACCENT_STYLES
 from app.models.time_reference import SleepScheduleTimeReference
 from app.services.background_service import VALID_BACKGROUND_FILL_MODES
 
@@ -63,6 +64,24 @@ class SettingsUpdateRequest(BaseModel):
         if v not in VALID_BACKGROUND_FILL_MODES:
             raise ValueError(
                 f"background_fill_mode must be one of {sorted(VALID_BACKGROUND_FILL_MODES)!r}, got {v!r}"
+            )
+        return v
+
+    @field_validator("theme_id")
+    @classmethod
+    def validate_theme_id(cls, v: str) -> str:
+        value = v.strip()
+        if not value:
+            raise ValueError("theme_id must be a non-empty string")
+        return value
+
+    @field_validator("home_city_accent_style")
+    @classmethod
+    def validate_home_city_accent_style(cls, v: str) -> str:
+        if v not in VALID_HOME_CITY_ACCENT_STYLES:
+            raise ValueError(
+                "home_city_accent_style must be one of "
+                f"{sorted(VALID_HOME_CITY_ACCENT_STYLES)!r}, got {v!r}"
             )
         return v
 

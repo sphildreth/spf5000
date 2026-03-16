@@ -93,14 +93,14 @@ def test_put_settings_persists_theme_id(test_client: TestClient) -> None:
 
 
 def test_put_settings_persists_home_city_accent_style(test_client: TestClient) -> None:
-    payload = {**_FULL_SETTINGS_PAYLOAD, "home_city_accent_style": "glow"}
+    payload = {**_FULL_SETTINGS_PAYLOAD, "home_city_accent_style": "accent_glow"}
     resp = test_client.put("/api/settings", json=payload)
     assert resp.status_code == 200
-    assert resp.json()["home_city_accent_style"] == "glow"
+    assert resp.json()["home_city_accent_style"] == "accent_glow"
 
     get_resp = test_client.get("/api/settings")
     assert get_resp.status_code == 200
-    assert get_resp.json()["home_city_accent_style"] == "glow"
+    assert get_resp.json()["home_city_accent_style"] == "accent_glow"
 
 
 def test_put_settings_omitting_theme_fields_uses_defaults(test_client: TestClient) -> None:
@@ -118,13 +118,13 @@ def test_put_settings_round_trips_all_theme_fields(test_client: TestClient) -> N
     payload = {
         **_FULL_SETTINGS_PAYLOAD,
         "theme_id": "warm-family",
-        "home_city_accent_style": "warm",
+        "home_city_accent_style": "solid_border",
     }
     resp = test_client.put("/api/settings", json=payload)
     assert resp.status_code == 200
     body = resp.json()
     assert body["theme_id"] == "warm-family"
-    assert body["home_city_accent_style"] == "warm"
+    assert body["home_city_accent_style"] == "solid_border"
 
 
 # ── Auth protection — existing routes should still be guarded ─────────────────

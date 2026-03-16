@@ -3,6 +3,7 @@
   "name": "Warm Family",
   "description": "Warm amber and terracotta tones. Inviting and comfortable for living-room displays.",
   "version": "1.0.0",
+  "mode": "dark",
   "tokens": {
     "colors": {
       "background_primary": "#1a1008",
@@ -92,7 +93,7 @@
   },
   "contexts": {
     "home_city_accent": {
-      "style": "warm",
+      "style": "solid_border",
       "highlight_color": "#f5c842",
       "badge_background": "rgba(245, 200, 66, 0.16)",
       "badge_text": "#f5c842"
