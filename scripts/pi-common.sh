@@ -99,6 +99,7 @@ require_spf5000_checkout() {
   [[ -f "${app_root}/frontend/package.json" ]] || fail "Missing ${app_root}/frontend/package.json. ${app_root} does not look like an SPF5000 checkout."
   [[ -f "${app_root}/deploy/systemd/spf5000.service.template" ]] || fail "Missing ${app_root}/deploy/systemd/spf5000.service.template."
   [[ -f "${app_root}/deploy/autostart/spf5000-kiosk.desktop.template" ]] || fail "Missing ${app_root}/deploy/autostart/spf5000-kiosk.desktop.template."
+  [[ -f "${app_root}/deploy/autostart/spf5000-kiosk-launch.sh.template" ]] || fail "Missing ${app_root}/deploy/autostart/spf5000-kiosk-launch.sh.template."
 }
 
 infer_service_value() {
@@ -195,6 +196,13 @@ kiosk_desktop_path() {
   local service_name="${2:-${PI_DEFAULT_SERVICE_NAME}}"
 
   printf '%s/.config/autostart/%s-kiosk.desktop\n' "$(resolve_user_home "${user_name}")" "${service_name}"
+}
+
+kiosk_launcher_path() {
+  local user_name="$1"
+  local service_name="${2:-${PI_DEFAULT_SERVICE_NAME}}"
+
+  printf '%s/.config/autostart/%s-kiosk-launch.sh\n' "$(resolve_user_home "${user_name}")" "${service_name}"
 }
 
 safe_remove_path() {

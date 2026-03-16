@@ -14,6 +14,7 @@ PURGE=false
 
 SERVICE_FILE=""
 AUTOSTART_FILE=""
+AUTOSTART_LAUNCHER_FILE=""
 
 usage() {
   cat <<EOF
@@ -82,6 +83,7 @@ preflight() {
 
   if [[ -n "${RUNTIME_USER}" ]]; then
     AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+    AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
   fi
 }
 
@@ -128,6 +130,13 @@ remove_autostart() {
     rm -f "${AUTOSTART_FILE}"
   else
     log "Autostart entry ${AUTOSTART_FILE} is already absent."
+  fi
+
+  if [[ -f "${AUTOSTART_LAUNCHER_FILE}" ]]; then
+    log "Removing ${AUTOSTART_LAUNCHER_FILE}."
+    rm -f "${AUTOSTART_LAUNCHER_FILE}"
+  else
+    log "Autostart launcher ${AUTOSTART_LAUNCHER_FILE} is already absent."
   fi
 }
 

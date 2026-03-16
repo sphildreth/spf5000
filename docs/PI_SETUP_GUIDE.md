@@ -112,7 +112,7 @@ You may also want the usual X11 anti-blanking settings in the runtime user's ses
 @xset s noblank
 ```
 
-Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle.
+Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry delegates to a launcher script under `~/.config/autostart/`. That launcher script uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle.
 
 You can verify the active desktop backend with:
 
@@ -327,7 +327,7 @@ The installed autostart entry already includes a short delay. If you still need 
 
 ### Chromium asks for "Choose password for new keyring"
 
-That prompt comes from Chromium trying to use the desktop keyring. The managed kiosk autostart entry should now launch Chromium with `--password-store=basic` so the prompt does not appear.
+That prompt comes from Chromium trying to use the desktop keyring. The managed kiosk launcher script should now launch Chromium with `--password-store=basic` so the prompt does not appear.
 
 Re-run the installer to rewrite the autostart entry, then log out or reboot the Pi.
 
@@ -351,12 +351,12 @@ ps -ef | grep -E 'labwc|openbox|Xorg|Xwayland' | grep -v grep
 
 Interpretation:
 
-- `Type=wayland` and `labwc` mean the Pi is on Wayland; in that case the managed kiosk autostart entry should include `--ozone-platform-hint=auto` so Chromium runs natively on Wayland
-- `Type=x11` and `openbox`/`Xorg` mean the Pi is on X11; in that case the managed kiosk autostart entry should launch `unclutter`
+- `Type=wayland` and `labwc` mean the Pi is on Wayland; in that case the managed kiosk launcher script should include `--ozone-platform-hint=auto` so Chromium runs natively on Wayland
+- `Type=x11` and `openbox`/`Xorg` mean the Pi is on X11; in that case the managed kiosk launcher script should launch `unclutter`
 
-On Wayland, the managed kiosk autostart entry should contain `--ozone-platform-hint=auto`. On X11, it should already launch `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`.
+On Wayland, the managed kiosk launcher script should contain `--ozone-platform-hint=auto`. On X11, it should already launch `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`.
 
-Re-run the installer to refresh the managed autostart file, then log out or reboot the Pi. `doctor.sh` now warns if the installed autostart entry is missing the Wayland selector for Wayland sessions or the X11 cursor-hiding command for X11 sessions.
+Re-run the installer to refresh the managed autostart files, then log out or reboot the Pi. `doctor.sh` now warns if the installed launcher script is missing the Wayland selector for Wayland sessions or the X11 cursor-hiding command for X11 sessions.
 
 ### The admin UI is not reachable from another device
 

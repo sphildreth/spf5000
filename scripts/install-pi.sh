@@ -25,6 +25,7 @@ DISPLAY_URL=""
 HEALTH_HOST=""
 SERVICE_FILE=""
 AUTOSTART_FILE=""
+AUTOSTART_LAUNCHER_FILE=""
 DECENTDB_RELEASE_TAG="${DECENTDB_RELEASE_TAG:-latest}"
 DECENTDB_RELEASE_ASSET_NAME=""
 DECENTDB_RELEASE_ASSET_URL=""
@@ -164,6 +165,7 @@ preflight() {
   DATABASE_PATH="${DATA_DIR}/spf5000.ddb"
   SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
   AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+  AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
 
   if [[ "${HOST}" == "0.0.0.0" ]]; then
     DISPLAY_HOST="127.0.0.1"
@@ -476,6 +478,7 @@ install_service_file() {
 
 install_autostart_file() {
   local autostart_template="${APP_ROOT}/deploy/autostart/spf5000-kiosk.desktop.template"
+  local launcher_template="${APP_ROOT}/deploy/autostart/spf5000-kiosk-launch.sh.template"
   local chromium_binary=""
   local autostart_dir=""
 
@@ -485,13 +488,18 @@ install_autostart_file() {
   log "Installing Chromium kiosk autostart entry."
   mkdir -p "${autostart_dir}"
   render_template \
-    "${autostart_template}" \
-    "${AUTOSTART_FILE}" \
+    "${launcher_template}" \
+    "${AUTOSTART_LAUNCHER_FILE}" \
     "KIOSK_DELAY_SECONDS=${PI_DEFAULT_KIOSK_DELAY_SECONDS}" \
     "CHROMIUM_BINARY=${chromium_binary}" \
     "DISPLAY_URL=${DISPLAY_URL}"
+  render_template \
+    "${autostart_template}" \
+    "${AUTOSTART_FILE}" \
+    "KIOSK_LAUNCHER=${AUTOSTART_LAUNCHER_FILE}"
 
   chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${autostart_dir}"
+  chmod 0755 "${AUTOSTART_LAUNCHER_FILE}"
   chmod 0644 "${AUTOSTART_FILE}"
 }
 

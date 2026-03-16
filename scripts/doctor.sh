@@ -17,6 +17,7 @@ DATABASE_PATH="${PI_DEFAULT_DATA_DIR}/spf5000.ddb"
 HOST="${PI_DEFAULT_HOST}"
 PORT="${PI_DEFAULT_PORT}"
 AUTOSTART_FILE=""
+AUTOSTART_LAUNCHER_FILE=""
 
 PASS_COUNT=0
 WARN_COUNT=0
@@ -99,6 +100,7 @@ preflight() {
 
   if [[ -n "${RUNTIME_USER}" ]]; then
     AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+    AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
   fi
 
   load_runtime_config
@@ -363,6 +365,7 @@ check_browser_runtime() {
   local throttled=""
   local lan_ip=""
   local autostart_exec_line=""
+  local launcher_body=""
   local autostart_has_unclutter="false"
   local autostart_has_wayland_flag="false"
   local session_id=""
@@ -392,15 +395,28 @@ check_browser_runtime() {
 
       autostart_exec_line="$(grep '^Exec=' "${AUTOSTART_FILE}" 2>/dev/null || true)"
 
-      if [[ "${autostart_exec_line}" == *"/usr/bin/unclutter"* ]]; then
+      if [[ -n "${AUTOSTART_LAUNCHER_FILE}" && -f "${AUTOSTART_LAUNCHER_FILE}" ]]; then
+        pass_check "Chromium autostart launcher exists at ${AUTOSTART_LAUNCHER_FILE}."
+        launcher_body="$(cat "${AUTOSTART_LAUNCHER_FILE}" 2>/dev/null || true)"
+      elif [[ -n "${AUTOSTART_LAUNCHER_FILE}" ]]; then
+        fail_check "Chromium autostart launcher is missing: ${AUTOSTART_LAUNCHER_FILE}."
+      fi
+
+      if [[ "${autostart_exec_line}" == *"kiosk-launch.sh"* ]]; then
+        pass_check "Chromium autostart entry delegates to the managed launcher script."
+      else
+        warn_check "Chromium autostart entry does not appear to call the managed launcher script."
+      fi
+
+      if [[ "${launcher_body}" == *"/usr/bin/unclutter"* ]]; then
         autostart_has_unclutter="true"
       fi
 
-      if [[ "${autostart_exec_line}" == *"--ozone-platform-hint=auto"* ]] || [[ "${autostart_exec_line}" == *"--ozone-platform=wayland"* ]]; then
+      if [[ "${launcher_body}" == *"--ozone-platform-hint=auto"* ]] || [[ "${launcher_body}" == *"--ozone-platform=wayland"* ]]; then
         autostart_has_wayland_flag="true"
       fi
 
-      if [[ "${autostart_exec_line}" == *"--password-store=basic"* ]]; then
+      if [[ "${launcher_body}" == *"--password-store=basic"* ]]; then
         pass_check "Chromium autostart entry avoids desktop keyring prompts with --password-store=basic."
       else
         warn_check "Chromium autostart entry does not set --password-store=basic; Chromium may prompt for a new keyring password."

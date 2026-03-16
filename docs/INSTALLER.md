@@ -51,7 +51,7 @@ The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEA
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
 
-The managed Chromium autostart entry sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode. On X11 sessions it also launches `unclutter-xfixes` through `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`. On Raspberry Pi OS Desktop's default `labwc` Wayland session it instead requests native Chromium Wayland mode with `--ozone-platform-hint=auto`, so the display route's own `cursor: none` styling is not routed through Xwayland.
+The managed Chromium autostart entry now delegates to a companion launcher script in the same autostart directory. That launcher script sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode. On X11 sessions it also launches `unclutter-xfixes` through `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`. On Raspberry Pi OS Desktop's default `labwc` Wayland session it instead requests native Chromium Wayland mode with `--ozone-platform-hint=auto`, so the display route's own `cursor: none` styling is not routed through Xwayland.
 
 The installer defaults to `--host 0.0.0.0` so another device on the LAN can still reach `/setup`, `/login`, and `/admin`. Chromium still opens the local `http://127.0.0.1:8000/display` route when the host is the wildcard bind.
 
@@ -62,6 +62,7 @@ By default the installer manages:
 ```text
 /etc/systemd/system/spf5000.service
 ~/.config/autostart/spf5000-kiosk.desktop
+~/.config/autostart/spf5000-kiosk-launch.sh
 /var/lib/spf5000/spf5000.toml
 /var/lib/spf5000/
 /var/cache/spf5000/
