@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.models.source import Source
+from app.providers.google_photos import GooglePhotosProvider
 from app.providers.local_files import LocalFilesProvider
 from app.repositories.source_repository import SourceRepository
 
@@ -10,7 +11,10 @@ from app.repositories.source_repository import SourceRepository
 class SourceService:
     def __init__(self, repo: SourceRepository | None = None) -> None:
         self.repo = repo or SourceRepository()
-        self.providers = {"local_files": LocalFilesProvider()}
+        self.providers = {
+            "local_files": LocalFilesProvider(),
+            "google_photos": GooglePhotosProvider(),
+        }
 
     def list_sources(self) -> list[Source]:
         return self.repo.list_sources()
@@ -30,7 +34,7 @@ class SourceService:
             existing.enabled = enabled
         return self.repo.update_source(existing)
 
-    def get_provider(self, provider_type: str) -> LocalFilesProvider:
+    def get_provider(self, provider_type: str) -> object:
         provider = self.providers.get(provider_type)
         if provider is None:
             raise ValueError(f"Unsupported provider type: {provider_type}")

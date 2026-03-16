@@ -18,10 +18,14 @@ Do this:
 sudo raspi-config
 sudo raspi-config nonint do_blanking 1
 
+# You can clearly use whatever user you like just keep it consistent below for the user "pi"
+sudo useradd -M /bin/bash pi
+sudo passwd pi
+
 sudo mkdir -p /opt
 cd /opt
 sudo git clone https://github.com/sphildreth/spf5000.git
-sudo git clone <your DecentDB repo URL> decentdb
+sudo git clone https://github.com/sphildreth/decentdb.git
 sudo chown -R pi:pi /opt/spf5000 /opt/decentdb
 
 cd /opt/spf5000

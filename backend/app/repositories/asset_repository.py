@@ -125,6 +125,7 @@ class AssetRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return
+            conn.execute("update assets set is_active = 1, updated_at = ? where id = ?", (utc_now(), asset_id))
             existing = conn.execute(
                 "select asset_id from collection_assets where collection_id = ? and asset_id = ?",
                 (collection_id, asset_id),
@@ -139,6 +140,31 @@ class AssetRepository:
                 conn.execute(
                     "insert into collection_assets (collection_id, asset_id, sort_order, added_at) values (?, ?, ?, ?)",
                     (collection_id, asset_id, sort_order, utc_now()),
+                )
+
+    def remove_asset_from_collection(self, asset_id: str, collection_id: str) -> None:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return
+            conn.execute(
+                "delete from collection_assets where collection_id = ? and asset_id = ?",
+                (collection_id, asset_id),
+            )
+
+    def deactivate_asset_if_unassigned(self, asset_id: str) -> None:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return
+            membership_count = int(
+                conn.execute(
+                    "select count(*) from collection_assets where asset_id = ?",
+                    (asset_id,),
+                ).fetchone()[0]
+            )
+            if membership_count == 0:
+                conn.execute(
+                    "update assets set is_active = 0, updated_at = ? where id = ?",
+                    (utc_now(), asset_id),
                 )
 
     def get_variant(self, asset_id: str, kind: str) -> AssetVariant | None:

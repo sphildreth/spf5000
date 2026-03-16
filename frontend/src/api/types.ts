@@ -127,6 +127,60 @@ export interface SourceUpdateRequest {
   enabled?: boolean
 }
 
+export interface GooglePhotosDeviceAuthFlow {
+  user_code: string
+  verification_uri: string
+  expires_at: string | null
+  interval_seconds: number
+}
+
+export interface GooglePhotosAccountSummary {
+  display_name: string | null
+  email: string | null
+  subject: string | null
+  connected_at: string | null
+}
+
+export interface GooglePhotosMediaSourceSummary {
+  id: string
+  name: string
+  type: string | null
+}
+
+export interface GooglePhotosDeviceSummary {
+  display_name: string | null
+  settings_uri: string | null
+  media_sources_set: boolean
+  selected_media_sources: GooglePhotosMediaSourceSummary[]
+}
+
+export interface GooglePhotosSyncRunSummary {
+  id: string | null
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  imported_count: number
+  updated_count: number
+  removed_count: number
+  skipped_count: number
+  error_count: number
+  message: string | null
+}
+
+export interface GooglePhotosProviderStatus {
+  provider_available: boolean
+  provider_configured: boolean
+  connection_state: string
+  pending_auth: GooglePhotosDeviceAuthFlow | null
+  account: GooglePhotosAccountSummary | null
+  device: GooglePhotosDeviceSummary | null
+  latest_sync_run: GooglePhotosSyncRunSummary | null
+  cached_asset_count: number
+  last_successful_sync_at: string | null
+  warning: string | null
+  error: string | null
+}
+
 export interface LocalImportScanRequest {
   source_id: string
   max_samples: number

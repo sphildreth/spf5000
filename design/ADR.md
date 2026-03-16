@@ -20,6 +20,10 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - statuses include `Proposed`, `Accepted`, `Superseded`, and `Deprecated`
 - meaningful architectural deviations should be captured in a new ADR rather than rewriting accepted history away
 
+## Proposed ADRs
+
+- `0012-use-google-photos-ambient-api-for-offline-first-local-sync.md` - Google Photos Ambient API integration with offline-first local sync
+
 ## Accepted ADR set
 
 - `0001-use-fastapi-for-backend.md` - backend framework choice
