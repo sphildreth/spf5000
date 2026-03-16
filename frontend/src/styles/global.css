@@ -66,6 +66,35 @@ img {
   min-height: 100vh;
 }
 
+.sidebar-brand {
+  display: grid;
+  gap: 1rem;
+}
+
+.sidebar-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.sidebar-brand-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  box-shadow:
+    0 0 0 1px rgba(128, 174, 251, 0.18),
+    0 16px 30px rgba(0, 0, 0, 0.24);
+  flex: 0 0 auto;
+}
+
+.sidebar-brand-copy {
+  min-width: 0;
+}
+
+.sidebar-brand-copy .eyebrow {
+  margin: 0;
+}
+
 .sidebar-brand h1 {
   margin: 0.25rem 0 0.5rem;
   font-size: 1.75rem;
@@ -576,35 +605,42 @@ textarea {
   position: absolute;
   inset: 0;
   background: #000;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
 .display-layer--hidden {
-  transform: translate3d(100%, 0, 0);
+  transform: translate3d(var(--display-hidden-x, 100%), var(--display-hidden-y, 0%), 0);
+  opacity: var(--display-hidden-opacity, 1);
 }
 
 .display-layer--prepped {
-  transform: translate3d(-100%, 0, 0);
+  transform: translate3d(var(--display-prepped-x, -100%), var(--display-prepped-y, 0%), 0);
+  opacity: var(--display-prepped-opacity, 1);
   z-index: 2;
 }
 
 .display-layer--visible {
   transform: translate3d(0, 0, 0);
+  opacity: 1;
   z-index: 1;
 }
 
 .display-layer--incoming,
 .display-layer--outgoing {
-  transition: transform var(--transition-duration) cubic-bezier(0.2, 0.7, 0.1, 1);
+  transition:
+    transform var(--transition-duration) cubic-bezier(0.2, 0.7, 0.1, 1),
+    opacity var(--transition-duration) linear;
 }
 
 .display-layer--incoming {
   transform: translate3d(0, 0, 0);
+  opacity: 1;
   z-index: 2;
 }
 
 .display-layer--outgoing {
-  transform: translate3d(100%, 0, 0);
+  transform: translate3d(var(--display-outgoing-x, 100%), var(--display-outgoing-y, 0%), 0);
+  opacity: var(--display-outgoing-opacity, 1);
   z-index: 1;
 }
 

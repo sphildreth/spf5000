@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useLocation } from 'react-router-dom'
 
 import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
-import type { DisplayConfig, DisplayPlaylist, PlaylistItem, SleepSchedule } from '../api/types'
+import type { DisplayConfig, DisplayPlaylist, DisplayTransitionMode, PlaylistItem, SleepSchedule } from '../api/types'
 import { BootScreen, type BootScreenDemoFrame, type BootScreenMessage, useBootScreenDemo } from '../components/BootScreen'
 
 type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
@@ -10,6 +10,18 @@ type LayerStage = 'hidden' | 'prepped' | 'visible' | 'incoming' | 'outgoing'
 interface DisplayLayer {
   item: PlaylistItem | null
   stage: LayerStage
+}
+
+interface TransitionStyleVars {
+  hiddenX: string
+  hiddenY: string
+  hiddenOpacity: string
+  preppedX: string
+  preppedY: string
+  preppedOpacity: string
+  outgoingX: string
+  outgoingY: string
+  outgoingOpacity: string
 }
 
 const INITIAL_LAYERS: DisplayLayer[] = [
@@ -96,6 +108,11 @@ export function DisplayPage() {
   // depending on live playlist timing or backend availability.
   const showBootDemo = useMemo(() => new URLSearchParams(location.search).get('demo') === 'boot', [location.search])
   const demoMessage = useBootScreenDemo(showBootDemo, demoFrames)
+  const transitionStyleVars = useMemo(() => getTransitionStyleVars(config.transition_mode), [config.transition_mode])
+  const transitionDurationMs = useMemo(
+    () => getTransitionDurationMs(config),
+    [config.transition_duration_ms, config.transition_mode],
+  )
 
   useEffect(() => {
     configRef.current = config
@@ -137,6 +154,7 @@ export function DisplayPage() {
 
     const currentLayerIndex = activeLayerRef.current
     const incomingLayerIndex = currentLayerIndex === 0 ? 1 : 0
+    const finalizeDelayMs = getTransitionFinalizeDelayMs(configRef.current)
     transitionRef.current = true
 
     setLayers((current) =>
@@ -187,7 +205,7 @@ export function DisplayPage() {
       )
 
       scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
-    }, configRef.current.transition_duration_ms + 80)
+    }, finalizeDelayMs)
   }, [])
 
   const scheduleAdvance = useCallback(
@@ -464,14 +482,27 @@ export function DisplayPage() {
   }, [bootMessage, config.idle_message, demoMessage, error, loading, showIdle])
 
   return (
-    <main className="display-page" style={{ ['--display-fit' as string]: config.fit_mode } as CSSProperties}>
+    <main
+      className="display-page"
+      style={
+        {
+          ['--display-fit' as string]: config.fit_mode,
+          ['--transition-duration' as string]: `${transitionDurationMs}ms`,
+          ['--display-hidden-x' as string]: transitionStyleVars.hiddenX,
+          ['--display-hidden-y' as string]: transitionStyleVars.hiddenY,
+          ['--display-hidden-opacity' as string]: transitionStyleVars.hiddenOpacity,
+          ['--display-prepped-x' as string]: transitionStyleVars.preppedX,
+          ['--display-prepped-y' as string]: transitionStyleVars.preppedY,
+          ['--display-prepped-opacity' as string]: transitionStyleVars.preppedOpacity,
+          ['--display-outgoing-x' as string]: transitionStyleVars.outgoingX,
+          ['--display-outgoing-y' as string]: transitionStyleVars.outgoingY,
+          ['--display-outgoing-opacity' as string]: transitionStyleVars.outgoingOpacity,
+        } as CSSProperties
+      }
+    >
       <div className="display-stage" aria-label="SPF5000 fullscreen slideshow">
         {layers.map((layer, index) => (
-          <div
-            key={index}
-            className={`display-layer display-layer--${layer.stage}`}
-            style={{ ['--transition-duration' as string]: `${config.transition_duration_ms}ms` } as CSSProperties}
-          >
+          <div key={index} className={`display-layer display-layer--${layer.stage}`}>
             {layer.item ? (
               <figure className="display-media">
                 <img src={layer.item.display_url} alt={layer.item.filename} draggable={false} />
@@ -540,6 +571,81 @@ function preloadImage(src: string): Promise<void> {
     image.onerror = () => reject(new Error(`Could not load image: ${src}`))
     image.src = src
   })
+}
+
+function getTransitionStyleVars(mode: DisplayTransitionMode): TransitionStyleVars {
+  switch (mode) {
+    case 'slide-right-to-left':
+      return {
+        hiddenX: '-100%',
+        hiddenY: '0%',
+        hiddenOpacity: '1',
+        preppedX: '100%',
+        preppedY: '0%',
+        preppedOpacity: '1',
+        outgoingX: '-100%',
+        outgoingY: '0%',
+        outgoingOpacity: '1',
+      }
+    case 'slide-top-to-bottom':
+      return {
+        hiddenX: '0%',
+        hiddenY: '100%',
+        hiddenOpacity: '1',
+        preppedX: '0%',
+        preppedY: '-100%',
+        preppedOpacity: '1',
+        outgoingX: '0%',
+        outgoingY: '100%',
+        outgoingOpacity: '1',
+      }
+    case 'slide-bottom-to-top':
+      return {
+        hiddenX: '0%',
+        hiddenY: '-100%',
+        hiddenOpacity: '1',
+        preppedX: '0%',
+        preppedY: '100%',
+        preppedOpacity: '1',
+        outgoingX: '0%',
+        outgoingY: '-100%',
+        outgoingOpacity: '1',
+      }
+    case 'cut':
+      return {
+        hiddenX: '0%',
+        hiddenY: '0%',
+        hiddenOpacity: '0',
+        preppedX: '0%',
+        preppedY: '0%',
+        preppedOpacity: '0',
+        outgoingX: '0%',
+        outgoingY: '0%',
+        outgoingOpacity: '0',
+      }
+    case 'slide':
+    default:
+      return {
+        hiddenX: '100%',
+        hiddenY: '0%',
+        hiddenOpacity: '1',
+        preppedX: '-100%',
+        preppedY: '0%',
+        preppedOpacity: '1',
+        outgoingX: '100%',
+        outgoingY: '0%',
+        outgoingOpacity: '1',
+      }
+  }
+}
+
+function getTransitionDurationMs(config: Pick<DisplayConfig, 'transition_duration_ms' | 'transition_mode'>): number {
+  return config.transition_mode === 'cut' ? 0 : Math.max(config.transition_duration_ms, 0)
+}
+
+function getTransitionFinalizeDelayMs(config: Pick<DisplayConfig, 'transition_duration_ms' | 'transition_mode'>): number {
+  const durationMs = getTransitionDurationMs(config)
+  return durationMs > 0 ? durationMs + 80 : 40
 }
 
 function describeSleepSchedule(schedule: SleepSchedule | null): string {

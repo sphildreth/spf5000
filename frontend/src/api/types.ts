@@ -1,7 +1,49 @@
 export type FitMode = 'contain' | 'cover'
 export type PlaybackMode = 'shuffle' | 'sequential'
+export type DisplayTransitionMode =
+  | 'slide'
+  | 'slide-right-to-left'
+  | 'slide-top-to-bottom'
+  | 'slide-bottom-to-top'
+  | 'cut'
 
 export type JsonRecord = Record<string, unknown>
+
+const DISPLAY_TRANSITION_MODE_LABELS: Record<DisplayTransitionMode, string> = {
+  slide: 'Slide (left to right)',
+  'slide-right-to-left': 'Slide (right to left)',
+  'slide-top-to-bottom': 'Slide (top to bottom)',
+  'slide-bottom-to-top': 'Slide (bottom to top)',
+  cut: 'Cut',
+}
+
+export const DISPLAY_TRANSITION_MODE_OPTIONS: ReadonlyArray<{
+  value: DisplayTransitionMode
+  label: string
+}> = Object.entries(DISPLAY_TRANSITION_MODE_LABELS).map(([value, label]) => ({
+  value: value as DisplayTransitionMode,
+  label,
+}))
+
+export function asDisplayTransitionMode(
+  value: unknown,
+  fallback: DisplayTransitionMode = 'slide',
+): DisplayTransitionMode {
+  switch (value) {
+    case 'slide':
+    case 'slide-right-to-left':
+    case 'slide-top-to-bottom':
+    case 'slide-bottom-to-top':
+    case 'cut':
+      return value
+    default:
+      return fallback
+  }
+}
+
+export function getDisplayTransitionModeLabel(value: DisplayTransitionMode): string {
+  return DISPLAY_TRANSITION_MODE_LABELS[value]
+}
 
 export interface FrameSettings {
   frame_name: string
@@ -9,7 +51,7 @@ export interface FrameSettings {
   display_variant_height: number
   thumbnail_max_size: number
   slideshow_interval_seconds: number
-  transition_mode: string
+  transition_mode: DisplayTransitionMode
   transition_duration_ms: number
   fit_mode: FitMode
   shuffle_enabled: boolean
@@ -233,7 +275,7 @@ export interface DisplayConfig {
   name: string
   selected_collection_id: string | null
   slideshow_interval_seconds: number
-  transition_mode: string
+  transition_mode: DisplayTransitionMode
   transition_duration_ms: number
   fit_mode: FitMode
   shuffle_enabled: boolean
@@ -248,7 +290,7 @@ export interface DisplayConfigUpdateRequest {
   name?: string
   selected_collection_id?: string | null
   slideshow_interval_seconds?: number
-  transition_mode?: string
+  transition_mode?: DisplayTransitionMode
   transition_duration_ms?: number
   fit_mode?: FitMode
   shuffle_enabled?: boolean

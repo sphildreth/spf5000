@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
+import logoMarkUrl from '../../../graphics/logo-128x128.png'
 import { useSession } from '../context/SessionContext'
 
 const navItems = [
@@ -24,8 +25,13 @@ export function AdminLayout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <p className="eyebrow">Super Picture Frame 5000</p>
-          <h1>Admin Console</h1>
+          <div className="sidebar-brand-header">
+            <img className="sidebar-brand-logo" src={logoMarkUrl} alt="SPF5000 logo" width={64} height={64} />
+            <div className="sidebar-brand-copy">
+              <p className="eyebrow">Super Picture Frame 5000</p>
+              <h1>Admin Console</h1>
+            </div>
+          </div>
           <p className="sidebar-copy">Simple LAN management for the frame, sources, and slideshow.</p>
         </div>
 

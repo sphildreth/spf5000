@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { getCollections } from '../api/collections'
 import { getDisplayConfig, updateDisplayConfig } from '../api/display'
 import { getSleepSchedule, updateSleepSchedule } from '../api/settings'
-import type { DisplayConfig, DisplayConfigUpdateRequest, SleepSchedule, SleepScheduleUpdateRequest } from '../api/types'
+import {
+  asDisplayTransitionMode,
+  DISPLAY_TRANSITION_MODE_OPTIONS,
+  getDisplayTransitionModeLabel,
+  type DisplayConfig,
+  type DisplayConfigUpdateRequest,
+  type SleepSchedule,
+  type SleepScheduleUpdateRequest,
+} from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -241,14 +249,17 @@ export function DisplaySettingsPage() {
                       current
                         ? {
                             ...current,
-                            transition_mode: event.target.value,
+                            transition_mode: asDisplayTransitionMode(event.target.value, current.transition_mode),
                           }
                         : current,
                     )
                   }
                 >
-                  <option value="slide">Slide (left to right)</option>
-                  <option value="cut">Cut</option>
+                  {DISPLAY_TRANSITION_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -328,7 +339,7 @@ export function DisplaySettingsPage() {
               </div>
               <div>
                 <dt>Transition</dt>
-                <dd>{toTitleCase(draft.transition_mode)}</dd>
+                <dd>{getDisplayTransitionModeLabel(draft.transition_mode)}</dd>
               </div>
               <div>
                 <dt>Playlist refresh</dt>

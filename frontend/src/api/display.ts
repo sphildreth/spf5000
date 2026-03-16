@@ -1,5 +1,18 @@
 import { apiGet, apiPut } from './http'
-import { asArray, asBoolean, asFitMode, asNumber, asOptionalString, asRecord, asString, type DisplayConfig, type DisplayConfigUpdateRequest, type DisplayPlaylist, type PlaylistItem } from './types'
+import {
+  asArray,
+  asBoolean,
+  asDisplayTransitionMode,
+  asFitMode,
+  asNumber,
+  asOptionalString,
+  asRecord,
+  asString,
+  type DisplayConfig,
+  type DisplayConfigUpdateRequest,
+  type DisplayPlaylist,
+  type PlaylistItem,
+} from './types'
 import { normalizeSleepSchedule } from './settings'
 
 const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
@@ -55,7 +68,7 @@ function normalizeDisplayConfig(payload: unknown): DisplayConfig {
     name: asString(record?.name, DEFAULT_DISPLAY_CONFIG.name),
     selected_collection_id: asOptionalString(record?.selected_collection_id) ?? null,
     slideshow_interval_seconds: asNumber(record?.slideshow_interval_seconds, DEFAULT_DISPLAY_CONFIG.slideshow_interval_seconds),
-    transition_mode: asString(record?.transition_mode, DEFAULT_DISPLAY_CONFIG.transition_mode),
+    transition_mode: asDisplayTransitionMode(record?.transition_mode, DEFAULT_DISPLAY_CONFIG.transition_mode),
     transition_duration_ms: asNumber(record?.transition_duration_ms, DEFAULT_DISPLAY_CONFIG.transition_duration_ms),
     fit_mode: asFitMode(record?.fit_mode, DEFAULT_DISPLAY_CONFIG.fit_mode),
     shuffle_enabled: asBoolean(record?.shuffle_enabled, DEFAULT_DISPLAY_CONFIG.shuffle_enabled),
