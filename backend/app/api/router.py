@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_admin
-from app.api.routes import assets, auth, collections, display, google_photos, health, imports, settings, sources, weather
+from app.api.routes import assets, auth, collections, display, google_photos, health, imports, settings, sources, themes, weather
 
 api_router = APIRouter()
 
 # ── Public routes ──────────────────────────────────────────────────────────────
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(auth.router, tags=["auth"])
+api_router.include_router(themes.router, prefix="/themes", tags=["themes"])
 
 # ── Protected routes — require a valid admin session ───────────────────────────
 _admin_dep = [Depends(require_admin)]

@@ -1,0 +1,103 @@
+{
+  "id": "home-shopping-network",
+  "name": "Home Shopping Network",
+  "description": "Cheerful magenta-and-blue sales-TV energy with glossy infomercial confidence.",
+  "version": "1.0.0",
+  "mode": "dark",
+  "tokens": {
+    "colors": {
+      "background_primary": "#090712",
+      "background_secondary": "#100D1D",
+      "surface_default": "#201739",
+      "surface_elevated": "#2B204D",
+      "surface_overlay": "rgba(15,11,26,0.80)",
+      "text_primary": "#FFF8FF",
+      "text_secondary": "#EBDCF6",
+      "text_muted": "#C0A8D1",
+      "border_default": "#7B62A1",
+      "accent_primary": "#FF5CB4",
+      "accent_secondary": "#66B8FF",
+      "status_success": "#79E7B1",
+      "status_warning": "#FFE16D",
+      "status_error": "#FF7086",
+      "shadow_color": "rgba(0,0,0,0.48)",
+      "glow_color": "rgba(255,92,180,0.20)",
+      "overlay_backdrop": "rgba(0,0,0,0.38)"
+    },
+    "typography": {
+      "font_family_base": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "font_family_display": "Orbitron, Inter, ui-sans-serif, system-ui, sans-serif",
+      "font_weight_normal": 400,
+      "font_weight_medium": 500,
+      "font_weight_bold": 700,
+      "font_size_body": "16px",
+      "font_size_small": "13px",
+      "font_size_widget_label": "13px",
+      "font_size_widget_temp": "42px",
+      "font_size_heading": "24px",
+      "font_size_alert_headline": "52px",
+      "font_size_alert_subheading": "24px"
+    },
+    "spacing": {
+      "space_xs": "4px",
+      "space_sm": "8px",
+      "space_md": "12px",
+      "space_lg": "16px",
+      "space_xl": "24px",
+      "space_2xl": "32px"
+    },
+    "motion": {
+      "duration_fast": "120ms",
+      "duration_normal": "220ms",
+      "duration_slow": "420ms",
+      "easing_standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "easing_emphasized": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    },
+    "shape": {
+      "radius_card": "8px",
+      "radius_button": "8px",
+      "radius_badge": "999px",
+      "radius_overlay": "12px",
+      "border_width_standard": "1px",
+      "border_width_emphasis": "2px",
+      "shadow_card": "0 8px 24px rgba(0,0,0,0.35)",
+      "shadow_overlay": "0 14px 36px rgba(0,0,0,0.45)",
+      "glow_accent": "rgba(255,92,180,0.20)",
+      "glow_logo": "rgba(255,92,180,0.20)",
+      "blur_overlay": "10px",
+      "opacity_widget_background": 0.82,
+      "opacity_overlay_background": 0.42
+    }
+  },
+  "components": {
+    "button_primary": {
+      "background": "var(--color-accent-primary)",
+      "color": "var(--color-text-on-accent)",
+      "border": "none",
+      "border_radius": "var(--shape-radius-md)",
+      "background_token": "accent_primary",
+      "text_token": "text_primary"
+    },
+    "card": {
+      "background": "var(--color-surface-default)",
+      "border": "1px solid var(--color-border-default)",
+      "border_radius": "var(--shape-radius-lg)",
+      "background_token": "surface_default",
+      "border_token": "border_default"
+    },
+    "input": {
+      "background": "var(--color-background-secondary)",
+      "border": "1px solid var(--color-border-default)",
+      "color": "var(--color-text-primary)",
+      "border_radius": "var(--shape-radius-md)"
+    }
+  },
+  "contexts": {
+    "home_city_accent": {
+      "style": "gradient_border",
+      "highlight_color": "var(--color-accent-primary)",
+      "badge_background": "var(--color-accent-primary-muted)",
+      "badge_text": "var(--color-accent-primary)"
+    }
+  }
+}

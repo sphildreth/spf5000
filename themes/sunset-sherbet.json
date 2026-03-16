@@ -1,0 +1,103 @@
+{
+  "id": "sunset-sherbet",
+  "name": "Sunset Sherbet",
+  "description": "Warm sunset oranges, pinks, and violet dusk tones.",
+  "version": "1.0.0",
+  "mode": "dark",
+  "tokens": {
+    "colors": {
+      "background_primary": "#160913",
+      "background_secondary": "#221020",
+      "surface_default": "#2B1628",
+      "surface_elevated": "#3A1F30",
+      "surface_overlay": "rgba(30,14,28,0.78)",
+      "text_primary": "#FFF4F6",
+      "text_secondary": "#F1CAD2",
+      "text_muted": "#C998A6",
+      "border_default": "#7C485C",
+      "accent_primary": "#FF8A5B",
+      "accent_secondary": "#FF5EC4",
+      "status_success": "#6EE7B7",
+      "status_warning": "#FFD166",
+      "status_error": "#FF6B6B",
+      "shadow_color": "rgba(0,0,0,0.45)",
+      "glow_color": "rgba(255,138,91,0.26)",
+      "overlay_backdrop": "rgba(0,0,0,0.36)"
+    },
+    "typography": {
+      "font_family_base": "Inter, ui-sans-serif, system-ui, sans-serif",
+      "font_family_display": "Orbitron, Inter, ui-sans-serif, system-ui, sans-serif",
+      "font_weight_normal": 400,
+      "font_weight_medium": 500,
+      "font_weight_bold": 700,
+      "font_size_body": "16px",
+      "font_size_small": "13px",
+      "font_size_widget_label": "13px",
+      "font_size_widget_temp": "42px",
+      "font_size_heading": "24px",
+      "font_size_alert_headline": "52px",
+      "font_size_alert_subheading": "24px"
+    },
+    "spacing": {
+      "space_xs": "4px",
+      "space_sm": "8px",
+      "space_md": "12px",
+      "space_lg": "16px",
+      "space_xl": "24px",
+      "space_2xl": "32px"
+    },
+    "motion": {
+      "duration_fast": "120ms",
+      "duration_normal": "220ms",
+      "duration_slow": "420ms",
+      "easing_standard": "cubic-bezier(0.2, 0, 0, 1)",
+      "easing_emphasized": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    },
+    "shape": {
+      "radius_card": "16px",
+      "radius_button": "10px",
+      "radius_badge": "999px",
+      "radius_overlay": "18px",
+      "border_width_standard": "1px",
+      "border_width_emphasis": "2px",
+      "shadow_card": "0 10px 30px rgba(0,0,0,0.35)",
+      "shadow_overlay": "0 16px 40px rgba(0,0,0,0.45)",
+      "glow_accent": "rgba(255,138,91,0.26)",
+      "glow_logo": "rgba(255,138,91,0.26)",
+      "blur_overlay": "12px",
+      "opacity_widget_background": 0.78,
+      "opacity_overlay_background": 0.4
+    }
+  },
+  "components": {
+    "button_primary": {
+      "background": "var(--color-accent-primary)",
+      "color": "var(--color-text-on-accent)",
+      "border": "none",
+      "border_radius": "var(--shape-radius-md)",
+      "background_token": "accent_primary",
+      "text_token": "text_primary"
+    },
+    "card": {
+      "background": "var(--color-surface-default)",
+      "border": "1px solid var(--color-border-default)",
+      "border_radius": "var(--shape-radius-lg)",
+      "background_token": "surface_default",
+      "border_token": "border_default"
+    },
+    "input": {
+      "background": "var(--color-background-secondary)",
+      "border": "1px solid var(--color-border-default)",
+      "color": "var(--color-text-primary)",
+      "border_radius": "var(--shape-radius-md)"
+    }
+  },
+  "contexts": {
+    "home_city_accent": {
+      "style": "gradient_border",
+      "highlight_color": "var(--color-accent-primary)",
+      "badge_background": "var(--color-accent-primary-muted)",
+      "badge_text": "var(--color-accent-primary)"
+    }
+  }
+}

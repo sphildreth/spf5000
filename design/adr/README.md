@@ -18,3 +18,4 @@
 - 0016 Use cached image-derived background fill for display presentation
 - 0017 Refine display background fill modes, cached-vs-render-time treatments, and adaptive policy
 - 0018 Use app-selected display timezone for sleep schedule evaluation
+- 0019 Use token-based theme system for admin and display

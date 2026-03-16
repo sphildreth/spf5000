@@ -75,6 +75,8 @@ function normalizeSettings(payload: unknown): FrameSettings {
     display_variant_width: asNumber(record?.display_variant_width, 1920),
     display_variant_height: asNumber(record?.display_variant_height, 1080),
     thumbnail_max_size: asNumber(record?.thumbnail_max_size, 400),
+    theme_id: asString(record?.theme_id, 'default-dark'),
+    home_city_accent_style: asString(record?.home_city_accent_style, 'default'),
     slideshow_interval_seconds: asNumber(record?.slideshow_interval_seconds, 30),
     transition_mode: asDisplayTransitionMode(record?.transition_mode, 'slide'),
     transition_duration_ms: asNumber(record?.transition_duration_ms, 700),

@@ -1,0 +1,105 @@
+{
+  "id": "retro-neon",
+  "name": "Retro Neon",
+  "description": "High-contrast neon glow aesthetic inspired by 1980s CRT displays.",
+  "version": "1.0.0",
+  "tokens": {
+    "colors": {
+      "background_primary": "#050510",
+      "background_secondary": "#0a0a1e",
+      "background_elevated": "#0f0f2a",
+      "background_overlay": "rgba(5, 5, 16, 0.88)",
+      "surface_default": "#0d0d20",
+      "surface_hover": "#141430",
+      "surface_active": "#1a1a3a",
+      "border_default": "#1e1e4a",
+      "border_subtle": "#0f0f30",
+      "border_strong": "#ff00ff",
+      "text_primary": "#e0e0ff",
+      "text_secondary": "#9090cc",
+      "text_disabled": "#404060",
+      "text_on_accent": "#050510",
+      "accent_primary": "#ff00ff",
+      "accent_primary_hover": "#ff44ff",
+      "accent_primary_muted": "rgba(255, 0, 255, 0.15)",
+      "accent_danger": "#ff2244",
+      "accent_danger_hover": "#ff5566",
+      "accent_warning": "#ffcc00",
+      "accent_success": "#00ffaa",
+      "display_background": "#000000",
+      "display_overlay_text": "#e0e0ff",
+      "display_overlay_shadow": "rgba(0, 0, 30, 0.90)"
+    },
+    "typography": {
+      "font_family_base": "'Share Tech Mono', 'Courier New', monospace",
+      "font_family_display": "'Orbitron', 'Share Tech Mono', monospace",
+      "font_family_mono": "'Share Tech Mono', 'Courier New', monospace",
+      "font_size_xs": "0.75rem",
+      "font_size_sm": "0.875rem",
+      "font_size_md": "1rem",
+      "font_size_lg": "1.125rem",
+      "font_size_xl": "1.375rem",
+      "font_size_2xl": "1.75rem",
+      "font_weight_normal": "400",
+      "font_weight_medium": "500",
+      "font_weight_semibold": "600",
+      "font_weight_bold": "700",
+      "line_height_tight": "1.2",
+      "line_height_normal": "1.5",
+      "line_height_relaxed": "1.8"
+    },
+    "spacing": {
+      "xs": "0.25rem",
+      "sm": "0.5rem",
+      "md": "1rem",
+      "lg": "1.5rem",
+      "xl": "2rem",
+      "2xl": "3rem"
+    },
+    "motion": {
+      "duration_fast": "80ms",
+      "duration_normal": "160ms",
+      "duration_slow": "300ms",
+      "easing_default": "steps(4, end)",
+      "easing_spring": "steps(6, end)"
+    },
+    "shape": {
+      "radius_sm": "0px",
+      "radius_md": "0px",
+      "radius_lg": "2px",
+      "radius_xl": "2px",
+      "radius_full": "0px"
+    }
+  },
+  "components": {
+    "button_primary": {
+      "background": "transparent",
+      "color": "var(--color-accent-primary)",
+      "border": "1px solid var(--color-accent-primary)",
+      "border_radius": "0px",
+      "text_shadow": "0 0 8px var(--color-accent-primary)",
+      "box_shadow": "0 0 8px var(--color-accent-primary-muted)"
+    },
+    "card": {
+      "background": "var(--color-surface-default)",
+      "border": "1px solid var(--color-border-strong)",
+      "border_radius": "0px",
+      "box_shadow": "0 0 12px var(--color-accent-primary-muted)"
+    },
+    "input": {
+      "background": "var(--color-background-primary)",
+      "border": "1px solid var(--color-accent-primary)",
+      "color": "var(--color-text-primary)",
+      "border_radius": "0px"
+    }
+  },
+  "contexts": {
+    "home_city_accent": {
+      "style": "glow",
+      "highlight_color": "#00ffcc",
+      "badge_background": "rgba(0, 255, 204, 0.12)",
+      "badge_text": "#00ffcc",
+      "text_shadow": "0 0 10px #00ffcc"
+    }
+  }
+}

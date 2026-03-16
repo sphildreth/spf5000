@@ -1,6 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* ── Core admin-shell tokens (overridden per-theme by ThemeContext) ── */
   --bg: #0f1116;
   --panel: #171b24;
   --panel-strong: #202635;
@@ -14,6 +15,18 @@
   --warning: #f6d06a;
   --danger: #ff8d8d;
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
+  /* ── Display overlay surfaces ── */
+  --weather-bg: rgba(12, 16, 24, 0.74);
+  --weather-border: rgba(255, 255, 255, 0.14);
+  --weather-text: rgba(249, 251, 255, 0.98);
+  --weather-text-muted: rgba(182, 199, 224, 0.82);
+  --boot-glow-default: rgba(71, 214, 255, 0.26);
+  --boot-glow-empty: rgba(132, 240, 206, 0.22);
+  --boot-glow-error: rgba(255, 101, 184, 0.26);
+  --idle-bg: rgba(8, 10, 14, 0.82);
+  --idle-border: rgba(148, 163, 184, 0.14);
+  /* Home-city accent; falls back to the theme accent when not overridden */
+  --accent-home-city: var(--accent);
 }
 
 * {
@@ -916,10 +929,10 @@ textarea {
   min-width: 24rem;
   padding: 1rem 1.15rem;
   border-radius: 20px;
-  background: rgba(12, 16, 24, 0.74);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--weather-bg);
+  border: 1px solid var(--weather-border);
   box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
-  color: rgba(249, 251, 255, 0.98);
+  color: var(--weather-text);
   backdrop-filter: blur(10px);
   z-index: 10;
   pointer-events: none;
@@ -964,15 +977,19 @@ textarea {
 
 .display-weather-widget__condition {
   font-size: 0.95rem;
-  color: rgba(235, 242, 255, 0.86);
+  color: var(--weather-text-muted);
 }
 
 .display-weather-widget__location,
 .display-weather-widget__stale {
   font-size: 0.8rem;
-  color: rgba(182, 199, 224, 0.82);
+  color: var(--weather-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.display-weather-widget__location {
+  color: var(--accent-home-city);
 }
 
 .display-weather-widget__details {
@@ -988,7 +1005,7 @@ textarea {
 
 .display-weather-widget__details dt {
   font-size: 0.72rem;
-  color: rgba(182, 199, 224, 0.82);
+  color: var(--weather-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1150,8 +1167,8 @@ textarea {
   text-align: center;
   padding: 2rem 2.5rem;
   border-radius: 24px;
-  background: rgba(8, 10, 14, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: var(--idle-bg);
+  border: 1px solid var(--idle-border);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
 }
 
@@ -1200,7 +1217,7 @@ textarea {
 }
 
 .display-boot-copy {
-  --boot-glow-color: rgba(71, 214, 255, 0.26);
+  --boot-glow-color: var(--boot-glow-default);
   position: absolute;
   left: 22%;
   right: 22%;
@@ -1223,11 +1240,11 @@ textarea {
 }
 
 .display-boot-screen--empty .display-boot-copy {
-  --boot-glow-color: rgba(132, 240, 206, 0.22);
+  --boot-glow-color: var(--boot-glow-empty);
 }
 
 .display-boot-screen--error .display-boot-copy {
-  --boot-glow-color: rgba(255, 101, 184, 0.26);
+  --boot-glow-color: var(--boot-glow-error);
   color: rgba(255, 236, 244, 0.96);
 }
 

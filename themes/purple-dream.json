@@ -1,0 +1,101 @@
+{
+  "id": "purple-dream",
+  "name": "Purple Dream",
+  "description": "Rich violet and lavender palette with soft gradients. Elegant and modern.",
+  "version": "1.0.0",
+  "tokens": {
+    "colors": {
+      "background_primary": "#0e0b1a",
+      "background_secondary": "#150f24",
+      "background_elevated": "#1c1530",
+      "background_overlay": "rgba(14, 11, 26, 0.80)",
+      "surface_default": "#1a1230",
+      "surface_hover": "#231840",
+      "surface_active": "#2d2050",
+      "border_default": "#2e2050",
+      "border_subtle": "#1e1638",
+      "border_strong": "#7c4dff",
+      "text_primary": "#ede8ff",
+      "text_secondary": "#9e8fcc",
+      "text_disabled": "#4a3d70",
+      "text_on_accent": "#ffffff",
+      "accent_primary": "#9c6bff",
+      "accent_primary_hover": "#b48cff",
+      "accent_primary_muted": "rgba(156, 107, 255, 0.18)",
+      "accent_danger": "#ff5c8a",
+      "accent_danger_hover": "#ff7faa",
+      "accent_warning": "#f5b942",
+      "accent_success": "#68dfa0",
+      "display_background": "#080612",
+      "display_overlay_text": "#ede8ff",
+      "display_overlay_shadow": "rgba(8, 6, 18, 0.88)"
+    },
+    "typography": {
+      "font_family_base": "'Nunito', 'Inter', system-ui, sans-serif",
+      "font_family_display": "'Nunito', 'Inter', system-ui, sans-serif",
+      "font_family_mono": "'Fira Code', 'JetBrains Mono', monospace",
+      "font_size_xs": "0.75rem",
+      "font_size_sm": "0.875rem",
+      "font_size_md": "1rem",
+      "font_size_lg": "1.125rem",
+      "font_size_xl": "1.375rem",
+      "font_size_2xl": "1.75rem",
+      "font_weight_normal": "400",
+      "font_weight_medium": "500",
+      "font_weight_semibold": "600",
+      "font_weight_bold": "800",
+      "line_height_tight": "1.25",
+      "line_height_normal": "1.6",
+      "line_height_relaxed": "1.85"
+    },
+    "spacing": {
+      "xs": "0.25rem",
+      "sm": "0.5rem",
+      "md": "1rem",
+      "lg": "1.5rem",
+      "xl": "2rem",
+      "2xl": "3rem"
+    },
+    "motion": {
+      "duration_fast": "150ms",
+      "duration_normal": "260ms",
+      "duration_slow": "420ms",
+      "easing_default": "ease-in-out",
+      "easing_spring": "cubic-bezier(0.34, 1.56, 0.64, 1)"
+    },
+    "shape": {
+      "radius_sm": "6px",
+      "radius_md": "10px",
+      "radius_lg": "16px",
+      "radius_xl": "20px",
+      "radius_full": "9999px"
+    }
+  },
+  "components": {
+    "button_primary": {
+      "background": "linear-gradient(135deg, var(--color-accent-primary), #c084fc)",
+      "color": "var(--color-text-on-accent)",
+      "border": "none",
+      "border_radius": "var(--shape-radius-full)"
+    },
+    "card": {
+      "background": "var(--color-surface-default)",
+      "border": "1px solid var(--color-border-default)",
+      "border_radius": "var(--shape-radius-lg)"
+    },
+    "input": {
+      "background": "var(--color-background-secondary)",
+      "border": "1px solid var(--color-border-default)",
+      "color": "var(--color-text-primary)",
+      "border_radius": "var(--shape-radius-md)"
+    }
+  },
+  "contexts": {
+    "home_city_accent": {
+      "style": "glow",
+      "highlight_color": "#c084fc",
+      "badge_background": "rgba(192, 132, 252, 0.16)",
+      "badge_text": "#c084fc"
+    }
+  }
+}

@@ -29,6 +29,8 @@ DEFAULT_SETTINGS = {
     "selected_collection_id": DEFAULT_COLLECTION_ID,
     "active_display_profile_id": DEFAULT_DISPLAY_PROFILE_ID,
     "background_fill_mode": "black",
+    "theme_id": "default-dark",
+    "home_city_accent_style": "default",
     # Sleep schedule defaults — display is off by default; 22:00 → 08:00 is a sensible preset.
     "sleep_schedule_enabled": "0",
     "sleep_start_local_time": "22:00",

@@ -113,6 +113,8 @@ export interface FrameSettings {
   display_variant_width: number
   display_variant_height: number
   thumbnail_max_size: number
+  theme_id: string
+  home_city_accent_style: string
   slideshow_interval_seconds: number
   transition_mode: DisplayTransitionMode
   transition_duration_ms: number
@@ -640,4 +642,49 @@ export function normalizeAuthSessionResponse(value: unknown): AuthSessionRespons
     authenticated: asBoolean(record?.authenticated, false),
     user: username ? { username } : null,
   }
+}
+
+// ─── Theme System ──────────────────────────────────────────────────────────
+
+/** CSS-ready string values for every design token in a theme. */
+export interface ThemeTokens {
+  // Admin shell & UI
+  bg: string
+  panel: string
+  panelStrong: string
+  panelSoft: string
+  border: string
+  text: string
+  muted: string
+  accent: string
+  accentStrong: string
+  ok: string
+  warning: string
+  danger: string
+  shadow: string
+  // Display overlay surfaces (optional; root defaults apply when absent)
+  weatherBg?: string
+  weatherBorder?: string
+  weatherText?: string
+  weatherTextMuted?: string
+  bootGlowDefault?: string
+  bootGlowEmpty?: string
+  bootGlowError?: string
+  idleBg?: string
+  idleBorder?: string
+  /** Accent color used to highlight the home-city label in the weather widget. */
+  accentHomeCityColor?: string
+}
+
+export interface ThemeDefinition {
+  id: string
+  label: string
+  description: string
+  tokens: ThemeTokens
+}
+
+export interface ThemesResponse {
+  active_theme_id: string
+  home_city_accent_style: string
+  themes: ThemeDefinition[]
 }

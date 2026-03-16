@@ -32,6 +32,8 @@ class SettingsResponse(BaseModel):
     selected_collection_id: str
     active_display_profile_id: str
     background_fill_mode: str
+    theme_id: str
+    home_city_accent_style: str
 
     @classmethod
     def from_domain(cls, value: FrameSettings) -> "SettingsResponse":
@@ -52,6 +54,8 @@ class SettingsUpdateRequest(BaseModel):
     selected_collection_id: str
     active_display_profile_id: str
     background_fill_mode: str = "black"
+    theme_id: str = "default-dark"
+    home_city_accent_style: str = "default"
 
     @field_validator("background_fill_mode")
     @classmethod

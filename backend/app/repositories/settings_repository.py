@@ -25,7 +25,7 @@ class SettingsRepository:
             if is_null_connection(conn):
                 return defaults
             cursor = conn.execute(
-                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     "frame_name",
                     "display_variant_width",
@@ -40,6 +40,8 @@ class SettingsRepository:
                     "selected_collection_id",
                     "active_display_profile_id",
                     "background_fill_mode",
+                    "theme_id",
+                    "home_city_accent_style",
                 ),
             )
             rows = cursor.fetchall()
@@ -58,6 +60,8 @@ class SettingsRepository:
                 selected_collection_id=str(values.get("selected_collection_id", defaults.selected_collection_id)),
                 active_display_profile_id=str(values.get("active_display_profile_id", defaults.active_display_profile_id)),
                 background_fill_mode=str(values.get("background_fill_mode", defaults.background_fill_mode)),
+                theme_id=str(values.get("theme_id", defaults.theme_id)),
+                home_city_accent_style=str(values.get("home_city_accent_style", defaults.home_city_accent_style)),
             )
 
     def update_settings(self, frame_settings: FrameSettings) -> FrameSettings:
@@ -79,6 +83,8 @@ class SettingsRepository:
                 "selected_collection_id": frame_settings.selected_collection_id,
                 "active_display_profile_id": frame_settings.active_display_profile_id,
                 "background_fill_mode": frame_settings.background_fill_mode,
+                "theme_id": frame_settings.theme_id,
+                "home_city_accent_style": frame_settings.home_city_accent_style,
             }
             for key, value in updates.items():
                 existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()
