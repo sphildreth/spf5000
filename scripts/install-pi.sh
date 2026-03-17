@@ -56,8 +56,8 @@ Options:
 Notes:
   - The installer expects an existing SPF5000 checkout at --app-root.
   - A stable security.session_secret is generated only when a new config file is created.
-  - The installer downloads a matching DecentDB native release plus the matching source archive for the Python binding.
-  - Set DECENTDB_RELEASE_TAG=vX.Y.Z to pin a specific DecentDB release instead of using the latest release.
+  - The installer downloads the latest matching DecentDB native release plus the matching source archive for the Python binding.
+  - Set DECENTDB_RELEASE_TAG=vX.Y.Z to override the default latest-release behavior.
 EOF
 }
 

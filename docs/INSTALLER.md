@@ -47,7 +47,7 @@ Common options:
 - `--skip-apt` - skip apt installation and validate only
 - `--force` - overwrite an existing generated config and bypass the non-Pi hardware guard
 
-The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to pin a specific DecentDB release.
+The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to override that latest-release behavior.
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk desktop entry to that user's `~/.config/autostart/` path and also adds a managed command block to `~/.config/labwc/autostart` so Raspberry Pi OS Desktop's default `labwc` Wayland session can launch the same kiosk script after login. Desktop Autologin should be configured for the same account.
 
@@ -87,7 +87,7 @@ The backend needs both parts of the upstream DecentDB Python integration:
 - the Python binding from `bindings/python`
 - the native C API library from the DecentDB release bundle
 
-On supported 64-bit Linux architectures, the installer now downloads a matching DecentDB GitHub release plus the matching source archive. On each run it:
+On supported 64-bit Linux architectures, the installer now downloads the configured DecentDB GitHub release plus the matching source archive. By default that is the latest upstream release. On each run it:
 
 - extracts the native library into `vendor/decentdb/`
 - installs or refreshes the Python binding into `backend/.venv`
