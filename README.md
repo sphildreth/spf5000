@@ -291,7 +291,7 @@ http://<pi-hostname-or-ip>:8000/setup
 
 Useful companion scripts:
 
-- `scripts/doctor.sh` — validates service state, local health checks, config paths, Chromium availability, and kiosk wiring
+- `scripts/doctor.sh` — validates service state, local health checks, display playlist/sleep state, Chromium availability, and kiosk wiring
 - `scripts/uninstall-pi.sh` — removes appliance wiring while preserving data by default
 
 For full appliance details, read:

@@ -119,6 +119,99 @@ health_host() {
   printf '%s\n' "${HOST}"
 }
 
+select_runtime_session_id() {
+  local user_name="$1"
+
+  python3 - "${user_name}" <<'PY'
+import subprocess
+import sys
+
+user_name = sys.argv[1]
+
+try:
+    sessions_output = subprocess.check_output(
+        ["loginctl", "list-sessions", "--no-legend"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+except Exception:
+    raise SystemExit(1)
+
+best_session_id = None
+best_score = None
+
+for line in sessions_output.splitlines():
+    parts = line.split()
+    if len(parts) < 3 or parts[2] != user_name:
+        continue
+
+    session_id = parts[0]
+    try:
+        details_output = subprocess.check_output(
+            [
+                "loginctl",
+                "show-session",
+                session_id,
+                "-p",
+                "Type",
+                "-p",
+                "Desktop",
+                "-p",
+                "State",
+                "-p",
+                "Active",
+                "-p",
+                "Remote",
+                "-p",
+                "Class",
+                "-p",
+                "Seat",
+                "--value",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        detail_values = [value.strip() for value in details_output.splitlines()]
+        while len(detail_values) < 7:
+            detail_values.append("")
+        session_type, desktop, state, active, remote, session_class, seat = detail_values[:7]
+    except Exception:
+        session_type = ""
+        desktop = ""
+        state = ""
+        active = ""
+        remote = ""
+        session_class = ""
+        seat = ""
+
+    score = 0
+    if session_type in {"wayland", "x11"}:
+        score += 100
+    if active == "yes":
+        score += 20
+    if state == "active":
+        score += 10
+    if remote == "no":
+        score += 5
+    if seat:
+        score += 3
+    if desktop:
+        score += 2
+    if session_class == "user":
+        score += 1
+
+    if best_score is None or score > best_score:
+        best_score = score
+        best_session_id = session_id
+
+if best_session_id:
+    print(best_session_id)
+    raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
 check_environment() {
   printf '\n== Environment ==\n'
 
@@ -363,6 +456,200 @@ PY
   trap - RETURN
 }
 
+check_display_runtime_state() {
+  local local_host=""
+  local playlist_url=""
+  local playlist_json=""
+  local playlist_info=()
+  local item_count="0"
+  local collection_label=""
+  local first_item_url=""
+  local first_asset_url=""
+  local sleep_state=""
+  local sleep_start=""
+  local sleep_end=""
+  local sleep_timezone=""
+  local sleep_error=""
+  local playlist_body_file=""
+  local playlist_info_output=""
+  local asset_headers_file=""
+  local asset_body_file=""
+  local asset_status=""
+  local asset_content_type=""
+  local asset_size=""
+
+  printf '\n== Display state ==\n'
+
+  if ! command -v curl >/dev/null 2>&1; then
+    return
+  fi
+
+  local_host="$(health_host)"
+  playlist_url="http://${local_host}:${PORT}/api/display/playlist"
+
+  playlist_json="$(curl --silent --show-error --max-time 5 "${playlist_url}" 2>/dev/null || true)"
+  if [[ -z "${playlist_json}" ]]; then
+    fail_check "Display playlist endpoint did not respond at ${playlist_url}."
+    return
+  fi
+
+  playlist_body_file="$(mktemp)"
+  trap 'rm -f "${playlist_body_file}"' RETURN
+  printf '%s' "${playlist_json}" > "${playlist_body_file}"
+
+  if ! playlist_info_output="$(python3 - "${playlist_body_file}" <<'PY'
+import json
+import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+items = payload.get("items")
+if not isinstance(items, list):
+    items = []
+
+collection_label = payload.get("collection_name") or payload.get("collection_id") or ""
+first_item_url = ""
+if items and isinstance(items[0], dict):
+    first_item_url = str(items[0].get("display_url") or "")
+
+sleep = payload.get("sleep_schedule")
+sleep_state = "disabled"
+sleep_start = ""
+sleep_end = ""
+timezone_label = "device-local timezone"
+sleep_error = ""
+
+if isinstance(sleep, dict):
+    sleep_start = str(sleep.get("sleep_start_local_time") or "")
+    sleep_end = str(sleep.get("sleep_end_local_time") or "")
+    configured_timezone = str(sleep.get("display_timezone") or "")
+    if configured_timezone:
+        timezone_label = configured_timezone
+
+    if bool(sleep.get("sleep_schedule_enabled")):
+        try:
+            if configured_timezone:
+                now = datetime.now(ZoneInfo(configured_timezone))
+            else:
+                now = datetime.now().astimezone()
+                timezone_label = getattr(now.tzinfo, "key", None) or now.tzname() or timezone_label
+
+            start_hour, start_minute = [int(value) for value in sleep_start.split(":", 1)]
+            end_hour, end_minute = [int(value) for value in sleep_end.split(":", 1)]
+            start_total = start_hour * 60 + start_minute
+            end_total = end_hour * 60 + end_minute
+            current_total = now.hour * 60 + now.minute
+
+            if start_total == end_total:
+                sleep_state = "invalid"
+            elif start_total < end_total:
+                sleep_state = "active" if start_total <= current_total < end_total else "inactive"
+            else:
+                sleep_state = "active" if current_total >= start_total or current_total < end_total else "inactive"
+        except Exception as exc:
+            sleep_state = "unknown"
+            sleep_error = str(exc)
+
+print(len(items))
+print(collection_label)
+print(first_item_url)
+print(sleep_state)
+print(sleep_start)
+print(sleep_end)
+print(timezone_label)
+print(sleep_error)
+PY
+  )"; then
+    rm -f "${playlist_body_file}"
+    trap - RETURN
+    fail_check "Display playlist endpoint ${playlist_url} returned invalid JSON."
+    return
+  fi
+
+  mapfile -t playlist_info <<< "${playlist_info_output}"
+
+  rm -f "${playlist_body_file}"
+  trap - RETURN
+
+  item_count="${playlist_info[0]:-0}"
+  collection_label="${playlist_info[1]:-}"
+  first_item_url="${playlist_info[2]:-}"
+  sleep_state="${playlist_info[3]:-disabled}"
+  sleep_start="${playlist_info[4]:-}"
+  sleep_end="${playlist_info[5]:-}"
+  sleep_timezone="${playlist_info[6]:-device-local timezone}"
+  sleep_error="${playlist_info[7]:-}"
+
+  if [[ "${item_count}" =~ ^[0-9]+$ ]] && (( item_count > 0 )); then
+    if [[ -n "${collection_label}" ]]; then
+      pass_check "Display playlist endpoint returned ${item_count} item(s) from ${collection_label}."
+    else
+      pass_check "Display playlist endpoint returned ${item_count} item(s)."
+    fi
+  else
+    warn_check "Display playlist endpoint returned no items; /display will stay idle until photos are imported."
+  fi
+
+  case "${sleep_state}" in
+    disabled)
+      pass_check "Display sleep schedule is disabled."
+      ;;
+    inactive)
+      pass_check "Display sleep schedule is enabled but inactive right now (${sleep_start} -> ${sleep_end}, ${sleep_timezone})."
+      ;;
+    active)
+      warn_check "Display sleep schedule is active right now (${sleep_start} -> ${sleep_end}, ${sleep_timezone}); /display is expected to render a black sleep screen."
+      ;;
+    invalid)
+      warn_check "Display sleep schedule is enabled but invalid (${sleep_start} -> ${sleep_end}); identical start and end times should be corrected in the admin UI."
+      ;;
+    unknown)
+      warn_check "Could not evaluate the display sleep schedule (${sleep_start} -> ${sleep_end}, ${sleep_timezone}): ${sleep_error:-unknown error}."
+      ;;
+    *)
+      warn_check "Display sleep schedule returned an unrecognized state: ${sleep_state}."
+      ;;
+  esac
+
+  if ! [[ "${item_count}" =~ ^[0-9]+$ ]] || (( item_count == 0 )); then
+    return
+  fi
+
+  if [[ -z "${first_item_url}" ]]; then
+    warn_check "Display playlist has items, but the first item did not include a display asset URL."
+    return
+  fi
+
+  if [[ "${first_item_url}" == http://* || "${first_item_url}" == https://* ]]; then
+    first_asset_url="${first_item_url}"
+  else
+    first_asset_url="http://${local_host}:${PORT}${first_item_url}"
+  fi
+
+  asset_headers_file="$(mktemp)"
+  asset_body_file="$(mktemp)"
+  trap 'rm -f "${asset_headers_file}" "${asset_body_file}"' RETURN
+
+  if curl --silent --show-error --location --max-time 10 --dump-header "${asset_headers_file}" --output "${asset_body_file}" "${first_asset_url}" >/dev/null 2>&1; then
+    asset_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "${asset_headers_file}")"
+    asset_content_type="$(awk 'BEGIN {IGNORECASE=1} /^content-type:/ {sub(/\r$/, "", $0); sub(/^[^:]*:[[:space:]]*/, "", $0); value=$0} END {print value}' "${asset_headers_file}")"
+    asset_size="$(wc -c < "${asset_body_file}" | tr -d '[:space:]')"
+
+    if [[ "${asset_status}" == "200" ]] && [[ "${asset_content_type}" == image/* ]] && [[ "${asset_size}" =~ ^[0-9]+$ ]] && (( asset_size > 0 )); then
+      pass_check "First display asset responded successfully at ${first_asset_url}."
+    else
+      fail_check "First display asset did not serve a valid image at ${first_asset_url} (status=${asset_status:-unknown}, content-type=${asset_content_type:-unknown}, bytes=${asset_size:-0})."
+    fi
+  else
+    fail_check "First display asset did not respond at ${first_asset_url}."
+  fi
+
+  rm -f "${asset_headers_file}" "${asset_body_file}"
+  trap - RETURN
+}
+
 check_browser_runtime() {
   local chromium_binary=""
   local default_target=""
@@ -375,9 +662,14 @@ check_browser_runtime() {
   local session_id=""
   local session_type=""
   local session_desktop=""
+  local session_state=""
+  local session_active=""
+  local session_remote=""
   local labwc_autostart_body=""
   local expected_display_url=""
   local chromium_process=""
+  local boot_epoch=""
+  local log_mtime=""
 
   printf '\n== Browser kiosk runtime ==\n'
 
@@ -451,10 +743,20 @@ check_browser_runtime() {
   fi
 
   if command -v loginctl >/dev/null 2>&1 && [[ -n "${RUNTIME_USER}" ]]; then
-    session_id="$(loginctl list-sessions --no-legend 2>/dev/null | awk -v user="${RUNTIME_USER}" '$3 == user { print $1; exit }' || true)"
+    session_id="$(select_runtime_session_id "${RUNTIME_USER}" || true)"
     if [[ -n "${session_id}" ]]; then
       session_type="$(loginctl show-session "${session_id}" -p Type --value 2>/dev/null || true)"
       session_desktop="$(loginctl show-session "${session_id}" -p Desktop --value 2>/dev/null || true)"
+      session_state="$(loginctl show-session "${session_id}" -p State --value 2>/dev/null || true)"
+      session_active="$(loginctl show-session "${session_id}" -p Active --value 2>/dev/null || true)"
+      session_remote="$(loginctl show-session "${session_id}" -p Remote --value 2>/dev/null || true)"
+      if [[ "${session_active}" == "yes" && "${session_remote}" != "yes" ]]; then
+        pass_check "Desktop session ${session_id} for ${RUNTIME_USER} is active and local${session_state:+ (state=${session_state})}."
+      elif [[ "${session_remote}" == "yes" ]]; then
+        warn_check "The best matching session for ${RUNTIME_USER} is remote${session_state:+ (state=${session_state})}; Chromium kiosk must run in a local desktop session on the Pi."
+      else
+        warn_check "Desktop session ${session_id} for ${RUNTIME_USER} is present but not active/local (active=${session_active:-unknown}, remote=${session_remote:-unknown}${session_state:+, state=${session_state}})."
+      fi
       if [[ "${session_type}" == "x11" ]]; then
         pass_check "Desktop session for ${RUNTIME_USER} is X11${session_desktop:+ (${session_desktop})}."
         if [[ "${autostart_has_unclutter}" == "true" ]]; then
@@ -518,6 +820,25 @@ check_browser_runtime() {
   if [[ -n "${KIOSK_LOG_FILE}" ]]; then
     if [[ -f "${KIOSK_LOG_FILE}" ]]; then
       pass_check "Kiosk launcher log exists at ${KIOSK_LOG_FILE}."
+      if [[ -r /proc/stat ]]; then
+        boot_epoch="$(awk '/^btime / {print $2; exit}' /proc/stat 2>/dev/null || true)"
+      fi
+      log_mtime="$(stat -c '%Y' "${KIOSK_LOG_FILE}" 2>/dev/null || true)"
+      if [[ -n "${boot_epoch}" && -n "${log_mtime}" ]]; then
+        if (( log_mtime >= boot_epoch )); then
+          pass_check "Kiosk launcher log has been updated since the current boot."
+        else
+          warn_check "Kiosk launcher log predates the current boot; the kiosk launcher may not have run after the last reboot."
+        fi
+      fi
+      if grep -Fq 'Executing ' "${KIOSK_LOG_FILE}" 2>/dev/null; then
+        pass_check "Kiosk launcher log recorded a Chromium launch command."
+      elif [[ -n "${session_id}" ]]; then
+        warn_check "Kiosk launcher log exists but does not yet show a Chromium launch command."
+      fi
+      if grep -Fq 'Another kiosk instance already holds' "${KIOSK_LOG_FILE}" 2>/dev/null; then
+        warn_check "Kiosk launcher log shows a duplicate-launch lockout; another kiosk instance may already be holding the kiosk lock."
+      fi
     elif [[ -n "${session_id}" ]]; then
       warn_check "Kiosk launcher log is missing at ${KIOSK_LOG_FILE}; kiosk launch failures may be harder to diagnose."
     fi
@@ -568,6 +889,7 @@ main() {
   check_service
   check_config_and_paths
   check_http_endpoints
+  check_display_runtime_state
   check_browser_runtime
   print_summary
 }

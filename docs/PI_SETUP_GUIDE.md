@@ -222,7 +222,8 @@ The doctor checks:
 - local `/api/health` reachability
 - frontend shell reachability on `/display`
 - public bootstrap state from `/api/auth/session`
-- Chromium binary and autostart entry presence for the active desktop backend
+- public display playlist state, sleep-schedule state, and first-slide asset reachability
+- Chromium binary and autostart entry presence for the active desktop backend, including labwc wiring, launcher logging, and live kiosk-process checks
 - graphical-target and optional undervoltage hints
 
 Warnings are acceptable for some manual Pi OS settings. Failing checks should be resolved before you treat the frame as ready.

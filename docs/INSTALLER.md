@@ -128,12 +128,13 @@ sudo ./scripts/doctor.sh --user pi
 - local health endpoint reachability
 - frontend shell reachability on `/display`
 - bootstrap state from `/api/auth/session`
-- Chromium availability, XDG/labwc kiosk autostart wiring, launcher logging, and a live Chromium process check for the active desktop session
+- public display playlist state, active sleep-schedule hints, and first-slide asset reachability
+- Chromium availability, XDG/labwc kiosk autostart wiring, launcher logging, log freshness since boot, and a live Chromium process check for the active desktop session
 - graphical-target and optional undervoltage hints
 
 Warnings indicate manual Pi OS tuning or non-blocking issues. Failing checks mean the appliance setup is not ready.
 
-If the backend is healthy but the Pi-connected monitor stays black, inspect the managed launcher log at `/var/cache/spf5000/logs/spf5000-kiosk-launcher.log` before rebooting again.
+If the backend is healthy but the Pi-connected monitor stays black, `doctor.sh` now also tells you whether the display is intentionally black because quiet hours are active, whether the playlist is empty, whether the first display asset responds locally, and whether the managed launcher log at `/var/cache/spf5000/logs/spf5000-kiosk-launcher.log` has been updated since boot.
 
 ## Using `uninstall-pi.sh`
 
