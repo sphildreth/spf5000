@@ -4,6 +4,7 @@ Derives a dominant color and a two-stop gradient from a JPEG display variant.
 Colors are deliberately subdued/muted so they serve as tasteful letterbox fills
 that don't visually compete with the photo.
 """
+
 from __future__ import annotations
 
 import logging
@@ -76,9 +77,12 @@ def derive_background_meta(image_path: Path) -> AssetBackground:
     from PIL import Image  # local import — PIL is optional in some test contexts
 
     with Image.open(image_path) as img:
-        sample = img.convert("RGB").resize(_SAMPLE_SIZE, Image.Resampling.LANCZOS)
+        rgb_img = img.convert("RGB")
+        sample = rgb_img.resize(_SAMPLE_SIZE, Image.Resampling.LANCZOS)
         w, h = sample.size
         pixels: list[tuple[int, int, int]] = list(sample.get_flattened_data())  # type: ignore[arg-type]
+        sample.close()
+        rgb_img.close()
 
     # Dominant colour — overall average
     dominant = _subdue_rgb(*_avg_rgb(pixels))

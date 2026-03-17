@@ -50,7 +50,9 @@ class AssetIngestService:
         if existing is not None:
             for collection_id in collection_ids:
                 self.asset_repo.add_asset_to_collection(existing.id, collection_id)
-            return AssetIngestResult(asset=existing, created=False, checksum_sha256=checksum)
+            return AssetIngestResult(
+                asset=existing, created=False, checksum_sha256=checksum
+            )
 
         asset = self._materialize_asset(
             source_id=source_id,
@@ -62,7 +64,9 @@ class AssetIngestService:
             metadata=metadata or {},
         )
         created_asset = self.asset_repo.create_asset(asset)
-        return AssetIngestResult(asset=created_asset, created=True, checksum_sha256=checksum)
+        return AssetIngestResult(
+            asset=created_asset, created=True, checksum_sha256=checksum
+        )
 
     def _materialize_asset(
         self,
@@ -77,8 +81,12 @@ class AssetIngestService:
     ) -> Asset:
         device_settings = self.settings_repo.get_settings()
         filename = original_filename or source_path.name
-        extension = Path(filename).suffix.lower() or source_path.suffix.lower() or ".jpg"
-        original_destination = self._build_managed_path(settings.originals_dir, checksum, extension)
+        extension = (
+            Path(filename).suffix.lower() or source_path.suffix.lower() or ".jpg"
+        )
+        original_destination = self._build_managed_path(
+            settings.originals_dir, checksum, extension
+        )
         original_destination.parent.mkdir(parents=True, exist_ok=True)
         if source_path.resolve() != original_destination.resolve():
             if not original_destination.exists():
@@ -117,6 +125,9 @@ class AssetIngestService:
             if background_metadata is not None:
                 complete_metadata["background"] = background_metadata
 
+            if normalized is not image:
+                normalized.close()
+
         now = utc_now()
         original_name = Path(filename).name
         return Asset(
@@ -150,18 +161,33 @@ class AssetIngestService:
         max_width: int,
         max_height: int,
     ) -> AssetVariant:
-        target_dir = settings.thumbnails_dir if kind == "thumbnail" else settings.display_variants_dir
+        target_dir = (
+            settings.thumbnails_dir
+            if kind == "thumbnail"
+            else settings.display_variants_dir
+        )
         destination = self._build_managed_path(target_dir, checksum, ".jpg")
         destination.parent.mkdir(parents=True, exist_ok=True)
 
         if kind == "display":
-            working = self._resize_display_variant(image, max_width=max_width, max_height=max_height)
+            working = self._resize_display_variant(
+                image, max_width=max_width, max_height=max_height
+            )
         else:
             working = image.copy()
             working.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
 
         rendered = self._to_rgb(working)
-        rendered.save(destination, format="JPEG", quality=settings.jpeg_quality, optimize=True)
+        rendered.save(
+            destination, format="JPEG", quality=settings.jpeg_quality, optimize=True
+        )
+        width, height = rendered.size
+
+        if rendered is not working:
+            rendered.close()
+        if working is not image:
+            working.close()
+
         now = utc_now()
         return AssetVariant(
             id=f"variant-{kind}-{checksum[:24]}",
@@ -169,13 +195,15 @@ class AssetIngestService:
             kind=kind,
             local_path=str(destination),
             mime_type="image/jpeg",
-            width=rendered.width,
-            height=rendered.height,
+            width=width,
+            height=height,
             size_bytes=destination.stat().st_size,
             created_at=now,
         )
 
-    def _derive_background_metadata(self, display_variant: AssetVariant) -> dict[str, object] | None:
+    def _derive_background_metadata(
+        self, display_variant: AssetVariant
+    ) -> dict[str, object] | None:
         try:
             background = derive_background_meta(Path(display_variant.local_path))
         except Exception:
@@ -195,7 +223,9 @@ class AssetIngestService:
         return base_dir / checksum[:2] / f"{checksum}{extension}"
 
     @staticmethod
-    def _resize_display_variant(image: Image.Image, *, max_width: int, max_height: int) -> Image.Image:
+    def _resize_display_variant(
+        image: Image.Image, *, max_width: int, max_height: int
+    ) -> Image.Image:
         width, height = image.size
         if width <= 0 or height <= 0:
             return image.copy()

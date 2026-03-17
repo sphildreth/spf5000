@@ -17,7 +17,10 @@ from app.providers.google_photos.errors import (
     GooglePhotosError,
     GooglePhotosSlowDown,
 )
-from app.providers.google_photos.metadata import HIGHLIGHTS_MEDIA_SOURCE_ID, PROVIDER_NAME
+from app.providers.google_photos.metadata import (
+    HIGHLIGHTS_MEDIA_SOURCE_ID,
+    PROVIDER_NAME,
+)
 from app.providers.google_photos.models import (
     GooglePhotosAccount,
     GooglePhotosAuthFlow,
@@ -59,24 +62,49 @@ class GooglePhotosService:
 
         if auth_flow is not None:
             connection_state = "awaiting_authorization"
-            warnings.append("Finish the Google device-code approval flow to link this frame.")
+            warnings.append(
+                "Finish the Google device-code approval flow to link this frame."
+            )
         if not settings.google_photos_configured:
-            warnings.append("Google Photos OAuth client ID and secret are not configured.")
+            warnings.append(
+                "Google Photos OAuth client ID and secret are not configured."
+            )
         if account.device_id and not account.media_sources_set:
-            warnings.append("Use the Google Photos settings URI to select media sources before syncing.")
-        if any(source.media_source_id == HIGHLIGHTS_MEDIA_SOURCE_ID for source in media_sources):
-            warnings.append("Google Photos 'Highlights' is selected, but it cannot be enumerated per-source; sync skips it.")
+            warnings.append(
+                "Use the Google Photos settings URI to select media sources before syncing."
+            )
+        if any(
+            source.media_source_id == HIGHLIGHTS_MEDIA_SOURCE_ID
+            for source in media_sources
+        ):
+            warnings.append(
+                "Google Photos 'Highlights' is selected, but it cannot be enumerated per-source; sync skips it."
+            )
         if cached_asset_count > 0 and connection_state != "connected":
-            warnings.append("Cached Google Photos assets remain on disk for offline playback.")
+            warnings.append(
+                "Cached Google Photos assets remain on disk for offline playback."
+            )
         if latest_sync_run is not None:
-            warnings.extend(message for message in latest_sync_run.warning_messages if message not in warnings)
-        if auth_flow is not None and auth_flow.error_message and auth_flow.error_message not in warnings:
+            warnings.extend(
+                message
+                for message in latest_sync_run.warning_messages
+                if message not in warnings
+            )
+        if (
+            auth_flow is not None
+            and auth_flow.error_message
+            and auth_flow.error_message not in warnings
+        ):
             warnings.append(auth_flow.error_message)
         if current_error and current_error not in warnings:
             warnings.append(current_error)
 
         linked_account = None
-        if account.account_subject or account.account_email or account.account_display_name:
+        if (
+            account.account_subject
+            or account.account_email
+            or account.account_display_name
+        ):
             linked_account = {
                 "subject": account.account_subject,
                 "email": account.account_email,
@@ -86,7 +114,12 @@ class GooglePhotosService:
             }
 
         device = None
-        if account.request_id or account.device_id or account.device_display_name or account.settings_uri:
+        if (
+            account.request_id
+            or account.device_id
+            or account.device_display_name
+            or account.settings_uri
+        ):
             device = {
                 "request_id": account.request_id,
                 "device_id": account.device_id,
@@ -115,14 +148,20 @@ class GooglePhotosService:
             "warnings": warnings,
         }
 
-    def start_connect(self, *, device_display_name: str | None = None) -> dict[str, object]:
+    def start_connect(
+        self, *, device_display_name: str | None = None
+    ) -> dict[str, object]:
         self._ensure_configured()
         self.repo.cancel_active_auth_flows()
         now = utc_now()
         request_id = str(uuid4())
-        display_name = device_display_name or settings.google_photos_provider_display_name
+        display_name = (
+            device_display_name or settings.google_photos_provider_display_name
+        )
         client = self.client_factory()
-        payload = client.start_device_flow(request_id=request_id, display_name=display_name)
+        payload = client.start_device_flow(
+            request_id=request_id, display_name=display_name
+        )
         flow = GooglePhotosAuthFlow(
             id=f"provider-auth-{uuid4().hex[:12]}",
             provider_name=PROVIDER_NAME,
@@ -132,7 +171,9 @@ class GooglePhotosService:
             device_code=str(payload["device_code"]),
             user_code=str(payload["user_code"]),
             verification_uri=str(payload["verification_uri"]),
-            verification_uri_complete=None if payload.get("verification_uri_complete") is None else str(payload["verification_uri_complete"]),
+            verification_uri_complete=None
+            if payload.get("verification_uri_complete") is None
+            else str(payload["verification_uri_complete"]),
             interval_seconds=int(payload["interval_seconds"]),
             expires_at=str(payload["expires_at"]),
             error_message="",
@@ -161,7 +202,9 @@ class GooglePhotosService:
             return self.get_status()
 
         now = utc_now()
-        if auth_flow.next_poll_at and self._utc_now() < self._parse_timestamp(auth_flow.next_poll_at):
+        if auth_flow.next_poll_at and self._utc_now() < self._parse_timestamp(
+            auth_flow.next_poll_at
+        ):
             return self.get_status()
 
         client = self.client_factory()
@@ -177,14 +220,19 @@ class GooglePhotosService:
             return self.get_status()
         except GooglePhotosSlowDown as exc:
             auth_flow.status = "polling"
-            auth_flow.interval_seconds = max(auth_flow.interval_seconds + 5, exc.interval_seconds)
+            auth_flow.interval_seconds = max(
+                auth_flow.interval_seconds + 5, exc.interval_seconds
+            )
             auth_flow.last_polled_at = now
             auth_flow.next_poll_at = utc_plus_seconds(auth_flow.interval_seconds)
             auth_flow.updated_at = now
             auth_flow.error_message = str(exc)
             self.repo.update_auth_flow(auth_flow)
             return self.get_status()
-        except (GooglePhotosAuthorizationDenied, GooglePhotosAuthorizationExpired) as exc:
+        except (
+            GooglePhotosAuthorizationDenied,
+            GooglePhotosAuthorizationExpired,
+        ) as exc:
             auth_flow.status = "failed"
             auth_flow.error_message = str(exc)
             auth_flow.last_polled_at = now
@@ -200,10 +248,14 @@ class GooglePhotosService:
 
         account = self._get_or_create_account()
         account.access_token = str(token_payload.get("access_token") or "")
-        account.refresh_token = str(token_payload.get("refresh_token") or account.refresh_token or "")
+        account.refresh_token = str(
+            token_payload.get("refresh_token") or account.refresh_token or ""
+        )
         account.scope = str(token_payload.get("scope") or account.scope or client.scope)
         expires_in = int(token_payload.get("expires_in", 3600) or 3600)
-        account.access_token_expires_at = (self._utc_now() + timedelta(seconds=expires_in)).isoformat()
+        account.access_token_expires_at = (
+            self._utc_now() + timedelta(seconds=expires_in)
+        ).isoformat()
         userinfo = client.get_userinfo(account.access_token)
         account.account_subject = self._optional_str(userinfo.get("sub"))
         account.account_email = self._optional_str(userinfo.get("email"))
@@ -237,7 +289,11 @@ class GooglePhotosService:
         if account.access_token:
             try:
                 account = self._ensure_access_token(account)
-                client.delete_device(access_token=account.access_token or "", device_id=account.device_id, request_id=account.request_id)
+                client.delete_device(
+                    access_token=account.access_token or "",
+                    device_id=account.device_id,
+                    request_id=account.request_id,
+                )
             except GooglePhotosError:
                 pass
         now = utc_now()
@@ -303,15 +359,22 @@ class GooglePhotosService:
                 return sync_run
 
             account = self._ensure_access_token(account)
-            device_payload = self.client_factory().get_device(access_token=account.access_token or "", device_id=account.device_id or "")
+            device_payload = self.client_factory().get_device(
+                access_token=account.access_token or "",
+                device_id=account.device_id or "",
+            )
             self._apply_device_payload(account, device_payload, poll_at=utc_now())
             account.updated_at = utc_now()
             self.repo.upsert_account(account)
             media_sources = self.repo.list_media_sources()
             if not account.media_sources_set or not media_sources:
                 sync_run.status = "completed"
-                sync_run.message = "No Google Photos media sources have been selected yet"
-                sync_run.warning_messages = ["Open the Google Photos settings URI and choose media sources before syncing."]
+                sync_run.message = (
+                    "No Google Photos media sources have been selected yet"
+                )
+                sync_run.warning_messages = [
+                    "Open the Google Photos settings URI and choose media sources before syncing."
+                ]
                 sync_run.completed_at = utc_now()
                 self.repo.update_sync_run(sync_run)
                 return sync_run
@@ -323,7 +386,9 @@ class GooglePhotosService:
             sync_run.skipped_count = stats.skipped_count
             sync_run.error_count = stats.error_count
             sync_run.warning_messages = stats.warnings
-            sync_run.status = "completed_with_errors" if stats.error_count else "completed"
+            sync_run.status = (
+                "completed_with_errors" if stats.error_count else "completed"
+            )
             sync_run.message = (
                 f"Synced {stats.imported_count} new assets, {stats.duplicate_count} duplicates, "
                 f"{stats.skipped_count} skipped, {stats.error_count} errors"
@@ -334,8 +399,12 @@ class GooglePhotosService:
             account.last_completed_sync_at = sync_run.completed_at
             account.updated_at = sync_run.completed_at or account.updated_at
             self.repo.upsert_account(account)
-            self.source_repo.touch_last_scan(GOOGLE_PHOTOS_SOURCE_ID, sync_run.completed_at or started_at)
-            self.source_repo.touch_last_import(GOOGLE_PHOTOS_SOURCE_ID, sync_run.completed_at or started_at)
+            self.source_repo.touch_last_scan(
+                GOOGLE_PHOTOS_SOURCE_ID, sync_run.completed_at or started_at
+            )
+            self.source_repo.touch_last_import(
+                GOOGLE_PHOTOS_SOURCE_ID, sync_run.completed_at or started_at
+            )
             return sync_run
         except Exception as exc:
             sync_run.status = "failed"
@@ -386,14 +455,30 @@ class GooglePhotosService:
         for remote_media_id, remote_item in remote_items.items():
             if not remote_item.mime_type.startswith("image/"):
                 stats.skipped_count += 1
-                stats.warnings.append(f"Skipped unsupported Google media item {remote_media_id} ({remote_item.mime_type}).")
+                stats.warnings.append(
+                    f"Skipped unsupported Google media item {remote_media_id} ({remote_item.mime_type})."
+                )
                 continue
             staging_suffix = self._guess_extension(remote_item.mime_type)
-            staging_path = settings.google_photos_download_staging_dir / f"{remote_media_id}{staging_suffix}"
+            staging_path = (
+                settings.google_photos_download_staging_dir
+                / f"{remote_media_id}{staging_suffix}"
+            )
             try:
-                media_bytes = client.download_media(access_token=account.access_token or "", base_url=remote_item.base_url)
                 staging_path.parent.mkdir(parents=True, exist_ok=True)
-                staging_path.write_bytes(media_bytes)
+                if hasattr(client, "download_media_to_file"):
+                    client.download_media_to_file(
+                        access_token=account.access_token or "",
+                        base_url=remote_item.base_url,
+                        dest_path=staging_path,
+                    )
+                else:
+                    media_bytes = client.download_media(
+                        access_token=account.access_token or "",
+                        base_url=remote_item.base_url,
+                    )
+                    staging_path.write_bytes(media_bytes)
+
                 result = self.asset_ingestion.ingest_file(
                     source_id=GOOGLE_PHOTOS_SOURCE_ID,
                     collection_ids=[GOOGLE_PHOTOS_COLLECTION_ID],
@@ -412,11 +497,15 @@ class GooglePhotosService:
                 else:
                     stats.duplicate_count += 1
                 existing_mapping = self.repo.get_provider_asset(remote_media_id)
-                first_synced_at = existing_mapping.first_synced_at if existing_mapping else utc_now()
+                first_synced_at = (
+                    existing_mapping.first_synced_at if existing_mapping else utc_now()
+                )
                 seen_at = utc_now()
                 self.repo.upsert_provider_asset(
                     GooglePhotosProviderAsset(
-                        id=existing_mapping.id if existing_mapping else f"provider-asset-{uuid4().hex[:12]}",
+                        id=existing_mapping.id
+                        if existing_mapping
+                        else f"provider-asset-{uuid4().hex[:12]}",
                         provider_name=PROVIDER_NAME,
                         remote_media_id=remote_media_id,
                         local_asset_id=result.asset.id,
@@ -432,7 +521,9 @@ class GooglePhotosService:
                             {
                                 "provider": PROVIDER_NAME,
                                 "google_media_id": remote_media_id,
-                                "media_source_ids": sorted(remote_sources[remote_media_id]),
+                                "media_source_ids": sorted(
+                                    remote_sources[remote_media_id]
+                                ),
                             }
                         ),
                         first_synced_at=first_synced_at,
@@ -444,54 +535,91 @@ class GooglePhotosService:
                 )
             except Exception as exc:
                 stats.error_count += 1
-                stats.warnings.append(f"Failed to sync Google media item {remote_media_id}: {exc}")
+                stats.warnings.append(
+                    f"Failed to sync Google media item {remote_media_id}: {exc}"
+                )
             finally:
                 staging_path.unlink(missing_ok=True)
         return stats
 
-    def _refresh_device_state(self, account: GooglePhotosAccount, *, force: bool) -> GooglePhotosAccount:
+    def _refresh_device_state(
+        self, account: GooglePhotosAccount, *, force: bool
+    ) -> GooglePhotosAccount:
         if not account.device_id:
             return account
         if not force and account.last_device_poll_at:
             last_polled_at = self._parse_timestamp(account.last_device_poll_at)
-            if self._utc_now() < last_polled_at + timedelta(seconds=max(1, account.device_poll_interval_seconds)):
+            if self._utc_now() < last_polled_at + timedelta(
+                seconds=max(1, account.device_poll_interval_seconds)
+            ):
                 return account
         account = self._ensure_access_token(account)
-        device_payload = self.client_factory().get_device(access_token=account.access_token or "", device_id=account.device_id)
+        device_payload = self.client_factory().get_device(
+            access_token=account.access_token or "", device_id=account.device_id
+        )
         self._apply_device_payload(account, device_payload, poll_at=utc_now())
         account.updated_at = utc_now()
         return self.repo.upsert_account(account)
 
     def _ensure_access_token(self, account: GooglePhotosAccount) -> GooglePhotosAccount:
-        if not account.refresh_token and account.access_token and account.access_token_expires_at:
-            if self._parse_timestamp(account.access_token_expires_at) > self._utc_now() + timedelta(seconds=60):
+        if (
+            not account.refresh_token
+            and account.access_token
+            and account.access_token_expires_at
+        ):
+            if self._parse_timestamp(
+                account.access_token_expires_at
+            ) > self._utc_now() + timedelta(seconds=60):
                 return account
         if account.access_token and account.access_token_expires_at:
-            if self._parse_timestamp(account.access_token_expires_at) > self._utc_now() + timedelta(seconds=60):
+            if self._parse_timestamp(
+                account.access_token_expires_at
+            ) > self._utc_now() + timedelta(seconds=60):
                 return account
         if not account.refresh_token:
-            raise GooglePhotosConfigurationError("Google Photos access token is unavailable and no refresh token is stored")
-        token_payload = self.client_factory().refresh_access_token(account.refresh_token)
+            raise GooglePhotosConfigurationError(
+                "Google Photos access token is unavailable and no refresh token is stored"
+            )
+        token_payload = self.client_factory().refresh_access_token(
+            account.refresh_token
+        )
         account.access_token = str(token_payload.get("access_token") or "")
         account.scope = str(token_payload.get("scope") or account.scope)
         expires_in = int(token_payload.get("expires_in", 3600) or 3600)
-        account.access_token_expires_at = (self._utc_now() + timedelta(seconds=expires_in)).isoformat()
+        account.access_token_expires_at = (
+            self._utc_now() + timedelta(seconds=expires_in)
+        ).isoformat()
         account.updated_at = utc_now()
         return self.repo.upsert_account(account)
 
-    def _apply_device_payload(self, account: GooglePhotosAccount, payload: dict[str, Any], *, poll_at: str) -> None:
+    def _apply_device_payload(
+        self, account: GooglePhotosAccount, payload: dict[str, Any], *, poll_at: str
+    ) -> None:
         account.device_id = self._optional_str(payload.get("id")) or account.device_id
-        account.device_display_name = self._optional_str(payload.get("displayName")) or account.device_display_name
+        account.device_display_name = (
+            self._optional_str(payload.get("displayName"))
+            or account.device_display_name
+        )
         account.settings_uri = self._optional_str(payload.get("settingsUri"))
         account.media_sources_set = bool(payload.get("mediaSourcesSet", False))
-        polling_config = payload.get("pollingConfig") if isinstance(payload.get("pollingConfig"), dict) else {}
-        account.device_poll_interval_seconds = parse_duration_seconds(self._optional_str(polling_config.get("pollInterval")), default=30)
-        account.device_created_at = self._optional_str(payload.get("createTime")) or account.device_created_at
+        polling_config = (
+            payload.get("pollingConfig")
+            if isinstance(payload.get("pollingConfig"), dict)
+            else {}
+        )
+        account.device_poll_interval_seconds = parse_duration_seconds(
+            self._optional_str(polling_config.get("pollInterval")), default=30
+        )
+        account.device_created_at = (
+            self._optional_str(payload.get("createTime")) or account.device_created_at
+        )
         account.last_device_poll_at = poll_at
         media_sources = self._media_sources_from_payload(payload.get("mediaSources"))
         self.repo.replace_media_sources(media_sources)
 
-    def _media_sources_from_payload(self, payload: object) -> list[GooglePhotosMediaSource]:
+    def _media_sources_from_payload(
+        self, payload: object
+    ) -> list[GooglePhotosMediaSource]:
         now = utc_now()
         media_sources: list[GooglePhotosMediaSource] = []
         if not isinstance(payload, list):
@@ -553,4 +681,6 @@ class GooglePhotosService:
     def _ensure_configured() -> None:
         if settings.google_photos_configured:
             return
-        raise GooglePhotosConfigurationError("Google Photos OAuth client ID/secret are not configured")
+        raise GooglePhotosConfigurationError(
+            "Google Photos OAuth client ID/secret are not configured"
+        )

@@ -35,22 +35,32 @@ class GooglePhotosClient:
     def scope(self) -> str:
         return DEFAULT_SCOPE
 
-    def start_device_flow(self, *, request_id: str, display_name: str) -> dict[str, Any]:
+    def start_device_flow(
+        self, *, request_id: str, display_name: str
+    ) -> dict[str, Any]:
         self._ensure_configured()
         payload = {
             "client_id": settings.google_photos_client_id,
             "scope": self.scope,
-            "state": build_device_flow_state(request_id=request_id, display_name=display_name),
+            "state": build_device_flow_state(
+                request_id=request_id, display_name=display_name
+            ),
         }
         response = self._post_form(OAUTH_DEVICE_CODE_URL, payload)
         expires_in = int(response.get("expires_in", 1800) or 1800)
         return {
             "device_code": str(response["device_code"]),
             "user_code": str(response["user_code"]),
-            "verification_uri": str(response.get("verification_uri") or response.get("verification_url") or ""),
+            "verification_uri": str(
+                response.get("verification_uri")
+                or response.get("verification_url")
+                or ""
+            ),
             "verification_uri_complete": response.get("verification_uri_complete"),
             "interval_seconds": int(response.get("interval", 5) or 5),
-            "expires_at": (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat(),
+            "expires_at": (
+                datetime.now(UTC) + timedelta(seconds=expires_in)
+            ).isoformat(),
         }
 
     def poll_device_flow(self, *, device_code: str) -> dict[str, Any]:
@@ -70,9 +80,13 @@ class GooglePhotosClient:
             if error == "slow_down":
                 raise GooglePhotosSlowDown(10) from exc
             if error == "access_denied":
-                raise GooglePhotosAuthorizationDenied("Google Photos access was denied") from exc
+                raise GooglePhotosAuthorizationDenied(
+                    "Google Photos access was denied"
+                ) from exc
             if error == "expired_token":
-                raise GooglePhotosAuthorizationExpired("The Google Photos approval code expired") from exc
+                raise GooglePhotosAuthorizationExpired(
+                    "The Google Photos approval code expired"
+                ) from exc
             raise
 
     def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
@@ -86,9 +100,13 @@ class GooglePhotosClient:
         return self._post_form(OAUTH_TOKEN_URL, payload)
 
     def get_userinfo(self, access_token: str) -> dict[str, Any]:
-        return self._get_json(OPENID_USERINFO_URL, headers=self._auth_headers(access_token))
+        return self._get_json(
+            OPENID_USERINFO_URL, headers=self._auth_headers(access_token)
+        )
 
-    def create_device(self, *, access_token: str, request_id: str, display_name: str) -> dict[str, Any]:
+    def create_device(
+        self, *, access_token: str, request_id: str, display_name: str
+    ) -> dict[str, Any]:
         return self._post_json(
             f"{AMBIENT_API_BASE_URL}/devices?requestId={quote(request_id, safe='')}",
             {"displayName": display_name},
@@ -96,13 +114,21 @@ class GooglePhotosClient:
         )
 
     def get_device(self, *, access_token: str, device_id: str) -> dict[str, Any]:
-        return self._get_json(f"{AMBIENT_API_BASE_URL}/devices/{quote(device_id, safe='')}", headers=self._auth_headers(access_token))
+        return self._get_json(
+            f"{AMBIENT_API_BASE_URL}/devices/{quote(device_id, safe='')}",
+            headers=self._auth_headers(access_token),
+        )
 
-    def delete_device(self, *, access_token: str, device_id: str | None, request_id: str | None) -> None:
+    def delete_device(
+        self, *, access_token: str, device_id: str | None, request_id: str | None
+    ) -> None:
         identifier = device_id or request_id
         if not identifier:
             return
-        self._delete(f"{AMBIENT_API_BASE_URL}/devices/{quote(identifier, safe='')}", headers=self._auth_headers(access_token))
+        self._delete(
+            f"{AMBIENT_API_BASE_URL}/devices/{quote(identifier, safe='')}",
+            headers=self._auth_headers(access_token),
+        )
 
     def list_media_items(
         self,
@@ -113,24 +139,43 @@ class GooglePhotosClient:
         page_token: str | None = None,
         page_size: int = 100,
     ) -> tuple[list[GooglePhotosRemoteMediaItem], str | None]:
-        params: dict[str, str | int] = {"deviceId": device_id, "pageSize": max(1, min(page_size, 100))}
+        params: dict[str, str | int] = {
+            "deviceId": device_id,
+            "pageSize": max(1, min(page_size, 100)),
+        }
         if media_source_id:
             params["mediaSourceId"] = media_source_id
         if page_token:
             params["pageToken"] = page_token
-        response = self._get_json(f"{AMBIENT_API_BASE_URL}/mediaItems", headers=self._auth_headers(access_token), params=params)
+        response = self._get_json(
+            f"{AMBIENT_API_BASE_URL}/mediaItems",
+            headers=self._auth_headers(access_token),
+            params=params,
+        )
         items: list[GooglePhotosRemoteMediaItem] = []
         for item in response.get("mediaItems", []) or []:
             if not isinstance(item, dict):
                 continue
-            media_file = item.get("mediaFile", {}) if isinstance(item.get("mediaFile"), dict) else {}
-            metadata = media_file.get("mediaFileMetadata", {}) if isinstance(media_file.get("mediaFileMetadata"), dict) else {}
+            media_file = (
+                item.get("mediaFile", {})
+                if isinstance(item.get("mediaFile"), dict)
+                else {}
+            )
+            metadata = (
+                media_file.get("mediaFileMetadata", {})
+                if isinstance(media_file.get("mediaFileMetadata"), dict)
+                else {}
+            )
             items.append(
                 GooglePhotosRemoteMediaItem(
                     id=str(item.get("id", "")),
-                    create_time=None if item.get("createTime") is None else str(item.get("createTime")),
+                    create_time=None
+                    if item.get("createTime") is None
+                    else str(item.get("createTime")),
                     base_url=str(media_file.get("baseUrl", "")),
-                    mime_type=str(media_file.get("mimeType", "application/octet-stream")),
+                    mime_type=str(
+                        media_file.get("mimeType", "application/octet-stream")
+                    ),
                     width=int(metadata.get("width") or 0),
                     height=int(metadata.get("height") or 0),
                 )
@@ -138,9 +183,32 @@ class GooglePhotosClient:
         next_page_token = response.get("nextPageToken")
         return items, None if next_page_token is None else str(next_page_token)
 
+    def download_media_to_file(
+        self, *, access_token: str, base_url: str, dest_path: Any
+    ) -> None:
+        url = f"{base_url}=d"
+        with httpx.Client(
+            timeout=self.timeout_seconds, follow_redirects=True
+        ) as client:
+            with client.stream(
+                "GET", url, headers=self._auth_headers(access_token)
+            ) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise GooglePhotosApiError(
+                        f"Google Photos media download failed with status {response.status_code}",
+                        status_code=response.status_code,
+                        payload=self._decode_payload(response),
+                    )
+                with open(dest_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192 * 8):
+                        f.write(chunk)
+
     def download_media(self, *, access_token: str, base_url: str) -> bytes:
         url = f"{base_url}=d"
-        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=self.timeout_seconds, follow_redirects=True
+        ) as client:
             response = client.get(url, headers=self._auth_headers(access_token))
         if response.status_code >= 400:
             raise GooglePhotosApiError(
@@ -155,12 +223,16 @@ class GooglePhotosClient:
             response = client.post(url, data=payload)
         return self._decode_json_response(response)
 
-    def _post_json(self, url: str, payload: dict[str, Any], *, headers: dict[str, str]) -> dict[str, Any]:
+    def _post_json(
+        self, url: str, payload: dict[str, Any], *, headers: dict[str, str]
+    ) -> dict[str, Any]:
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(url, json=payload, headers=headers)
         return self._decode_json_response(response)
 
-    def _get_json(self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get_json(
+        self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.get(url, headers=headers, params=params)
         return self._decode_json_response(response)
@@ -185,7 +257,11 @@ class GooglePhotosClient:
         payload = self._decode_payload(response)
         if isinstance(payload, dict):
             return payload
-        raise GooglePhotosApiError("Google Photos returned a non-object response", status_code=response.status_code, payload=payload)
+        raise GooglePhotosApiError(
+            "Google Photos returned a non-object response",
+            status_code=response.status_code,
+            payload=payload,
+        )
 
     @staticmethod
     def _decode_payload(response: httpx.Response) -> object:
@@ -225,4 +301,6 @@ class GooglePhotosClient:
     def _ensure_configured() -> None:
         if settings.google_photos_configured:
             return
-        raise GooglePhotosConfigurationError("Google Photos OAuth client ID/secret are not configured")
+        raise GooglePhotosConfigurationError(
+            "Google Photos OAuth client ID/secret are not configured"
+        )
