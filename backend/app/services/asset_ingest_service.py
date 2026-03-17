@@ -244,7 +244,9 @@ class AssetIngestService:
             return image
         if image.mode in {"RGBA", "LA"}:
             background = Image.new("RGB", image.size, (0, 0, 0))
-            background.paste(image, mask=image.getchannel("A"))
+            alpha_mask = image.getchannel("A")
+            background.paste(image, mask=alpha_mask)
+            alpha_mask.close()
             return background
         return image.convert("RGB")
 

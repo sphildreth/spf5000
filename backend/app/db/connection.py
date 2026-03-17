@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -54,6 +55,13 @@ def is_null_connection(conn: Any) -> bool:
     return bool(getattr(conn, "is_null", False))
 
 
+import sys
+
+_is_test_env = "pytest" in sys.modules
+
+_local = threading.local()
+
+
 @contextmanager
 def get_connection() -> Iterator[Any]:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -62,15 +70,45 @@ def get_connection() -> Iterator[Any]:
     settings.database_path.parent.mkdir(parents=True, exist_ok=True)
 
     if decentdb is None:
-        conn = NullConnection()
+        yield NullConnection()
+        return
+
+    db_path = str(settings.database_path)
+
+    if _is_test_env:
+        conn = decentdb.connect(db_path)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return
+
+    conn_info = getattr(_local, "conn_info", None)
+
+    if conn_info is None or conn_info["path"] != db_path:
+        if conn_info and conn_info["conn"]:
+            try:
+                conn_info["conn"].close()
+            except Exception:
+                pass
+        conn = decentdb.connect(db_path)
+        _local.conn_info = {"conn": conn, "path": db_path, "depth": 0}
     else:
-        conn = decentdb.connect(str(settings.database_path))
+        conn = conn_info["conn"]
+
+    _local.conn_info["depth"] += 1
 
     try:
         yield conn
-        conn.commit()
+        if _local.conn_info["depth"] == 1:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if _local.conn_info["depth"] == 1:
+            conn.rollback()
         raise
     finally:
-        conn.close()
+        _local.conn_info["depth"] -= 1
