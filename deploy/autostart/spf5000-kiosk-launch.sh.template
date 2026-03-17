@@ -1,4 +1,20 @@
 #!/bin/sh
+LOG_PATH="__KIOSK_LOG_PATH__"
+LOCK_ROOT="${XDG_RUNTIME_DIR:-${HOME}/.cache}"
+LOCK_PATH="${LOCK_ROOT}/spf5000-kiosk.lock"
+
+mkdir -p "$(dirname "${LOG_PATH}")" "$(dirname "${LOCK_PATH}")"
+exec >>"${LOG_PATH}" 2>&1
+printf '[%s] Starting SPF5000 kiosk launcher for %s\n' "$(date -Iseconds 2>/dev/null || date)" "__DISPLAY_URL__"
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"${LOCK_PATH}"
+  if ! flock -n 9; then
+    printf '[%s] Another kiosk instance already holds %s; skipping duplicate launch.\n' "$(date -Iseconds 2>/dev/null || date)" "${LOCK_PATH}"
+    exit 0
+  fi
+fi
+
 sleep __KIOSK_DELAY_SECONDS__
 
 set -- \
@@ -14,9 +30,14 @@ set -- \
 
 if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
   export XCURSOR_THEME=empty
+  printf '[%s] Detected Wayland session; enabling Chromium ozone auto-selection.\n' "$(date -Iseconds 2>/dev/null || date)"
   set -- --ozone-platform-hint=auto "$@"
 elif [ -x /usr/bin/unclutter ]; then
+  printf '[%s] Detected non-Wayland session; starting unclutter for cursor hiding.\n' "$(date -Iseconds 2>/dev/null || date)"
   /usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork >/dev/null 2>&1
+else
+  printf '[%s] Detected non-Wayland session without unclutter; continuing without a cursor helper.\n' "$(date -Iseconds 2>/dev/null || date)"
 fi
 
+printf '[%s] Executing __CHROMIUM_BINARY__ %s\n' "$(date -Iseconds 2>/dev/null || date)" "$*"
 exec __CHROMIUM_BINARY__ "$@"

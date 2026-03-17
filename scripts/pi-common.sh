@@ -12,6 +12,8 @@ PI_DEFAULT_SERVICE_NAME="spf5000"
 PI_DEFAULT_HOST="0.0.0.0"
 PI_DEFAULT_PORT="8000"
 PI_DEFAULT_KIOSK_DELAY_SECONDS="8"
+PI_KIOSK_LABWC_BLOCK_START="# >>> SPF5000 managed kiosk >>>"
+PI_KIOSK_LABWC_BLOCK_END="# <<< SPF5000 managed kiosk <<<"
 
 log() {
   printf '[INFO] %s\n' "$*"
@@ -203,6 +205,96 @@ kiosk_launcher_path() {
   local service_name="${2:-${PI_DEFAULT_SERVICE_NAME}}"
 
   printf '%s/.config/autostart/%s-kiosk-launch.sh\n' "$(resolve_user_home "${user_name}")" "${service_name}"
+}
+
+kiosk_labwc_autostart_path() {
+  local user_name="$1"
+
+  printf '%s/.config/labwc/autostart\n' "$(resolve_user_home "${user_name}")"
+}
+
+upsert_managed_text_block() {
+  local target_path="$1"
+  local start_marker="$2"
+  local end_marker="$3"
+  local block_content="$4"
+
+  python3 - "${target_path}" "${start_marker}" "${end_marker}" "${block_content}" <<'PY'
+from pathlib import Path
+import sys
+
+target_path = Path(sys.argv[1])
+start_marker = sys.argv[2]
+end_marker = sys.argv[3]
+block_content = sys.argv[4]
+
+text = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+lines = text.splitlines()
+result: list[str] = []
+
+i = 0
+while i < len(lines):
+    if lines[i] == start_marker:
+        i += 1
+        while i < len(lines) and lines[i] != end_marker:
+            i += 1
+        if i < len(lines) and lines[i] == end_marker:
+            i += 1
+        continue
+    result.append(lines[i])
+    i += 1
+
+while result and result[-1] == "":
+    result.pop()
+
+if result:
+    result.append("")
+
+result.extend([start_marker, *block_content.splitlines(), end_marker])
+target_path.parent.mkdir(parents=True, exist_ok=True)
+target_path.write_text("\n".join(result) + "\n", encoding="utf-8")
+PY
+}
+
+remove_managed_text_block() {
+  local target_path="$1"
+  local start_marker="$2"
+  local end_marker="$3"
+
+  python3 - "${target_path}" "${start_marker}" "${end_marker}" <<'PY'
+from pathlib import Path
+import sys
+
+target_path = Path(sys.argv[1])
+start_marker = sys.argv[2]
+end_marker = sys.argv[3]
+
+if not target_path.exists():
+    raise SystemExit(0)
+
+lines = target_path.read_text(encoding="utf-8").splitlines()
+result: list[str] = []
+
+i = 0
+while i < len(lines):
+    if lines[i] == start_marker:
+        i += 1
+        while i < len(lines) and lines[i] != end_marker:
+            i += 1
+        if i < len(lines) and lines[i] == end_marker:
+            i += 1
+        continue
+    result.append(lines[i])
+    i += 1
+
+while result and result[-1] == "":
+    result.pop()
+
+if result:
+    target_path.write_text("\n".join(result) + "\n", encoding="utf-8")
+else:
+    target_path.unlink(missing_ok=True)
+PY
 }
 
 safe_remove_path() {

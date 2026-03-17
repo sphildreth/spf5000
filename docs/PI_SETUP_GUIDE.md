@@ -84,7 +84,7 @@ It does not try to reconfigure every Raspberry Pi OS desktop setting for you. Th
 
 ## 4. Prepare the Pi OS desktop session
 
-The runtime user should be a normal desktop account with a home directory. SPF5000 installs the Chromium kiosk autostart entry into that user's `~/.config/autostart/` directory, and Raspberry Pi OS Desktop autologin should target that same user.
+The runtime user should be a normal desktop account with a home directory. SPF5000 installs the Chromium kiosk desktop entry into that user's `~/.config/autostart/` directory and also adds a managed command block to `~/.config/labwc/autostart` for Raspberry Pi OS Desktop's default `labwc` Wayland session. Raspberry Pi OS Desktop autologin should target that same user.
 
 Enable desktop autologin:
 
@@ -112,7 +112,7 @@ You may also want the usual X11 anti-blanking settings in the runtime user's ses
 @xset s noblank
 ```
 
-Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry delegates to a launcher script under `~/.config/autostart/`. That launcher script uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle.
+Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry delegates to a launcher script under `~/.config/autostart/`, and the installer also registers that same launcher in `~/.config/labwc/autostart` for `labwc` sessions. The launcher uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle. It also logs each launch attempt to `/var/cache/spf5000/logs/spf5000-kiosk-launcher.log`.
 
 You can verify the active desktop backend with:
 

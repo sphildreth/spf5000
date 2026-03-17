@@ -26,12 +26,14 @@ HEALTH_HOST=""
 SERVICE_FILE=""
 AUTOSTART_FILE=""
 AUTOSTART_LAUNCHER_FILE=""
+AUTOSTART_LABWC_FILE=""
 DECENTDB_RELEASE_TAG="${DECENTDB_RELEASE_TAG:-latest}"
 DECENTDB_RELEASE_ASSET_NAME=""
 DECENTDB_RELEASE_ASSET_URL=""
 DECENTDB_SOURCE_ARCHIVE_URL=""
 DECENTDB_VENDOR_DIR=""
 DECENTDB_NATIVE_LIB=""
+KIOSK_LOG_FILE=""
 
 usage() {
   cat <<EOF
@@ -166,6 +168,7 @@ preflight() {
   SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
   AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
   AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+  AUTOSTART_LABWC_FILE="$(kiosk_labwc_autostart_path "${RUNTIME_USER}")"
 
   if [[ "${HOST}" == "0.0.0.0" ]]; then
     DISPLAY_HOST="127.0.0.1"
@@ -175,6 +178,7 @@ preflight() {
     HEALTH_HOST="${HOST}"
   fi
   DISPLAY_URL="http://${DISPLAY_HOST}:${PORT}/display"
+  KIOSK_LOG_FILE="${LOG_DIR}/${SERVICE_NAME}-kiosk-launcher.log"
 }
 
 print_install_summary() {
@@ -187,6 +191,7 @@ Install summary
   Config path  : ${CONFIG_PATH}
   Service file : ${SERVICE_FILE}
   Autostart    : ${AUTOSTART_FILE}
+  Labwc start  : ${AUTOSTART_LABWC_FILE}
   Backend bind : ${HOST}:${PORT}
   Display URL  : ${DISPLAY_URL}
 EOF
@@ -560,7 +565,8 @@ install_autostart_file() {
     "${AUTOSTART_LAUNCHER_FILE}" \
     "KIOSK_DELAY_SECONDS=${PI_DEFAULT_KIOSK_DELAY_SECONDS}" \
     "CHROMIUM_BINARY=${chromium_binary}" \
-    "DISPLAY_URL=${DISPLAY_URL}"
+    "DISPLAY_URL=${DISPLAY_URL}" \
+    "KIOSK_LOG_PATH=${KIOSK_LOG_FILE}"
   render_template \
     "${autostart_template}" \
     "${AUTOSTART_FILE}" \
@@ -569,6 +575,30 @@ install_autostart_file() {
   chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${autostart_dir}"
   chmod 0755 "${AUTOSTART_LAUNCHER_FILE}"
   chmod 0644 "${AUTOSTART_FILE}"
+}
+
+install_labwc_autostart_file() {
+  local labwc_dir=""
+  local labwc_block=""
+
+  labwc_dir="$(dirname "${AUTOSTART_LABWC_FILE}")"
+
+  log "Installing labwc autostart command for Wayland sessions."
+  mkdir -p "${labwc_dir}"
+  chown "${RUNTIME_USER}:${RUNTIME_GROUP}" "${labwc_dir}"
+
+  labwc_block="$(cat <<EOF
+/bin/sh "${AUTOSTART_LAUNCHER_FILE}" &
+EOF
+)"
+  upsert_managed_text_block \
+    "${AUTOSTART_LABWC_FILE}" \
+    "${PI_KIOSK_LABWC_BLOCK_START}" \
+    "${PI_KIOSK_LABWC_BLOCK_END}" \
+    "${labwc_block}"
+
+  chown "${RUNTIME_USER}:${RUNTIME_GROUP}" "${AUTOSTART_LABWC_FILE}"
+  chmod 0644 "${AUTOSTART_LABWC_FILE}"
 }
 
 enable_service() {
@@ -624,9 +654,11 @@ What was configured
   Config path   : ${CONFIG_PATH}
   Service name  : ${SERVICE_NAME}.service
   Kiosk entry   : ${AUTOSTART_FILE}
+  labwc entry   : ${AUTOSTART_LABWC_FILE}
   Display URL   : ${DISPLAY_URL}
   DecentDB tag  : ${DECENTDB_RELEASE_TAG}
   DecentDB lib  : ${DECENTDB_NATIVE_LIB}
+  Kiosk log     : ${KIOSK_LOG_FILE}
 
 Useful commands
   sudo systemctl status ${SERVICE_NAME}.service
@@ -660,6 +692,7 @@ main() {
   install_empty_cursor
   install_service_file
   install_autostart_file
+  install_labwc_autostart_file
   enable_service
   wait_for_health
   print_final_summary

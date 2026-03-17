@@ -15,6 +15,7 @@ PURGE=false
 SERVICE_FILE=""
 AUTOSTART_FILE=""
 AUTOSTART_LAUNCHER_FILE=""
+AUTOSTART_LABWC_FILE=""
 
 usage() {
   cat <<EOF
@@ -84,6 +85,7 @@ preflight() {
   if [[ -n "${RUNTIME_USER}" ]]; then
     AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
     AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+    AUTOSTART_LABWC_FILE="$(kiosk_labwc_autostart_path "${RUNTIME_USER}")"
   fi
 }
 
@@ -92,6 +94,7 @@ print_uninstall_summary() {
 Uninstall summary
   Service file : ${SERVICE_FILE}
   Autostart    : ${AUTOSTART_FILE:-<skipped; no user supplied or inferred>}
+  labwc start  : ${AUTOSTART_LABWC_FILE:-<skipped; no user supplied or inferred>}
   Config path  : ${CONFIG_PATH}
   Data dir     : ${DATA_DIR}
   Cache dir    : ${CACHE_DIR}
@@ -137,6 +140,17 @@ remove_autostart() {
     rm -f "${AUTOSTART_LAUNCHER_FILE}"
   else
     log "Autostart launcher ${AUTOSTART_LAUNCHER_FILE} is already absent."
+  fi
+
+  if [[ -f "${AUTOSTART_LABWC_FILE}" ]]; then
+    if grep -Fq "${PI_KIOSK_LABWC_BLOCK_START}" "${AUTOSTART_LABWC_FILE}" 2>/dev/null; then
+      log "Removing the managed labwc autostart block from ${AUTOSTART_LABWC_FILE}."
+      remove_managed_text_block "${AUTOSTART_LABWC_FILE}" "${PI_KIOSK_LABWC_BLOCK_START}" "${PI_KIOSK_LABWC_BLOCK_END}"
+    else
+      log "Managed labwc autostart block is already absent from ${AUTOSTART_LABWC_FILE}."
+    fi
+  else
+    log "labwc autostart file ${AUTOSTART_LABWC_FILE} is already absent."
   fi
 }
 

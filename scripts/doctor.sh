@@ -18,6 +18,8 @@ HOST="${PI_DEFAULT_HOST}"
 PORT="${PI_DEFAULT_PORT}"
 AUTOSTART_FILE=""
 AUTOSTART_LAUNCHER_FILE=""
+AUTOSTART_LABWC_FILE=""
+KIOSK_LOG_FILE=""
 
 PASS_COUNT=0
 WARN_COUNT=0
@@ -101,9 +103,11 @@ preflight() {
   if [[ -n "${RUNTIME_USER}" ]]; then
     AUTOSTART_FILE="$(kiosk_desktop_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
     AUTOSTART_LAUNCHER_FILE="$(kiosk_launcher_path "${RUNTIME_USER}" "${SERVICE_NAME}")"
+    AUTOSTART_LABWC_FILE="$(kiosk_labwc_autostart_path "${RUNTIME_USER}")"
   fi
 
   load_runtime_config
+  KIOSK_LOG_FILE="${LOG_DIR}/${SERVICE_NAME}-kiosk-launcher.log"
 }
 
 health_host() {
@@ -371,6 +375,9 @@ check_browser_runtime() {
   local session_id=""
   local session_type=""
   local session_desktop=""
+  local labwc_autostart_body=""
+  local expected_display_url=""
+  local chromium_process=""
 
   printf '\n== Browser kiosk runtime ==\n'
 
@@ -400,6 +407,10 @@ check_browser_runtime() {
         launcher_body="$(cat "${AUTOSTART_LAUNCHER_FILE}" 2>/dev/null || true)"
       elif [[ -n "${AUTOSTART_LAUNCHER_FILE}" ]]; then
         fail_check "Chromium autostart launcher is missing: ${AUTOSTART_LAUNCHER_FILE}."
+      fi
+
+      if [[ -n "${AUTOSTART_LABWC_FILE}" && -f "${AUTOSTART_LABWC_FILE}" ]]; then
+        labwc_autostart_body="$(cat "${AUTOSTART_LABWC_FILE}" 2>/dev/null || true)"
       fi
 
       if [[ "${autostart_exec_line}" == *"kiosk-launch.sh"* ]]; then
@@ -453,6 +464,18 @@ check_browser_runtime() {
         fi
       elif [[ "${session_type}" == "wayland" ]]; then
         pass_check "Desktop session for ${RUNTIME_USER} is Wayland${session_desktop:+ (${session_desktop})}."
+        if [[ "${session_desktop}" == *"labwc"* ]]; then
+          if [[ -f "${AUTOSTART_LABWC_FILE}" ]]; then
+            pass_check "labwc autostart file exists at ${AUTOSTART_LABWC_FILE}."
+            if [[ "${labwc_autostart_body}" == *"${AUTOSTART_LAUNCHER_FILE}"* ]]; then
+              pass_check "labwc autostart file includes the managed kiosk launcher."
+            else
+              warn_check "labwc autostart file ${AUTOSTART_LABWC_FILE} does not reference the managed kiosk launcher."
+            fi
+          else
+            warn_check "labwc Wayland session detected, but ${AUTOSTART_LABWC_FILE} is missing. The desktop entry under ~/.config/autostart may not launch Chromium on labwc."
+          fi
+        fi
         if [[ "${autostart_has_wayland_flag}" == "true" ]]; then
           pass_check "Chromium autostart entry requests native Wayland mode for Wayland sessions."
         else
@@ -480,6 +503,26 @@ check_browser_runtime() {
     fi
   fi
 
+  expected_display_url="http://$(health_host):${PORT}/display"
+  if command -v ps >/dev/null 2>&1 && [[ -n "${RUNTIME_USER}" ]]; then
+    chromium_process="$(ps -ww -u "${RUNTIME_USER}" -o pid=,args= 2>/dev/null | awk -v display_url="${expected_display_url}" 'index($0, "--kiosk") && index($0, display_url) && tolower($0) ~ /chromium/ { print; exit }' || true)"
+    if [[ -n "${chromium_process}" ]]; then
+      pass_check "Chromium kiosk process is running for ${RUNTIME_USER}: ${chromium_process}."
+    elif [[ -n "${session_id}" ]]; then
+      fail_check "Chromium kiosk process is not running for ${RUNTIME_USER} even though a desktop session is active."
+    else
+      warn_check "Chromium kiosk process could not be verified because no active desktop session was found for ${RUNTIME_USER}."
+    fi
+  fi
+
+  if [[ -n "${KIOSK_LOG_FILE}" ]]; then
+    if [[ -f "${KIOSK_LOG_FILE}" ]]; then
+      pass_check "Kiosk launcher log exists at ${KIOSK_LOG_FILE}."
+    elif [[ -n "${session_id}" ]]; then
+      warn_check "Kiosk launcher log is missing at ${KIOSK_LOG_FILE}; kiosk launch failures may be harder to diagnose."
+    fi
+  fi
+
   if command -v vcgencmd >/dev/null 2>&1; then
     throttled="$(vcgencmd get_throttled 2>/dev/null || true)"
     if [[ -n "${throttled}" && "${throttled}" != "throttled=0x0" ]]; then
@@ -489,7 +532,7 @@ check_browser_runtime() {
     fi
   fi
 
-  warn_check "Desktop autologin and blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled. The managed kiosk launcher now prefers native Wayland Chromium on Wayland sessions and unclutter on X11, while Chromium keyring avoidance via --password-store=basic applies on both backends."
+  warn_check "Desktop autologin and blanking settings are not fully verified automatically; keep Raspberry Pi OS Desktop autologin enabled and screen blanking disabled. On Wayland/labwc, confirm the managed ~/.config/labwc/autostart entry still launches Chromium after reboots."
 
   lan_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   if [[ "${HOST}" == "127.0.0.1" || "${HOST}" == "localhost" ]]; then

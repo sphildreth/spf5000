@@ -49,7 +49,7 @@ Common options:
 
 The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to pin a specific DecentDB release.
 
-The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk autostart entry to that user's `~/.config/autostart/` path, and Desktop Autologin should be configured for the same account.
+The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk desktop entry to that user's `~/.config/autostart/` path and also adds a managed command block to `~/.config/labwc/autostart` so Raspberry Pi OS Desktop's default `labwc` Wayland session can launch the same kiosk script after login. Desktop Autologin should be configured for the same account.
 
 The managed Chromium autostart entry now delegates to a companion launcher script in the same autostart directory. That launcher script sets `--password-store=basic` so Chromium does not prompt for a GNOME keyring password in kiosk mode. On X11 sessions it also launches `unclutter-xfixes` through `/usr/bin/unclutter --timeout 0.1 --jitter 8 --hide-on-touch --start-hidden --fork`. On Raspberry Pi OS Desktop's default `labwc` Wayland session it instead requests native Chromium Wayland mode with `--ozone-platform-hint=auto`, so the display route's own `cursor: none` styling is not routed through Xwayland.
 
@@ -63,6 +63,7 @@ By default the installer manages:
 /etc/systemd/system/spf5000.service
 ~/.config/autostart/spf5000-kiosk.desktop
 ~/.config/autostart/spf5000-kiosk-launch.sh
+~/.config/labwc/autostart
 /var/lib/spf5000/spf5000.toml
 /var/lib/spf5000/
 /var/cache/spf5000/
@@ -127,10 +128,12 @@ sudo ./scripts/doctor.sh --user pi
 - local health endpoint reachability
 - frontend shell reachability on `/display`
 - bootstrap state from `/api/auth/session`
-- Chromium availability and kiosk autostart wiring for both X11 and Wayland sessions
+- Chromium availability, XDG/labwc kiosk autostart wiring, launcher logging, and a live Chromium process check for the active desktop session
 - graphical-target and optional undervoltage hints
 
 Warnings indicate manual Pi OS tuning or non-blocking issues. Failing checks mean the appliance setup is not ready.
+
+If the backend is healthy but the Pi-connected monitor stays black, inspect the managed launcher log at `/var/cache/spf5000/logs/spf5000-kiosk-launcher.log` before rebooting again.
 
 ## Using `uninstall-pi.sh`
 
