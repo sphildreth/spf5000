@@ -15,14 +15,16 @@ These scripts are intentionally Pi-specific and opinionated. They automate the s
 1. validates the target environment
 2. installs required apt packages unless `--skip-apt` is used
 3. creates the runtime directories
-4. creates or refreshes `backend/.venv`
-5. installs backend dependencies
-6. downloads the matching DecentDB release bundle, installs the Python binding, and stages the native library
-7. builds `frontend/dist`
-8. creates a runtime `spf5000.toml` if needed
-9. installs the `systemd` unit
-10. installs the Chromium kiosk autostart entry, including automatic cursor hiding and a password-store setting that avoids desktop keyring prompts
-11. enables and starts the backend service
+4. stops the managed backend service if it is already running
+5. creates a timestamped pre-install database backup tarball when an existing DecentDB file is present
+6. creates or refreshes `backend/.venv`
+7. installs backend dependencies
+8. downloads the matching DecentDB release bundle, installs the Python binding, and stages the native library
+9. builds `frontend/dist`
+10. creates a runtime `spf5000.toml` if needed
+11. installs the `systemd` unit
+12. installs the Chromium kiosk autostart entry, including automatic cursor hiding and a password-store setting that avoids desktop keyring prompts
+13. enables and starts the backend service
 
 When installing Chromium, the script automatically chooses the distro-supported package name (`chromium` or `chromium-browser`) based on the apt candidate available on the target system.
 
@@ -80,6 +82,8 @@ vendor/decentdb/
 
 Use `deploy/systemd/spf5000.service.template`, `deploy/autostart/spf5000-kiosk.desktop.template`, and `deploy/config/spf5000.toml.example` as the source-of-truth templates.
 
+When the installer finds an existing database, it also writes a timestamped backup archive under `installer-backups/` next to the active database file. The archive contains `spf5000.ddb` and includes `-wal` / `-shm` sidecars too when they exist so the preserved database state is more useful for recovery work.
+
 ## DecentDB requirement
 
 The backend needs both parts of the upstream DecentDB Python integration:
@@ -101,6 +105,7 @@ The supported prebuilt path is intended for 64-bit Raspberry Pi OS on ARM64. If 
 `install-pi.sh` is designed to be mostly idempotent:
 
 - apt installs can be repeated
+- an existing database is preserved into a timestamped `installer-backups/spf5000-ddb-install-backup-<timestamp>.tar.gz` archive before install changes are applied
 - the virtualenv can be refreshed
 - the DecentDB binding and native library are refreshed from the selected release each run
 - the service and autostart files are rewritten each run

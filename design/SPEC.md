@@ -11,6 +11,7 @@ SPF5000 V1 consists of:
 - a cached weather and alert subsystem with a National Weather Service provider
 - DecentDB for metadata, settings, display profiles, and import job history
 - DecentDB-backed bootstrap state plus a single local admin user
+- admin-protected ZIP backup/restore and collection media export workflows
 - filesystem-backed originals and generated image variants
 - provider-backed offline sync metadata for Google Photos auth/device/source state
 - configurable background presentation modes for display, with cached color metadata plus render-time image-based treatments
@@ -24,13 +25,14 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 
 - bootstrap runtime directories and DecentDB schema at startup
 - load startup/runtime settings from `spf5000.toml`
-- expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, uploads/imports, and display state
+- expose REST endpoints for setup, auth/session, health, status, settings, sources, collections, assets, uploads/imports, backup/export operations, and display state
 - expose an authenticated sleep-schedule time-reference API so admin clients can compare server UTC, Pi-local timezone, and configured display timezone
 - expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
 - expose weather settings, weather status, weather alert, and display-facing weather APIs
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
 - manage local import, admin uploads, duplicate detection, original-file storage, and derivative generation
+- manage database snapshot/export, validated database restore, collection media export, and the runtime coordination those workflows require
 - manage Google Photos Ambient API device registration, media-source state, and background sync into the local asset pipeline
 - manage scheduled weather and alert refresh into local cached state
 - protect admin APIs with signed session cookies while keeping display APIs public
@@ -41,6 +43,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - provide a browser-based admin shell for configuration and diagnostics
 - provide `/setup` and `/login` flows before the protected `/admin` shell
 - provide a dedicated fullscreen `/display` route with no admin chrome
+- provide a dedicated Backups page for database backup/restore and collection ZIP export
 - consume backend API endpoints through typed helpers under `frontend/src/api/`
 - keep display playback independent from the admin shell layout
 - render configurable background presentation behind slideshow images using cached playlist metadata plus the display variant when needed
@@ -51,6 +54,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - DecentDB stores structured state and metadata
 - DecentDB also stores bootstrap state and the single local admin record
 - the filesystem stores original image binaries, generated display derivatives, generated thumbnails, staging data, and fallback assets
+- database backup/restore operates on the DecentDB file, while collection export reads original media from the filesystem
 
 ## Runtime model on Raspberry Pi
 
@@ -116,6 +120,7 @@ backend/data/
 - display playback uses generated display derivatives rather than full originals
 - admin pages use generated thumbnail derivatives
 - deterministic filenames/paths are derived from asset metadata and checksums
+- admin backup/restore workflows may create temporary files under `staging/backup-restore/` and `staging/exports/`
 
 ## Data model
 
@@ -304,6 +309,13 @@ Providers implement the protocol in `backend/app/providers/base.py`. SPF5000 shi
 
 Import failures do not stop the display route from continuing to run with the existing library.
 
+## Backup and export workflows
+
+1. `GET /api/backup/database/export` checkpoints and snapshots the active DecentDB file into a ZIP that includes `spf5000.ddb` plus `backup-manifest.json`.
+2. `POST /api/backup/database/import` validates the uploaded ZIP structure, verifies that the bundled database looks like an SPF5000 database, pauses background coordinators, swaps the active `.ddb`, re-runs runtime initialization, resets connection state, and clears the current admin session.
+3. `GET /api/backup/collections/{collection_id}/export` packages exportable original media files plus `collection-export-manifest.json`, skips missing or out-of-bounds originals, and fails only when no exportable originals remain.
+4. Database restore does not restore original media files or generated variants; collection export is the media-moving path in V1.
+
 ## Google Photos provider and sync flow
 
 1. The admin starts Google Photos connection from the Sources page.
@@ -401,6 +413,7 @@ The React admin shell currently includes:
 - `Settings` for device and derivative defaults
 - `Library` for batch uploading, filtering, and browsing imported assets and variants
 - `Collections` for collection management
+- `Backups` for database backup/restore plus collection media export
 - `Sources` for local source configuration plus scan/import actions
 - `Display Settings` for slideshow behavior, the sleep schedule, display timezone selection, and Pi-local/configured display-time clarity
 - `Weather` for weather widget settings, provider/cache status, and alert visibility
@@ -458,6 +471,12 @@ Admin routing behavior:
 - `POST /api/assets/upload` (authenticated admin)
 - `GET /api/assets/{asset_id}/variants/{kind}`
 
+### Backup and export
+
+- `GET /api/backup/database/export` (authenticated admin)
+- `POST /api/backup/database/import` (authenticated admin)
+- `GET /api/backup/collections/{collection_id}/export` (authenticated admin)
+
 ### Sources and import
 
 - `GET /api/sources` (authenticated admin)
@@ -511,4 +530,5 @@ The current implementation has been validated with:
 - local-files and Google Photos providers are implemented
 - weather currently supports a single configured location and the National Weather Service provider
 - admin batch uploads into local collections are supported, while destructive library management remains out of scope
+- database backup/restore remains DB-only; moving original media still requires collection export or another filesystem-aware migration step
 - v1 supports only a single local admin account with cookie-backed sessions

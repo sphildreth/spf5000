@@ -8,6 +8,7 @@ const navItems = [
   { to: '/admin/settings', label: 'Settings' },
   { to: '/admin/library', label: 'Library' },
   { to: '/admin/collections', label: 'Collections' },
+  { to: '/admin/backups', label: 'Backups' },
   { to: '/admin/sources', label: 'Sources' },
   { to: '/admin/display-settings', label: 'Display' },
   { to: '/admin/weather', label: 'Weather' },

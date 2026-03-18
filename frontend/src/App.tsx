@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { useSession } from './context/SessionContext'
 import { AdminLayout } from './layouts/AdminLayout'
+import { BackupsPage } from './pages/BackupsPage'
 import { CollectionsPage } from './pages/CollectionsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DisplayPage } from './pages/DisplayPage'
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="collections" element={<CollectionsPage />} />
+        <Route path="backups" element={<BackupsPage />} />
         <Route path="sources" element={<SourcesPage />} />
         <Route path="display-settings" element={<DisplaySettingsPage />} />
         <Route path="weather" element={<WeatherPage />} />

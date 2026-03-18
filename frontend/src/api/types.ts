@@ -243,6 +243,13 @@ export interface CollectionUpsertRequest {
   is_active: boolean
 }
 
+export interface DatabaseBackupImportResponse {
+  restored: boolean
+  reauthenticate_required: boolean
+  media_restored: boolean
+  message: string
+}
+
 export interface SourceSummary {
   id: string
   name: string
@@ -641,6 +648,17 @@ export function normalizeAuthSessionResponse(value: unknown): AuthSessionRespons
     bootstrapped: asBoolean(record?.bootstrapped, false),
     authenticated: asBoolean(record?.authenticated, false),
     user: username ? { username } : null,
+  }
+}
+
+export function normalizeDatabaseBackupImportResponse(value: unknown): DatabaseBackupImportResponse {
+  const record = asRecord(value)
+
+  return {
+    restored: asBoolean(record?.restored, true),
+    reauthenticate_required: asBoolean(record?.reauthenticate_required ?? record?.requires_relogin, true),
+    media_restored: asBoolean(record?.media_restored, false),
+    message: asString(record?.message, 'Database backup restored. Sign in again to continue.'),
   }
 }
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_admin
-from app.api.routes import assets, auth, collections, display, google_photos, health, imports, settings, sources, themes, weather
+from app.api.routes import assets, auth, backup, collections, display, google_photos, health, imports, settings, sources, themes, weather
 
 api_router = APIRouter()
 
@@ -30,6 +30,9 @@ api_router.include_router(
 )
 api_router.include_router(
     weather.router, prefix="/weather", tags=["weather"], dependencies=_admin_dep
+)
+api_router.include_router(
+    backup.router, prefix="/backup", tags=["backup"], dependencies=_admin_dep
 )
 
 # Assets: list + detail are protected; variant fetch is public (served by display client).

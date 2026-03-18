@@ -55,6 +55,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🚀 **Smooth Transitions** — Say goodbye to jarring black flashes! The display route uses a dual-layer renderer that preloads the next image before animating.
 - 🎨 **Expanded Background Presentation** — Portrait and mixed-aspect slides support `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto`; cached display-variant metadata drives color-based modes while image-based treatments can reuse the display variant at render time.
 - 📱 **LAN-Managed Admin** — Setup, login, settings, import, and diagnostics are seamlessly available from a browser on your local network.
+- 🧳 **Backup & Export Ready** — Download ZIP backups of the DecentDB state, restore validated database backups, and export original collection media without dropping to SSH.
 - ☁️ **Google Photos Integration** — First-class Google Photos provider using the Ambient API for offline-cached local playback.
 - 🌦️ **Weather & Alerts** — Built-in National Weather Service integration for real-time widget overlays and fullscreen alerts.
 - 🛠️ **Modern Stack** — Built with a snappy **FastAPI backend** and a polished **React 19 + TypeScript + Vite frontend**.
@@ -342,6 +343,7 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 - settings, display timezone, and sleep schedule
 - weather settings, cached conditions, and alert status
 - collections and assets
+- backup, restore, and collection export workflows
 - sources and local import
 - display config, public playlist, and public weather/alert overlays
 
@@ -357,7 +359,7 @@ http://127.0.0.1:8000/api/docs
 backend/    FastAPI app, services, repositories, providers, tests
 frontend/   React + TypeScript + Vite admin and display UI
 design/     PRD, SPEC, ADR index, accepted architecture decisions
-docs/       Raspberry Pi setup, Google Photos, and installer guides
+docs/       Raspberry Pi setup, backup/export, Google Photos, and installer guides
 deploy/     systemd, autostart, and config templates
 graphics/   project artwork and logos
 scripts/    development and Pi appliance helper scripts
@@ -373,6 +375,7 @@ Design and operational docs live in-repo:
 - [`design/adr/`](design/adr/) — accepted and proposed ADRs
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes following Keep a Changelog
 - [`docs/PI_SETUP_GUIDE.md`](docs/PI_SETUP_GUIDE.md) — end-to-end Pi setup
+- [`docs/BACKUP_AND_EXPORT_GUIDE.md`](docs/BACKUP_AND_EXPORT_GUIDE.md) — database backup/restore and collection media export workflows
 - [`docs/GOOGLE_PHOTOS_GUIDE.md`](docs/GOOGLE_PHOTOS_GUIDE.md) — Google Photos credential setup, connection flow, and sync behavior
 - [`docs/INSTALLER.md`](docs/INSTALLER.md) — installer, doctor, and uninstall details
 
@@ -383,6 +386,7 @@ SPF5000 `1.0.0` is intentionally focused:
 - Google Photos selection happens through Google's Ambient settings UI instead of an in-app full-library browser
 - weather currently supports one configured location and the U.S. National Weather Service provider
 - browser uploads support batch image ingestion into local collections
+- database backup and restore cover DecentDB state only; original media still requires collection export or other filesystem migration
 - destructive library management remains intentionally limited
 - authentication is single-admin and local-account only
 - the product is image-focused; video-first playback is not a goal for this version

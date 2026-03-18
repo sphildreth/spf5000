@@ -67,6 +67,7 @@ Do not use Raspberry Pi OS Lite unless you are intentionally replacing the brows
 `scripts/install-pi.sh` automates:
 
 - apt package installation for the Pi runtime
+- a timestamped pre-install DecentDB backup archive when an existing database file is present
 - backend virtualenv creation and dependency installation
 - frontend production build creation
 - runtime config generation
@@ -267,6 +268,8 @@ The repository itself remains in the chosen app root, and the backend still uses
 To update a Pi that is already running SPF5000, update the repository checkout and then re-run the installer.
 
 `git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, reinstalls the DecentDB Python binding from the matching source archive, refreshes the staged DecentDB native library from the selected release, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
+
+If the installer finds an existing SPF5000 database, it first writes a timestamped backup archive under `installer-backups/` next to the active database file. That archive includes `spf5000.ddb` and also captures `-wal` / `-shm` sidecars when they exist.
 
 Typical update flow:
 

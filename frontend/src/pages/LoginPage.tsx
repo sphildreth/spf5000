@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { login } from '../api/auth'
 import { ApiError } from '../api/http'
 import { useSession } from '../context/SessionContext'
+import { consumeBackupRestoreFlash } from '../utils/sessionFlash'
 
 export function LoginPage() {
   const navigate = useNavigate()
   const { state, refresh } = useSession()
 
+  const [restoreFlash] = useState(() => consumeBackupRestoreFlash())
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +49,12 @@ export function LoginPage() {
         <p className="eyebrow">SPF5000</p>
         <h1 className="auth-title">Sign in</h1>
         <p className="auth-desc">Use the local admin account to manage the frame from your LAN.</p>
+
+        {restoreFlash ? (
+          <div className="notice notice--success auth-notice">
+            <p>{restoreFlash}</p>
+          </div>
+        ) : null}
 
         {loginUnavailableMessage ? (
           <div className="notice notice--error auth-notice">

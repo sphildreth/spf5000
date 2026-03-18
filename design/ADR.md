@@ -44,6 +44,7 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0016-use-cached-image-derived-background-fill-for-display-presentation.md` - initial cached color-based background fill modes for `/display`
 - `0017-refine-display-background-fill-modes-and-adaptive-policy.md` - expanded display background modes, cached-vs-render-time treatment split, and adaptive selection policy for `/display`
 - `0019-use-token-based-theme-system-for-admin-and-display.md` - token-based theme system spanning admin surfaces, `/display`, and validated repository-backed theme definitions
+- `0020-use-admin-protected-zip-backup-restore-and-media-export.md` - admin-protected ZIP workflows for DecentDB backup/restore and collection media export, explicitly excluding full-device clone semantics
 
 ## V1 implementation status
 

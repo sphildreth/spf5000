@@ -34,6 +34,7 @@ DECENTDB_SOURCE_ARCHIVE_URL=""
 DECENTDB_VENDOR_DIR=""
 DECENTDB_NATIVE_LIB=""
 KIOSK_LOG_FILE=""
+PREINSTALL_DATABASE_BACKUP=""
 
 usage() {
   cat <<EOF
@@ -253,6 +254,89 @@ ensure_directories() {
 
   log "Setting ownership for ${RUNTIME_USER}:${RUNTIME_GROUP}."
   chown -R "${RUNTIME_USER}:${RUNTIME_GROUP}" "${APP_ROOT}" "${DATA_DIR}" "${CACHE_DIR}"
+}
+
+resolve_configured_database_path() {
+  local config_path="$1"
+
+  python3 - "${config_path}" <<'PY'
+from pathlib import Path
+import sys
+import tomllib
+
+config_path = Path(sys.argv[1])
+
+with config_path.open("rb") as handle:
+    data = tomllib.load(handle)
+
+database_path = data.get("paths", {}).get("database_path")
+if not database_path:
+    raise SystemExit(1)
+
+path = Path(database_path).expanduser()
+if not path.is_absolute():
+    path = (config_path.parent / path).resolve()
+
+print(path)
+PY
+}
+
+resolve_database_backup_source_path() {
+  local configured_database_path=""
+
+  if [[ -f "${CONFIG_PATH}" && "${FORCE}" != true ]]; then
+    if configured_database_path="$(resolve_configured_database_path "${CONFIG_PATH}" 2>/dev/null)"; then
+      printf '%s\n' "${configured_database_path}"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "${DATABASE_PATH}"
+}
+
+stop_service_if_running() {
+  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+    log "Stopping ${SERVICE_NAME}.service before refreshing install artifacts."
+    systemctl stop "${SERVICE_NAME}.service"
+  fi
+}
+
+backup_existing_database_if_present() {
+  local database_backup_source=""
+  local database_backup_dir=""
+  local timestamp=""
+  local archive_path=""
+  local source_dir=""
+  local source_name=""
+  local archive_members=()
+
+  database_backup_source="$(resolve_database_backup_source_path)"
+  if [[ ! -f "${database_backup_source}" ]]; then
+    log "No existing database file found at ${database_backup_source}; skipping pre-install database backup."
+    return
+  fi
+
+  source_dir="$(dirname "${database_backup_source}")"
+  source_name="$(basename "${database_backup_source}")"
+  database_backup_dir="${source_dir}/installer-backups"
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  archive_path="${database_backup_dir}/spf5000-ddb-install-backup-${timestamp}.tar.gz"
+  archive_members=("${source_name}")
+
+  if [[ -f "${database_backup_source}-wal" ]]; then
+    archive_members+=("${source_name}-wal")
+  fi
+  if [[ -f "${database_backup_source}-shm" ]]; then
+    archive_members+=("${source_name}-shm")
+  fi
+
+  mkdir -p "${database_backup_dir}"
+  log "Creating pre-install database backup at ${archive_path}."
+  tar -czf "${archive_path}" -C "${source_dir}" "${archive_members[@]}"
+  chown "${RUNTIME_USER}:${RUNTIME_GROUP}" "${database_backup_dir}" "${archive_path}"
+  chmod 0750 "${database_backup_dir}"
+  chmod 0640 "${archive_path}"
+  PREINSTALL_DATABASE_BACKUP="${archive_path}"
 }
 
 ensure_backend_venv() {
@@ -656,6 +740,7 @@ What was configured
   Kiosk entry   : ${AUTOSTART_FILE}
   labwc entry   : ${AUTOSTART_LABWC_FILE}
   Display URL   : ${DISPLAY_URL}
+  DB backup     : ${PREINSTALL_DATABASE_BACKUP:-not created}
   DecentDB tag  : ${DECENTDB_RELEASE_TAG}
   DecentDB lib  : ${DECENTDB_NATIVE_LIB}
   Kiosk log     : ${KIOSK_LOG_FILE}
@@ -685,6 +770,8 @@ main() {
   install_packages
   ensure_required_binaries
   ensure_directories
+  stop_service_if_running
+  backup_existing_database_if_present
   ensure_backend_venv
   ensure_decentdb_runtime
   build_frontend

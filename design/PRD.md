@@ -69,6 +69,7 @@ Technical household member who installs, configures, and maintains the device.
 - As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
 - As an administrator, I want the admin UI to require a local sign-in without affecting the public slideshow display.
 - As an administrator, I want to configure weather, alert escalation, and refresh behavior from the same LAN admin UI.
+- As an administrator, I want to back up the database, restore from a validated backup ZIP, and export collection media from the admin UI so recovery or migration does not require SSH.
 
 ### Sources
 - As a household member, I want to select an album source and have pictures appear automatically on the frame.
@@ -103,6 +104,7 @@ Technical household member who installs, configures, and maintains the device.
 - Weather and alerts page for configuration and visibility
 - Sources page
 - Albums page
+- Backup and export page for database backup/restore and collection media export
 - Local media management page
 - System status page
 
@@ -111,6 +113,12 @@ Technical household member who installs, configures, and maintains the device.
 - Delete images from device
 - Organize images by albums or folders
 - Maintain metadata and source origin in database
+- Export original images from a collection as a ZIP
+
+### Backup and Recovery
+- Download a ZIP containing the current SPF5000 DecentDB database.
+- Restore SPF5000 from a validated database backup ZIP through the admin UI.
+- Clearly distinguish DB-only backup/restore from media export so operators do not assume a database restore recreates on-disk originals.
 
 ### Source Syncing
 - Abstract provider model for source integrations
@@ -134,6 +142,7 @@ Technical household member who installs, configures, and maintains the device.
 - Store weather settings plus cached weather and alert state in DecentDB.
 - Store image binaries and resized variants on local disk.
 - Store the selected display background mode in DecentDB and cached per-asset color metadata alongside asset metadata, while allowing image-based presentation modes to reuse display variants at render time.
+- Keep database backup/restore scoped to DecentDB state while treating original-media export as a separate filesystem-backed workflow.
 
 ## Quality Attributes
 
@@ -174,3 +183,4 @@ Technical household member who installs, configures, and maintains the device.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
 - Transitions feel smooth and continuous, with no obvious black flash between images.
 - Admin can choose a display background mode, including `adaptive_auto`, and portrait or mixed-aspect images render with the expected treatment without breaking slideshow smoothness.
+- Admin can download a database backup, restore it safely, and export collection media from the LAN admin UI without shell access.
