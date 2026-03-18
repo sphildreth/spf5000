@@ -57,36 +57,65 @@ export function DisplayPage() {
   const fullscreenAlertTimerRef = useRef<number | null>(null)
   const nextFullscreenRepeatAtRef = useRef<number | null>(null)
   const activeRepeatAlertIdRef = useRef<string | null>(null)
+  const slideshowCallbacks = useMemo(() => ({ onBootMessage: setBootMessage }), [])
 
-  const slideshow = useSlideshowEngine({
-    onBootMessage: setBootMessage,
-  })
-  const weatherOverlay = useWeatherOverlay()
+  const {
+    playlist,
+    playlistRef,
+    layers,
+    layersRef,
+    loading,
+    error,
+    setPlaylist,
+    setLoading,
+    setError,
+    configRef,
+    activeLayerRef,
+    currentIndexRef,
+    startedRef,
+    transitionRef,
+    clearTimers,
+    scheduleAdvance,
+    bootPlaylist,
+  } = useSlideshowEngine(slideshowCallbacks)
+  const {
+    weather,
+    alerts,
+    setWeather,
+    setAlerts,
+    syncDisplayOverlays,
+    EMPTY_DISPLAY_WEATHER,
+    EMPTY_DISPLAY_ALERTS,
+  } = useWeatherOverlay()
 
   const onWakeRef = useRef<(() => void) | null>(null)
   const onSleepRef = useRef<(() => void) | null>(null)
 
   onWakeRef.current = () => {
-    if (slideshow.startedRef.current) {
-      slideshow.scheduleAdvance(slideshow.configRef.current.slideshow_interval_seconds * 1000)
-    } else if (slideshow.playlistRef.current.items.length > 0) {
-      void slideshow.bootPlaylist(slideshow.playlistRef.current, slideshow.configRef.current)
+    if (startedRef.current) {
+      scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
+    } else if (playlistRef.current.items.length > 0) {
+      void bootPlaylist(playlistRef.current, configRef.current)
     }
   }
 
   onSleepRef.current = () => {
-    slideshow.clearTimers()
-    slideshow.transitionRef.current = false
+    clearTimers()
+    transitionRef.current = false
   }
 
-  const { isSleeping, updateSleepState } = useSleepManager({
-    onWake: () => { onWakeRef.current?.() },
-    onSleep: () => { onSleepRef.current?.() },
-  })
+  const handleWake = useCallback(() => {
+    onWakeRef.current?.()
+  }, [])
 
-  const configRef = slideshow.configRef
-  const playlistRef = slideshow.playlistRef
-  const layersRef = slideshow.layersRef
+  const handleSleep = useCallback(() => {
+    onSleepRef.current?.()
+  }, [])
+
+  const { isSleeping, updateSleepState } = useSleepManager({
+    onWake: handleWake,
+    onSleep: handleSleep,
+  })
 
   const demoFrames = useMemo<BootScreenDemoFrame[]>(
     () => [
@@ -158,7 +187,7 @@ export function DisplayPage() {
     async (initial = false) => {
       try {
         if (initial) {
-          slideshow.setLoading(true)
+          setLoading(true)
           setBootMessage({
             kicker: 'SPF5000',
             title: 'Preparing display',
@@ -180,16 +209,16 @@ export function DisplayPage() {
         }
 
         const nextPlaylist = playlistResult.value
-        const nextWeather = weatherResult.status === 'fulfilled' ? weatherResult.value : weatherOverlay.EMPTY_DISPLAY_WEATHER
-        const nextAlerts = alertsResult.status === 'fulfilled' ? alertsResult.value : weatherOverlay.EMPTY_DISPLAY_ALERTS
+        const nextWeather = weatherResult.status === 'fulfilled' ? weatherResult.value : EMPTY_DISPLAY_WEATHER
+        const nextAlerts = alertsResult.status === 'fulfilled' ? alertsResult.value : EMPTY_DISPLAY_ALERTS
         const nextConfig = nextPlaylist.profile
 
         configRef.current = nextConfig
         playlistRef.current = nextPlaylist
-        slideshow.setPlaylist(nextPlaylist)
+        setPlaylist(nextPlaylist)
         setConfig(nextConfig)
-        weatherOverlay.setWeather(nextWeather)
-        weatherOverlay.setAlerts(nextAlerts)
+        setWeather(nextWeather)
+        setAlerts(nextAlerts)
         setBootMessage({
           kicker: 'SPF5000',
           title: 'Checking schedule',
@@ -200,23 +229,23 @@ export function DisplayPage() {
         })
         updateSleepState(nextPlaylist.sleep_schedule)
 
-        const currentItemId = layersRef.current[slideshow.activeLayerRef.current]?.item?.asset_id
+        const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id
         const currentIndex = currentItemId ? nextPlaylist.items.findIndex((item) => item.asset_id === currentItemId) : -1
 
-        if (!slideshow.startedRef.current || currentIndex === -1) {
-          await slideshow.bootPlaylist(nextPlaylist, nextConfig)
+        if (!startedRef.current || currentIndex === -1) {
+          await bootPlaylist(nextPlaylist, nextConfig)
           return
         }
 
-        slideshow.currentIndexRef.current = currentIndex
-        slideshow.setError(null)
-        slideshow.setLoading(false)
-        slideshow.scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
+        currentIndexRef.current = currentIndex
+        setError(null)
+        setLoading(false)
+        scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
       } catch (caught) {
-        slideshow.setLoading(false)
-        if (!slideshow.startedRef.current) {
+        setLoading(false)
+        if (!startedRef.current) {
           const detail = caught instanceof Error ? caught.message : 'Unable to load display data.'
-          slideshow.setError(detail)
+          setError(detail)
           setBootMessage({
             kicker: 'SPF5000',
             title: 'Display unavailable',
@@ -227,7 +256,24 @@ export function DisplayPage() {
         }
       }
     },
-    [slideshow, weatherOverlay, updateSleepState, playlistRef, layersRef, configRef],
+    [
+      EMPTY_DISPLAY_ALERTS,
+      EMPTY_DISPLAY_WEATHER,
+      activeLayerRef,
+      bootPlaylist,
+      configRef,
+      currentIndexRef,
+      layersRef,
+      playlistRef,
+      scheduleAdvance,
+      setAlerts,
+      setError,
+      setLoading,
+      setPlaylist,
+      setWeather,
+      startedRef,
+      updateSleepState,
+    ],
   )
 
   useEffect(() => {
@@ -235,15 +281,15 @@ export function DisplayPage() {
     document.documentElement.style.cursor = 'none'
     document.body.style.cursor = 'none'
     if (showBootDemo) {
-      slideshow.clearTimers()
+      clearTimers()
       clearAlertTimers()
-      slideshow.setLoading(false)
-      slideshow.setError(null)
+      setLoading(false)
+      setError(null)
       return () => {
         document.documentElement.style.removeProperty('cursor')
         document.body.style.removeProperty('cursor')
         document.body.classList.remove('display-body')
-        slideshow.clearTimers()
+        clearTimers()
         clearAlertTimers()
       }
     }
@@ -254,10 +300,10 @@ export function DisplayPage() {
       document.documentElement.style.removeProperty('cursor')
       document.body.style.removeProperty('cursor')
       document.body.classList.remove('display-body')
-      slideshow.clearTimers()
+      clearTimers()
       clearAlertTimers()
     }
-  }, [clearAlertTimers, showBootDemo, syncDisplayData, slideshow])
+  }, [clearAlertTimers, clearTimers, setError, setLoading, showBootDemo, syncDisplayData])
 
   useEffect(() => {
     if (showBootDemo) return
@@ -288,13 +334,13 @@ export function DisplayPage() {
     if (showBootDemo) return
 
     const timer = window.setInterval(() => {
-      void weatherOverlay.syncDisplayOverlays()
+      void syncDisplayOverlays()
     }, OVERLAY_REFRESH_SECONDS * 1000)
 
     return () => {
       window.clearInterval(timer)
     }
-  }, [showBootDemo, weatherOverlay])
+  }, [showBootDemo, syncDisplayOverlays])
 
   useEffect(() => {
     if (showBootDemo) return
@@ -305,8 +351,8 @@ export function DisplayPage() {
       return
     }
 
-    const dominant = weatherOverlay.alerts.dominant_alert
-    const mode = weatherOverlay.alerts.presentation.mode
+    const dominant = alerts.dominant_alert
+    const mode = alerts.presentation.mode
 
     if (!dominant || (mode !== 'fullscreen' && mode !== 'fullscreen_repeat')) {
       activeRepeatAlertIdRef.current = null
@@ -338,38 +384,38 @@ export function DisplayPage() {
       return
     }
 
-    nextFullscreenRepeatAtRef.current = now + weatherOverlay.alerts.presentation.repeat_interval_minutes * 60 * 1000
+    nextFullscreenRepeatAtRef.current = now + alerts.presentation.repeat_interval_minutes * 60 * 1000
     setIsFullscreenAlertActive(true)
     clearAlertTimers()
     fullscreenAlertTimerRef.current = window.setTimeout(() => {
       setIsFullscreenAlertActive(false)
-    }, Math.max(weatherOverlay.alerts.presentation.repeat_display_seconds, 5) * 1000)
-  }, [weatherOverlay.alerts, clearAlertTimers, isSleeping, showBootDemo, isFullscreenAlertActive])
+    }, Math.max(alerts.presentation.repeat_display_seconds, 5) * 1000)
+  }, [alerts, clearAlertTimers, isSleeping, showBootDemo, isFullscreenAlertActive])
 
-  const showIdle = slideshow.playlist.items.length === 0 || !slideshow.layers.some((layer) => layer.item)
-  const bootOverlayVisible = Boolean((showIdle || demoMessage || (slideshow.error && !slideshow.layers.some((layer) => layer.item))) && !isSleeping)
+  const showIdle = playlist.items.length === 0 || !layers.some((layer) => layer.item)
+  const bootOverlayVisible = Boolean((showIdle || demoMessage || (error && !layers.some((layer) => layer.item))) && !isSleeping)
   const showNonFullscreenAlerts =
     !isSleeping &&
     !isFullscreenAlertActive &&
     !bootOverlayVisible &&
-    (weatherOverlay.alerts.presentation.mode === 'badge' ||
-      weatherOverlay.alerts.presentation.mode === 'banner' ||
-      (weatherOverlay.alerts.presentation.mode === 'fullscreen_repeat' && weatherOverlay.alerts.presentation.fallback_mode === 'banner'))
+    (alerts.presentation.mode === 'badge' ||
+      alerts.presentation.mode === 'banner' ||
+      (alerts.presentation.mode === 'fullscreen_repeat' && alerts.presentation.fallback_mode === 'banner'))
 
   const idleMessage = useMemo(() => {
     if (demoMessage) return demoMessage
 
-    if (slideshow.error && !showIdle) {
+    if (error && !showIdle) {
       return {
         kicker: 'SPF5000',
         title: 'Display unavailable',
-        detail: slideshow.error,
+        detail: error,
         secondary: 'Check the backend and playlist source, then refresh the display.',
         tone: 'error' as const,
       }
     }
 
-    if (!slideshow.loading && showIdle && !slideshow.error) {
+    if (!loading && showIdle && !error) {
       return {
         kicker: 'SPF5000',
         title: bootMessage.title,
@@ -381,7 +427,7 @@ export function DisplayPage() {
     }
 
     return bootMessage
-  }, [bootMessage, config.idle_message, demoMessage, slideshow.error, slideshow.loading, showIdle])
+  }, [bootMessage, config.idle_message, demoMessage, error, loading, showIdle])
 
   return (
     <main
@@ -403,7 +449,7 @@ export function DisplayPage() {
       }
     >
       <div className="display-stage" aria-label="SPF5000 fullscreen slideshow">
-        {slideshow.layers.map((layer, index) => (
+        {layers.map((layer, index) => (
           <DisplayBackgroundLayer
             key={`bg-${index}`}
             layer={layer}
@@ -412,7 +458,7 @@ export function DisplayPage() {
           />
         ))}
 
-        {slideshow.layers.map((layer, index) => (
+        {layers.map((layer, index) => (
           <div key={index} className={`display-layer display-layer--${layer.stage}`}>
             {layer.item ? (
               <figure className="display-media">
@@ -422,12 +468,12 @@ export function DisplayPage() {
           </div>
         ))}
 
-        {!isSleeping && !isFullscreenAlertActive ? <WeatherWidget weather={weatherOverlay.weather} /> : null}
-        {showNonFullscreenAlerts ? <WeatherAlertOverlay alerts={weatherOverlay.alerts} fullscreenActive={false} /> : null}
+        {!isSleeping && !isFullscreenAlertActive ? <WeatherWidget weather={weather} /> : null}
+        {showNonFullscreenAlerts ? <WeatherAlertOverlay alerts={alerts} fullscreenActive={false} /> : null}
 
         {bootOverlayVisible ? <BootScreen message={idleMessage} /> : null}
 
-        {!isSleeping && isFullscreenAlertActive ? <WeatherAlertOverlay alerts={weatherOverlay.alerts} fullscreenActive /> : null}
+        {!isSleeping && isFullscreenAlertActive ? <WeatherAlertOverlay alerts={alerts} fullscreenActive /> : null}
         {isSleeping ? <div className="display-sleep-overlay" aria-hidden="true" /> : null}
       </div>
     </main>

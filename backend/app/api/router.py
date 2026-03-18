@@ -1,7 +1,21 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_admin
-from app.api.routes import assets, auth, backup, collections, display, google_photos, health, imports, settings, sources, themes, weather
+from app.api.routes import (
+    assets,
+    auth,
+    backup,
+    collections,
+    display,
+    doctor,
+    google_photos,
+    health,
+    imports,
+    settings,
+    sources,
+    themes,
+    weather,
+)
 
 api_router = APIRouter()
 
@@ -17,7 +31,10 @@ api_router.include_router(
     settings.router, prefix="/settings", tags=["settings"], dependencies=_admin_dep
 )
 api_router.include_router(
-    collections.router, prefix="/collections", tags=["collections"], dependencies=_admin_dep
+    collections.router,
+    prefix="/collections",
+    tags=["collections"],
+    dependencies=_admin_dep,
 )
 api_router.include_router(
     sources.router, prefix="/sources", tags=["sources"], dependencies=_admin_dep
@@ -26,13 +43,19 @@ api_router.include_router(
     imports.router, prefix="/import", tags=["import"], dependencies=_admin_dep
 )
 api_router.include_router(
-    google_photos.router, prefix="/google-photos", tags=["google-photos"], dependencies=_admin_dep
+    google_photos.router,
+    prefix="/google-photos",
+    tags=["google-photos"],
+    dependencies=_admin_dep,
 )
 api_router.include_router(
     weather.router, prefix="/weather", tags=["weather"], dependencies=_admin_dep
 )
 api_router.include_router(
     backup.router, prefix="/backup", tags=["backup"], dependencies=_admin_dep
+)
+api_router.include_router(
+    doctor.router, prefix="/admin", tags=["doctor"], dependencies=_admin_dep
 )
 
 # Assets: list + detail are protected; variant fetch is public (served by display client).

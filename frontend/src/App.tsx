@@ -8,6 +8,7 @@ import { CollectionsPage } from './pages/CollectionsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DisplayPage } from './pages/DisplayPage'
 import { DisplaySettingsPage } from './pages/DisplaySettingsPage'
+import { DoctorPage } from './pages/DoctorPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { SetupPage } from './pages/SetupPage'
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="library" element={<LibraryPage />} />
           <Route path="collections" element={<CollectionsPage />} />
           <Route path="backups" element={<BackupsPage />} />
+          <Route path="doctor" element={<DoctorPage />} />
           <Route path="sources" element={<SourcesPage />} />
           <Route path="display-settings" element={<DisplaySettingsPage />} />
           <Route path="weather" element={<WeatherPage />} />

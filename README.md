@@ -62,6 +62,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🔒 **Secure & Private** — Single-admin session auth, clear storage boundaries with **DecentDB**, and locally managed files with SHA-256 duplicate detection.
 - 🌙 **Smart Scheduling** — App-managed sleep schedule stored in DecentDB, evaluated in a configurable display timezone with Pi-local fallback, and surfaced in the admin UI with both Pi-local and display-time clocks.
 - 🍓 **Pi-Ready** — Includes appliance scripts for install, uninstall, and health checks on Raspberry Pi OS Desktop.
+- 🔍 **Doctor Page** — Built-in health diagnostics page that aggregates subsystem status, identifies problems, and provides actionable remediation guidance.
 
 ## Architecture at a glance
 

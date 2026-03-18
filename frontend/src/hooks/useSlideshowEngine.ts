@@ -241,7 +241,7 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         setLoading(false)
         callbacks.onBootMessage({
           kicker: 'SPF5000',
-          title: 'No photos ready yet',
+          title: nextPlaylist.collection_name ? 'No images in this collection' : 'No images found',
           detail: nextConfig.idle_message,
           secondary: nextPlaylist.collection_name
             ? `Selected collection: ${nextPlaylist.collection_name}.`

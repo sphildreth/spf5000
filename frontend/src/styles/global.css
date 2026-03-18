@@ -3,7 +3,7 @@
   font-family: var(--font-family-base, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   --font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-family-display: Orbitron, Rajdhani, Arial, sans-serif;
-  /* ── Core admin-shell tokens (overridden per-theme by ThemeContext) ── */
+  /* ── Base admin-shell theme tokens (overridden per-theme by ThemeContext) ── */
   --bg: #0f1116;
   --panel: #171b24;
   --panel-strong: #202635;
@@ -17,6 +17,26 @@
   --warning: #f6d06a;
   --danger: #ff8d8d;
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
+  /* ── Derived semantic tokens (computed from the base theme tokens above) ── */
+  --surface-panel-elevated: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel) 94%, transparent),
+    color-mix(in srgb, var(--panel-soft) 96%, transparent)
+  );
+  --border-subtle: color-mix(in srgb, var(--border) 72%, transparent);
+  --border-faint: color-mix(in srgb, var(--border) 48%, transparent);
+  --severity-ok-surface: color-mix(in srgb, var(--ok) 12%, transparent);
+  --severity-ok-surface-strong: color-mix(in srgb, var(--ok) 18%, transparent);
+  --severity-ok-border: color-mix(in srgb, var(--ok) 28%, transparent);
+  --severity-warning-surface: color-mix(in srgb, var(--warning) 12%, transparent);
+  --severity-warning-surface-strong: color-mix(in srgb, var(--warning) 18%, transparent);
+  --severity-warning-border: color-mix(in srgb, var(--warning) 28%, transparent);
+  --severity-danger-surface: color-mix(in srgb, var(--danger) 12%, transparent);
+  --severity-danger-surface-strong: color-mix(in srgb, var(--danger) 18%, transparent);
+  --severity-danger-border: color-mix(in srgb, var(--danger) 28%, transparent);
+  --severity-info-surface: color-mix(in srgb, var(--accent) 12%, transparent);
+  --severity-info-surface-strong: color-mix(in srgb, var(--accent) 18%, transparent);
+  --severity-info-border: color-mix(in srgb, var(--accent) 28%, transparent);
   /* ── Display overlay surfaces ── */
   --weather-bg: rgba(12, 16, 24, 0.74);
   --weather-border: rgba(255, 255, 255, 0.14);
@@ -412,15 +432,15 @@ img {
 }
 
 .pill--ok {
-  color: #d7ffea;
-  background: rgba(110, 217, 161, 0.14);
-  border-color: rgba(110, 217, 161, 0.26);
+  color: var(--ok);
+  background: var(--severity-ok-surface);
+  border-color: var(--severity-ok-border);
 }
 
 .pill--warning {
-  color: #fff1c6;
-  background: rgba(246, 208, 106, 0.14);
-  border-color: rgba(246, 208, 106, 0.28);
+  color: var(--warning);
+  background: var(--severity-warning-surface);
+  border-color: var(--severity-warning-border);
 }
 
 .pill--muted {
@@ -1344,6 +1364,332 @@ textarea {
     right: 16%;
     top: 71%;
     bottom: 10%;
+  }
+}
+
+/* ─── Doctor Page ─────────────────────────────────────────────────────────────── */
+.doctor-overall {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+.doctor-overall--ok {
+  background: linear-gradient(180deg, var(--severity-ok-surface), color-mix(in srgb, var(--ok) 6%, transparent));
+  border-color: var(--severity-ok-border);
+}
+
+.doctor-overall--warning {
+  background: linear-gradient(180deg, var(--severity-warning-surface), color-mix(in srgb, var(--warning) 6%, transparent));
+  border-color: var(--severity-warning-border);
+}
+
+.doctor-overall--error {
+  background: linear-gradient(180deg, var(--severity-danger-surface), color-mix(in srgb, var(--danger) 6%, transparent));
+  border-color: var(--severity-danger-border);
+}
+
+.doctor-overall--info {
+  background: linear-gradient(180deg, var(--severity-info-surface), color-mix(in srgb, var(--accent) 6%, transparent));
+  border-color: var(--severity-info-border);
+}
+
+.doctor-overall-icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.doctor-overall-icon--ok {
+  background: var(--severity-ok-surface-strong);
+  color: var(--ok);
+}
+
+.doctor-overall-icon--warning {
+  background: var(--severity-warning-surface-strong);
+  color: var(--warning);
+}
+
+.doctor-overall-icon--error {
+  background: var(--severity-danger-surface-strong);
+  color: var(--danger);
+}
+
+.doctor-overall-icon--info {
+  background: var(--severity-info-surface-strong);
+  color: var(--accent);
+}
+
+.doctor-overall-text {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.doctor-overall-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.doctor-overall-version {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-family: monospace;
+}
+
+.doctor-overall-deps {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: monospace;
+  display: block;
+  margin-top: 0.2rem;
+}
+
+.doctor-overall-status {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.doctor-overall-status--ok {
+  color: var(--ok);
+}
+
+.doctor-overall-status--warning {
+  color: var(--warning);
+}
+
+.doctor-overall-status--error {
+  color: var(--danger);
+}
+
+.doctor-overall-status--info {
+  color: var(--accent);
+}
+
+.doctor-overall-summary {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.doctor-checked-at {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.doctor-groups {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.doctor-group {
+  background: var(--surface-panel-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.doctor-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.doctor-group-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.doctor-group-icon--ok {
+  background: var(--severity-ok-surface);
+  color: var(--ok);
+}
+
+.doctor-group-icon--warning {
+  background: var(--severity-warning-surface);
+  color: var(--warning);
+}
+
+.doctor-group-icon--error {
+  background: var(--severity-danger-surface);
+  color: var(--danger);
+}
+
+.doctor-group-icon--info {
+  background: var(--severity-info-surface);
+  color: var(--accent);
+}
+
+.doctor-group-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.doctor-group-badge-counts {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.doctor-checks {
+  display: grid;
+  gap: 0;
+}
+
+.doctor-check {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.doctor-check:last-child {
+  border-bottom: none;
+}
+
+.doctor-check-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.doctor-check-badge {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.doctor-check-badge--ok {
+  background: var(--severity-ok-surface);
+  color: var(--ok);
+}
+
+.doctor-check-badge--warning {
+  background: var(--severity-warning-surface);
+  color: var(--warning);
+}
+
+.doctor-check-badge--error {
+  background: var(--severity-danger-surface);
+  color: var(--danger);
+}
+
+.doctor-check-badge--info {
+  background: var(--severity-info-surface);
+  color: var(--accent);
+}
+
+.doctor-check-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.doctor-check-severity {
+  margin-left: auto;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
+
+.doctor-check-severity--ok {
+  color: var(--ok);
+  background: var(--severity-ok-surface);
+}
+
+.doctor-check-severity--warning {
+  color: var(--warning);
+  background: var(--severity-warning-surface);
+}
+
+.doctor-check-severity--error {
+  color: var(--danger);
+  background: var(--severity-danger-surface);
+}
+
+.doctor-check-severity--info {
+  color: var(--accent);
+  background: var(--severity-info-surface);
+}
+
+.doctor-check-summary {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.doctor-check-details {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.doctor-check-remediation {
+  margin: 0.5rem 0 0;
+  color: var(--warning);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  background: var(--severity-warning-surface);
+  border-radius: 8px;
+  border-left: 2px solid var(--warning);
+}
+
+.doctor-check--error .doctor-check-remediation {
+  color: var(--danger);
+  background: var(--severity-danger-surface);
+  border-left-color: var(--danger);
+}
+
+.pill--error {
+  color: var(--danger);
+  background: var(--severity-danger-surface);
+  border-color: var(--severity-danger-border);
+}
+
+.pill--info {
+  color: var(--accent);
+  background: var(--severity-info-surface);
+  border-color: var(--severity-info-border);
+}
+
+@media (max-width: 920px) {
+  .doctor-overall {
+    flex-wrap: wrap;
+  }
+
+  .doctor-check-header {
+    flex-wrap: wrap;
+  }
+
+  .doctor-check-severity {
+    margin-left: 0;
+    margin-top: 0.35rem;
   }
 }
 

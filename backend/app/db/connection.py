@@ -4,7 +4,14 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Iterator
 
+import structlog
+
 from app.core.config import settings
+from app.db.recovery import (
+    existing_database_paths,
+    is_recoverable_database_error,
+    quarantine_unreadable_database,
+)
 
 try:
     import decentdb  # type: ignore
@@ -54,14 +61,11 @@ def is_decentdb_available() -> bool:
 def is_null_connection(conn: Any) -> bool:
     return bool(getattr(conn, "is_null", False))
 
-
-import sys
-
-_is_test_env = "pytest" in sys.modules
-
 _local = threading.local()
 _connection_lock = threading.RLock()
-_connection_generation = 0
+
+
+LOGGER = structlog.get_logger(__name__)
 
 
 def _close_thread_connection() -> None:
@@ -85,11 +89,56 @@ def exclusive_database_access() -> Iterator[None]:
 
 
 def reset_connection_state() -> None:
-    global _connection_generation
-
     with _connection_lock:
         _close_thread_connection()
-        _connection_generation += 1
+
+
+def _recover_database_open_failure(exc: Exception) -> bool:
+    if getattr(_local, "recovering_database_open", False):
+        return False
+
+    if not is_recoverable_database_error(exc):
+        return False
+
+    existing_paths = existing_database_paths()
+    if not existing_paths:
+        return False
+
+    _local.recovering_database_open = True
+    try:
+        recovery_dir, moved_paths = quarantine_unreadable_database(
+            reset_connection_state=reset_connection_state,
+            exclusive_database_access=exclusive_database_access,
+        )
+        LOGGER.error(
+            "decentdb_open_failed_corrupt",
+            database_path=str(settings.database_path),
+            moved_files=[path.name for path in moved_paths],
+            recovery_dir=str(recovery_dir),
+            exc_info=exc,
+        )
+
+        from app.db.bootstrap import bootstrap_database
+
+        bootstrap_database()
+        _close_thread_connection()
+        LOGGER.warning(
+            "decentdb_recovered_from_quarantine",
+            recovery_dir=str(recovery_dir),
+            trigger="request_open",
+        )
+        return True
+    finally:
+        _local.recovering_database_open = False
+
+
+def _connect_with_recovery(db_path: str) -> Any:
+    try:
+        return decentdb.connect(db_path)
+    except Exception as exc:
+        if not _recover_database_open_failure(exc):
+            raise
+        return decentdb.connect(db_path)
 
 
 @contextmanager
@@ -105,43 +154,13 @@ def get_connection() -> Iterator[Any]:
             return
 
         db_path = str(settings.database_path)
-
-        if _is_test_env:
-            conn = decentdb.connect(db_path)
-            try:
-                yield conn
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
-            return
-
-        conn_info = getattr(_local, "conn_info", None)
-        generation = _connection_generation
-
-        if conn_info is None or conn_info["path"] != db_path or conn_info["generation"] != generation:
-            _close_thread_connection()
-            conn = decentdb.connect(db_path)
-            _local.conn_info = {
-                "conn": conn,
-                "path": db_path,
-                "depth": 0,
-                "generation": generation,
-            }
-        else:
-            conn = conn_info["conn"]
-
-        _local.conn_info["depth"] += 1
+        conn = _connect_with_recovery(db_path)
 
         try:
             yield conn
-            if _local.conn_info["depth"] == 1:
-                conn.commit()
+            conn.commit()
         except Exception:
-            if _local.conn_info["depth"] == 1:
-                conn.rollback()
+            conn.rollback()
             raise
         finally:
-            _local.conn_info["depth"] -= 1
+            conn.close()

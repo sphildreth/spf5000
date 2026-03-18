@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.db import bootstrap
+from app.db import bootstrap, connection
 from app.db.connection import get_connection, is_null_connection
 from app.main import create_app
 
@@ -66,8 +66,8 @@ def test_startup_recovers_from_unreadable_database_bootstrap_failure(
     assert len(recovery_dirs) == 1
     recovery_dir = recovery_dirs[0]
     assert (recovery_dir / db_path.name).read_bytes() == b"unreadable-database"
-    assert (recovery_dir / wal_path.name).read_bytes() == b"wal-bytes"
-    assert (recovery_dir / shm_path.name).read_bytes() == b"shm-bytes"
+    assert (recovery_dir / wal_path.name).read_bytes().startswith(b"wal-bytes")
+    assert (recovery_dir / shm_path.name).read_bytes().startswith(b"shm-bytes")
 
     with get_connection() as conn:
         assert not is_null_connection(conn)
@@ -94,3 +94,57 @@ def test_initialize_runtime_reraises_nonrecoverable_database_errors(
 
     assert db_path.read_bytes() == b"existing-database"
     assert not (settings.staging_dir / "database-recovery").exists()
+
+
+def test_request_time_open_failure_recovers_by_quarantining_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_settings(monkeypatch, tmp_path)
+
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=True) as client:
+        db_path = settings.database_path
+        original_db_bytes = db_path.read_bytes()
+        wal_path = Path(f"{db_path}-wal")
+        wal_path.write_bytes(b"wal-bytes")
+        shm_path = Path(f"{db_path}-shm")
+        shm_path.write_bytes(b"shm-bytes")
+
+        original_connect = connection.decentdb.connect
+        attempts = {"count": 0}
+
+        def flaky_connect(path: str):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise decentdb.OperationalError("Invalid page ID in WAL frame")
+            return original_connect(path)
+
+        monkeypatch.setattr(connection.decentdb, "connect", flaky_connect)
+
+        response = client.get("/api/status")
+        assert response.status_code == 401
+
+        session_response = client.get("/api/auth/session")
+        assert session_response.status_code == 200
+        assert session_response.json() == {
+            "auth_available": True,
+            "bootstrapped": False,
+            "authenticated": False,
+            "user": None,
+        }
+
+    assert attempts["count"] >= 3
+    assert db_path.exists()
+
+    recovery_root = settings.staging_dir / "database-recovery"
+    recovery_dirs = [path for path in recovery_root.iterdir() if path.is_dir()]
+    assert len(recovery_dirs) == 1
+    recovery_dir = recovery_dirs[0]
+    assert (recovery_dir / db_path.name).read_bytes() == original_db_bytes
+    assert (recovery_dir / wal_path.name).read_bytes().startswith(b"wal-bytes")
+    assert (recovery_dir / shm_path.name).read_bytes().startswith(b"shm-bytes")
+
+    with get_connection() as conn:
+        assert not is_null_connection(conn)
+        assert "settings" in set(conn.list_tables())

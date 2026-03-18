@@ -38,6 +38,7 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0014-use-national-weather-service-as-the-initial-weather-provider.md` - first weather provider choice
 - `0015-use-alert-escalation-and-visible-takeover-behavior-on-the-display.md` - alert escalation and display takeover policy
 - `0018-use-app-selected-display-timezone-for-sleep-schedule-evaluation.md` - sleep schedule evaluation uses an app-selected display timezone with Pi-local fallback
+- `0021-use-doctor-page-as-a-first-class-admin-health-feature.md` - doctor page as a first-class admin health/troubleshooting surface
 
 ## Proposed ADRs
 

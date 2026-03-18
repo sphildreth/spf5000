@@ -29,6 +29,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - expose an authenticated sleep-schedule time-reference API so admin clients can compare server UTC, Pi-local timezone, and configured display timezone
 - expose Google Photos provider APIs for device auth, status, disconnect, and sync triggers
 - expose weather settings, weather status, weather alert, and display-facing weather APIs
+- expose doctor/health diagnostics APIs for subsystem status and remediation guidance
 - keep routes thin and place orchestration in services
 - persist state through explicit repository SQL over the DecentDB DB-API binding
 - manage local import, admin uploads, duplicate detection, original-file storage, and derivative generation
@@ -44,6 +45,7 @@ The architecture follows the accepted ADR set in `design/adr/0001` through `0015
 - provide `/setup` and `/login` flows before the protected `/admin` shell
 - provide a dedicated fullscreen `/display` route with no admin chrome
 - provide a dedicated Backups page for database backup/restore and collection ZIP export
+- provide a dedicated Doctor page for health diagnostics and troubleshooting
 - consume backend API endpoints through typed helpers under `frontend/src/api/`
 - keep display playback independent from the admin shell layout
 - render configurable background presentation behind slideshow images using cached playlist metadata plus the display variant when needed
