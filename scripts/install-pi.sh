@@ -757,6 +757,7 @@ Still manual
   - Enable Raspberry Pi OS Desktop autologin (raspi-config -> System Options -> Boot / Auto Login -> Desktop Autologin).
   - Disable OS-level screen blanking if you want SPF5000 to control sleep/blackout behavior.
   - Import photos and complete /setup from another LAN device if this is a fresh install.
+  - If the desktop session for ${RUNTIME_USER} was already logged in during this install, log out or reboot once so the refreshed Chromium autostart files can launch the kiosk browser.
 
 Reminder
   Slideshow sleep scheduling is handled by SPF5000 application settings, not by this installer.

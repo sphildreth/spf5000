@@ -117,6 +117,8 @@ You may also want the usual X11 anti-blanking settings in the runtime user's ses
 
 Cursor hiding is validated on both Raspberry Pi OS desktop backends now, but the mechanism differs by session type. The managed SPF5000 Chromium autostart entry delegates to a launcher script under `~/.config/autostart/`, and the installer also registers that same launcher in `~/.config/labwc/autostart` for `labwc` sessions. The launcher uses `unclutter-xfixes` on X11 sessions and requests native Chromium Wayland mode with `--ozone-platform-hint=auto` on the default `labwc` Wayland session so the display route's `cursor: none` styling is applied without Xwayland in the middle. It also logs each launch attempt to `/var/cache/spf5000/logs/spf5000-kiosk-launcher.log`.
 
+If you install or update SPF5000 while the desktop session is already open, those refreshed autostart files only take effect on the next login. Log out or reboot once before treating a missing kiosk browser as a launch failure.
+
 You can verify the active desktop backend with:
 
 ```bash
@@ -268,6 +270,8 @@ The repository itself remains in the chosen app root, and the backend still uses
 To update a Pi that is already running SPF5000, update the repository checkout and then re-run the installer.
 
 `git pull` by itself is not the full update procedure. The installer also refreshes backend dependencies, reinstalls the DecentDB Python binding from the matching source archive, refreshes the staged DecentDB native library from the selected release, rebuilds `frontend/dist`, rewrites the managed `systemd` and kiosk autostart files, and restarts the backend service.
+
+When you re-run the installer from an already-active Pi desktop session, log out or reboot once afterward so the updated Chromium autostart files run in a fresh desktop login.
 
 If the installer finds an existing SPF5000 database, it first writes a timestamped backup archive under `installer-backups/` next to the active database file. That archive includes `spf5000.ddb` and also captures `-wal` / `-shm` sidecars when they exist.
 

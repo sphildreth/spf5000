@@ -212,6 +212,38 @@ raise SystemExit(1)
 PY
 }
 
+session_start_epoch() {
+  local session_id="$1"
+  local leader_pid=""
+  local elapsed_seconds=""
+
+  leader_pid="$(loginctl show-session "${session_id}" -p Leader --value 2>/dev/null || true)"
+  [[ "${leader_pid}" =~ ^[0-9]+$ ]] || return 1
+
+  elapsed_seconds="$(ps -o etimes= -p "${leader_pid}" 2>/dev/null | tr -d '[:space:]')"
+  [[ "${elapsed_seconds}" =~ ^[0-9]+$ ]] || return 1
+
+  printf '%s\n' "$(( $(date +%s) - elapsed_seconds ))"
+}
+
+newest_existing_mtime_epoch() {
+  local newest=""
+  local path=""
+  local mtime=""
+
+  for path in "$@"; do
+    [[ -n "${path}" && -e "${path}" ]] || continue
+    mtime="$(stat -c '%Y' "${path}" 2>/dev/null || true)"
+    [[ "${mtime}" =~ ^[0-9]+$ ]] || continue
+    if [[ -z "${newest}" ]] || (( mtime > newest )); then
+      newest="${mtime}"
+    fi
+  done
+
+  [[ -n "${newest}" ]] || return 1
+  printf '%s\n' "${newest}"
+}
+
 check_environment() {
   printf '\n== Environment ==\n'
 
@@ -670,6 +702,9 @@ check_browser_runtime() {
   local chromium_process=""
   local boot_epoch=""
   local log_mtime=""
+  local session_start=""
+  local kiosk_config_mtime=""
+  local session_needs_kiosk_restart="false"
 
   printf '\n== Browser kiosk runtime ==\n'
 
@@ -750,6 +785,11 @@ check_browser_runtime() {
       session_state="$(loginctl show-session "${session_id}" -p State --value 2>/dev/null || true)"
       session_active="$(loginctl show-session "${session_id}" -p Active --value 2>/dev/null || true)"
       session_remote="$(loginctl show-session "${session_id}" -p Remote --value 2>/dev/null || true)"
+      session_start="$(session_start_epoch "${session_id}" || true)"
+      kiosk_config_mtime="$(newest_existing_mtime_epoch "${AUTOSTART_FILE}" "${AUTOSTART_LAUNCHER_FILE}" "${AUTOSTART_LABWC_FILE}" || true)"
+      if [[ -n "${session_start}" && -n "${kiosk_config_mtime}" ]] && (( session_start < kiosk_config_mtime )); then
+        session_needs_kiosk_restart="true"
+      fi
       if [[ "${session_active}" == "yes" && "${session_remote}" != "yes" ]]; then
         pass_check "Desktop session ${session_id} for ${RUNTIME_USER} is active and local${session_state:+ (state=${session_state})}."
       elif [[ "${session_remote}" == "yes" ]]; then
@@ -810,6 +850,8 @@ check_browser_runtime() {
     chromium_process="$(ps -ww -u "${RUNTIME_USER}" -o pid=,args= 2>/dev/null | awk -v display_url="${expected_display_url}" 'index($0, "--kiosk") && index($0, display_url) && tolower($0) ~ /chromium/ { print; exit }' || true)"
     if [[ -n "${chromium_process}" ]]; then
       pass_check "Chromium kiosk process is running for ${RUNTIME_USER}: ${chromium_process}."
+    elif [[ "${session_needs_kiosk_restart}" == "true" ]]; then
+      warn_check "Chromium kiosk process is not running yet because the active desktop session appears older than the managed kiosk autostart files. Log out or reboot once so the new kiosk launcher can run."
     elif [[ -n "${session_id}" ]]; then
       fail_check "Chromium kiosk process is not running for ${RUNTIME_USER} even though a desktop session is active."
     else
@@ -839,6 +881,8 @@ check_browser_runtime() {
       if grep -Fq 'Another kiosk instance already holds' "${KIOSK_LOG_FILE}" 2>/dev/null; then
         warn_check "Kiosk launcher log shows a duplicate-launch lockout; another kiosk instance may already be holding the kiosk lock."
       fi
+    elif [[ "${session_needs_kiosk_restart}" == "true" ]]; then
+      warn_check "Kiosk launcher log is missing at ${KIOSK_LOG_FILE} because the active desktop session appears older than the managed kiosk autostart files. Log out or reboot once to trigger the launcher."
     elif [[ -n "${session_id}" ]]; then
       warn_check "Kiosk launcher log is missing at ${KIOSK_LOG_FILE}; kiosk launch failures may be harder to diagnose."
     fi
