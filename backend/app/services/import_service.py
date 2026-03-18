@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ from app.repositories.source_repository import SourceRepository
 from app.services.asset_ingest_service import AssetIngestService
 from app.services.source_service import SourceService
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = structlog.get_logger(__name__)
 
 
 class ImportService:
@@ -37,12 +37,16 @@ class ImportService:
             settings_repo=self.settings_repo,
         )
 
-    def scan_local_source(self, source_id: str, max_samples: int = 10) -> tuple[ImportJob, ProviderScanResult]:
+    def scan_local_source(
+        self, source_id: str, max_samples: int = 10
+    ) -> tuple[ImportJob, ProviderScanResult]:
         source = self.source_service.get_source(source_id)
         if source is None:
             raise ValueError(f"Unknown source: {source_id}")
         if source.provider_type != "local_files":
-            raise ValueError(f"Source {source_id} does not support local scan/import operations")
+            raise ValueError(
+                f"Source {source_id} does not support local scan/import operations"
+            )
         provider = self.source_service.get_provider(source.provider_type)
         scan_result = provider.scan_directory(source.import_path)
         now = utc_now()
@@ -58,7 +62,9 @@ class ImportService:
             duplicate_count=0,
             skipped_count=scan_result.ignored_count,
             error_count=0,
-            sample_filenames=[item.filename for item in scan_result.discovered[:max_samples]],
+            sample_filenames=[
+                item.filename for item in scan_result.discovered[:max_samples]
+            ],
             message=f"Scanned {scan_result.discovered_count} supported files",
             started_at=now,
             completed_at=now,
@@ -67,12 +73,16 @@ class ImportService:
         self.source_repo.touch_last_scan(source.id, now)
         return stored_job, scan_result
 
-    def import_local_source(self, source_id: str, collection_id: str, max_samples: int = 10) -> ImportJob:
+    def import_local_source(
+        self, source_id: str, collection_id: str, max_samples: int = 10
+    ) -> ImportJob:
         source = self.source_service.get_source(source_id)
         if source is None:
             raise ValueError(f"Unknown source: {source_id}")
         if source.provider_type != "local_files":
-            raise ValueError(f"Source {source_id} does not support local scan/import operations")
+            raise ValueError(
+                f"Source {source_id} does not support local scan/import operations"
+            )
         provider = self.source_service.get_provider(source.provider_type)
         scan_result = provider.scan_directory(source.import_path)
         started_at = utc_now()
@@ -88,7 +98,9 @@ class ImportService:
             duplicate_count=0,
             skipped_count=scan_result.ignored_count,
             error_count=0,
-            sample_filenames=[item.filename for item in scan_result.discovered[:max_samples]],
+            sample_filenames=[
+                item.filename for item in scan_result.discovered[:max_samples]
+            ],
             message="Import in progress",
             started_at=started_at,
             completed_at=None,
@@ -108,15 +120,13 @@ class ImportService:
                 else:
                     job.duplicate_count += 1
             except Exception as exc:  # pragma: no cover
-                LOGGER.exception("Failed to import %s", candidate.path)
+                LOGGER.exception("import_file_failed", path=str(candidate.path))
                 job.error_count += 1
                 job.message = f"Import completed with {job.error_count} errors"
-                LOGGER.error("Import error: %s", exc)
+                LOGGER.error("import_job_error", error=str(exc))
 
         job.status = "completed" if job.error_count == 0 else "completed_with_errors"
-        job.message = (
-            f"Imported {job.imported_count} new assets, {job.duplicate_count} duplicates, {job.error_count} errors"
-        )
+        job.message = f"Imported {job.imported_count} new assets, {job.duplicate_count} duplicates, {job.error_count} errors"
         job.completed_at = utc_now()
         self.source_repo.touch_last_scan(source.id, job.completed_at)
         self.source_repo.touch_last_import(source.id, job.completed_at)

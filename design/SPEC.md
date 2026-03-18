@@ -237,6 +237,12 @@ Persisted slideshow behavior, including:
 - idle message
 - playlist refresh interval seconds
 
+**Persistence model**: The `DisplayService.update_config()` method intentionally splits writes between two repositories:
+- `settings_repo` — fields that affect the display pipeline (`slideshow_interval_seconds`, `transition_mode`, `transition_duration_ms`, `fit_mode`, `shuffle_enabled`, `selected_collection_id`, `background_fill_mode`, `shuffle_bag_enabled`). These are kept in `settings` because display pipeline code reads them from `SettingsRepository` at render time, avoiding a separate display profile lookup on every frame.
+- `display_repo` — fields that are purely administrative or rarely changed (`name`, `idle_message`, `refresh_interval_seconds`). These belong in the display profile table.
+
+This split is historical rather than logical; consolidating all display fields into `display_profiles` would simplify the service code but requires careful migration planning. See ADR 0013 for tracking.
+
 ### `admin_users`
 
 The single local admin record, including:
@@ -492,6 +498,135 @@ Admin routing behavior:
 - `GET /api/display/weather`
 - `GET /api/display/alerts`
 
+## API Reference
+
+### Authentication
+
+All admin endpoints require an authenticated session. Obtain one via login, then include the session cookie in subsequent requests.
+
+#### Login
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your-password"}' \
+  -c cookies.txt
+```
+
+Response (200):
+```json
+{"username":"admin","bootstrapped":true,"user":{"username":"admin","is_admin":true}}
+```
+
+Error (401):
+```json
+{"detail":"Invalid username or password"}
+```
+
+#### Get current session
+```bash
+curl http://localhost:8000/api/auth/session -b cookies.txt
+```
+
+#### Logout
+```bash
+curl -X POST http://localhost:8000/api/auth/logout -b cookies.txt
+```
+
+### Health
+
+#### Basic health check
+```bash
+curl http://localhost:8000/api/health
+```
+Response: `{"ok":true,"app":"SPF5000","version":"...","database_available":true}`
+
+#### Deep health check (admin)
+```bash
+curl http://localhost:8000/api/health/deep -b cookies.txt
+```
+Response includes disk space, cache size, sync status, weather status, and asset count.
+
+### Settings
+
+#### Get settings (admin)
+```bash
+curl http://localhost:8000/api/settings -b cookies.txt
+```
+
+#### Update settings (admin)
+```bash
+curl -X PUT http://localhost:8000/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{"slideshow_seconds_per_image":10}' \
+  -b cookies.txt
+```
+
+### Collections
+
+#### List collections (admin)
+```bash
+curl http://localhost:8000/api/collections -b cookies.txt
+```
+
+#### Get collection (admin)
+```bash
+curl http://localhost:8000/api/collections/{collection_id} -b cookies.txt
+```
+
+### Assets
+
+#### List assets (admin)
+```bash
+curl http://localhost:8000/api/assets -b cookies.txt
+```
+
+#### Upload asset (admin)
+```bash
+curl -X POST http://localhost:8000/api/assets/upload \
+  -F "file=@photo.jpg" \
+  -b cookies.txt
+```
+
+### Display
+
+#### Get playlist (public)
+```bash
+curl http://localhost:8000/api/display/playlist
+```
+Response:
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "filename": "photo.jpg",
+      "variant_url": "/api/assets/{id}/display"
+    }
+  ]
+}
+```
+
+#### Get display weather (public)
+```bash
+curl http://localhost:8000/api/display/weather
+```
+
+### Error codes
+
+| Code | Meaning |
+|------|---------|
+| 400  | Invalid request body or parameters |
+| 401  | Missing or invalid session |
+| 403  | Operation not permitted |
+| 404  | Resource not found |
+| 409  | Conflict (e.g., duplicate asset) |
+| 422  | Validation error (Pydantic) |
+| 429  | Rate limited |
+| 500  | Internal server error |
+| 503  | Service unavailable (no assets, etc.) |
+
+Rate limit: 60 requests/minute per session on admin endpoints (enforced when `SPF5000_RATE_LIMIT=true`).
+
 ## Development and deployment model
 
 ### Development
@@ -517,6 +652,27 @@ Admin routing behavior:
 - the generated Chromium autostart entry launches the local `/display` route in kiosk mode after a short startup delay
 - `scripts/uninstall-pi.sh` removes the service and kiosk autostart while preserving config, database, cache, and imported assets by default
 - `scripts/doctor.sh` checks runtime prerequisites, service state, filesystem paths, local health endpoints, display playlist/sleep state, first-slide asset reachability, and kiosk wiring
+
+## Security posture
+
+### Session cookies
+
+Admin sessions are protected by signed HTTP-only cookies. The following configurations apply:
+
+- **Development / local Pi**: `https_only = false` (default). Sessions work over plain HTTP. Appropriate for the localhost/LAN trust boundary of a home photo frame.
+- **Production with reverse proxy**: Set `security.session_https_only = true` in `spf5000.toml` when the app runs behind a TLS-terminating reverse proxy (nginx, Caddy, etc.). This marks cookies as `Secure`, preventing transmission over plain HTTP.
+
+### CSRF
+
+The admin API uses signed session cookies with `allow_credentials=True` in CORS configuration. No explicit CSRF token is issued.
+
+**Threat model**: SPF5000 is a LAN-only appliance. The admin interface is expected to be used from the same browser on the same device as the photo frame. Cross-site request forgery attacks require a malicious site visited by the same browser to forge requests to the local admin API — a low-probability scenario on a home network behind a router's NAT.
+
+**Acceptance rationale**: CSRF protection adds complexity (token issuance, storage, validation) for a threat scenario that does not apply to this deployment model. The risk is accepted given the appliance's LAN-only, single-user nature. If the product is ever exposed beyond the LAN (e.g., via cloud sync), CSRF protection becomes mandatory before deployment.
+
+### Input validation
+
+All API inputs are validated by Pydantic schemas. File uploads are validated for image MIME type and extension before processing. DecentDB enforces a UNIQUE constraint on `assets.checksum_sha256` to prevent duplicate assets.
 
 ## Validation status
 

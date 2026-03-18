@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import math
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+import decentdb  # type: ignore[attr-defined, no-redef]
 from PIL import Image, ImageOps
 
 from app.core.config import settings
@@ -16,7 +17,7 @@ from app.repositories.base import json_dumps, utc_now
 from app.repositories.settings_repository import SettingsRepository
 from app.services.background_service import derive_background_meta
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -63,10 +64,21 @@ class AssetIngestService:
             collection_ids=collection_ids,
             metadata=metadata or {},
         )
-        created_asset = self.asset_repo.create_asset(asset)
-        return AssetIngestResult(
-            asset=created_asset, created=True, checksum_sha256=checksum
-        )
+        try:
+            created_asset = self.asset_repo.create_asset(asset)
+            return AssetIngestResult(
+                asset=created_asset, created=True, checksum_sha256=checksum
+            )
+        except decentdb.IntegrityError:
+            LOGGER.debug("asset_ingest_race_deduped", checksum_prefix=checksum[:16])
+            existing = self.asset_repo.find_by_checksum(checksum)
+            if existing is not None:
+                for collection_id in collection_ids:
+                    self.asset_repo.add_asset_to_collection(existing.id, collection_id)
+                return AssetIngestResult(
+                    asset=existing, created=False, checksum_sha256=checksum
+                )
+            raise
 
     def _materialize_asset(
         self,
@@ -217,8 +229,8 @@ class AssetIngestService:
             background = derive_background_meta(Path(display_variant.local_path))
         except Exception:
             LOGGER.warning(
-                "Background derivation failed during ingest for display variant %s",
-                display_variant.local_path,
+                "background_derivation_failed",
+                variant_path=str(display_variant.local_path),
                 exc_info=True,
             )
             return None

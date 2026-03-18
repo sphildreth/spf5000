@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import logging
+import structlog
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,7 +21,7 @@ from app.repositories.collection_repository import CollectionRepository
 from app.repositories.source_repository import SourceRepository
 from app.services.asset_ingest_service import AssetIngestService
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -94,7 +94,9 @@ class AssetService:
         self.repo.remove_asset_from_collection(asset_id, collection_id)
         self.repo.deactivate_asset_if_unassigned(asset_id)
 
-    def bulk_remove_from_collection(self, collection_id: str, asset_ids: list[str]) -> BulkRemoveSummary:
+    def bulk_remove_from_collection(
+        self, collection_id: str, asset_ids: list[str]
+    ) -> BulkRemoveSummary:
         collection_id = collection_id.strip()
         normalized_asset_ids = self._normalize_asset_ids(asset_ids)
         if not collection_id:
@@ -116,7 +118,12 @@ class AssetService:
                 errors.append({"asset_id": asset_id, "reason": "Asset not found."})
                 continue
             if collection_id not in asset.collection_ids:
-                errors.append({"asset_id": asset_id, "reason": "Asset is not assigned to the specified collection."})
+                errors.append(
+                    {
+                        "asset_id": asset_id,
+                        "reason": "Asset is not assigned to the specified collection.",
+                    }
+                )
                 continue
             remaining = [cid for cid in asset.collection_ids if cid != collection_id]
             self.repo.remove_asset_from_collection(asset_id, collection_id)
@@ -131,7 +138,9 @@ class AssetService:
             errors=errors,
         )
 
-    def upload_files(self, files: Sequence[UploadFile], collection_id: str | None = None) -> AssetUploadSummary:
+    def upload_files(
+        self, files: Sequence[UploadFile], collection_id: str | None = None
+    ) -> AssetUploadSummary:
         if not files:
             raise ValueError("Select at least one image to upload.")
 
@@ -169,7 +178,9 @@ class AssetService:
 
             staged_path: Path | None = None
             try:
-                staged_path = self._write_upload_to_staging(upload, staging_dir, suffix=extension or ".upload")
+                staged_path = self._write_upload_to_staging(
+                    upload, staging_dir, suffix=extension or ".upload"
+                )
                 result = self.ingest_service.ingest_file(
                     source_id=source.id,
                     collection_ids=[target_collection.id],
@@ -183,9 +194,13 @@ class AssetService:
                 else:
                     summary.duplicate_count += 1
             except Exception as exc:  # noqa: BLE001 - surfacing per-file errors is intentional.
-                LOGGER.exception("Failed to import uploaded asset %s", original_filename)
+                LOGGER.exception(
+                    "asset_upload_import_failed", original_filename=original_filename
+                )
                 summary.error_count += 1
-                summary.errors.append(f"{original_filename}: {self._describe_upload_error(exc)}")
+                summary.errors.append(
+                    f"{original_filename}: {self._describe_upload_error(exc)}"
+                )
             finally:
                 upload.file.close()
                 if staged_path is not None and staged_path.exists():
@@ -208,7 +223,9 @@ class AssetService:
         raise RuntimeError("No local upload source is configured.")
 
     @staticmethod
-    def _write_upload_to_staging(upload: UploadFile, staging_dir: Path, *, suffix: str) -> Path:
+    def _write_upload_to_staging(
+        upload: UploadFile, staging_dir: Path, *, suffix: str
+    ) -> Path:
         upload.file.seek(0)
         with NamedTemporaryFile(
             mode="wb",

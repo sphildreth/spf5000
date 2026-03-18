@@ -230,23 +230,51 @@ class GooglePhotosClient:
         return response.content
 
     def _post_form(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        client = _get_shared_client()
-        response = client.post(url, data=payload)
-        return self._decode_json_response(response)
+        return self._post_with_retry(
+            lambda: _get_shared_client().post(url, data=payload)
+        )
 
     def _post_json(
         self, url: str, payload: dict[str, Any], *, headers: dict[str, str]
     ) -> dict[str, Any]:
-        client = _get_shared_client()
-        response = client.post(url, json=payload, headers=headers)
-        return self._decode_json_response(response)
+        return self._post_with_retry(
+            lambda: _get_shared_client().post(url, json=payload, headers=headers)
+        )
 
     def _get_json(
         self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        client = _get_shared_client()
-        response = client.get(url, headers=headers, params=params)
-        return self._decode_json_response(response)
+        return self._get_with_retry(
+            lambda: _get_shared_client().get(url, headers=headers, params=params)
+        )
+
+    def _retryable_status(self, status_code: int) -> bool:
+        return status_code in {429, 500, 502, 503, 504}
+
+    def _get_with_retry(self, call: object) -> dict[str, Any]:  # type: ignore[type-arg]
+        import time
+
+        last_exc: Exception | None = None
+        for attempt in range(4):
+            try:
+                response = call()  # type: ignore
+                if not self._retryable_status(response.status_code):
+                    return self._decode_json_response(response)
+                last_exc = GooglePhotosApiError(
+                    f"Google Photos request failed with status {response.status_code}",
+                    status_code=response.status_code,
+                    payload=None,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_exc = exc
+            if attempt < 3:
+                time.sleep(2.0**attempt)
+        raise last_exc or GooglePhotosApiError(
+            "Google Photos request failed after retries", status_code=0, payload=None
+        )
+
+    def _post_with_retry(self, call: object) -> dict[str, Any]:  # type: ignore[type-arg]
+        return self._get_with_retry(call)
 
     def _delete(self, url: str, *, headers: dict[str, str]) -> None:
         client = _get_shared_client()

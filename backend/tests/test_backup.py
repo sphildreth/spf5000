@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from typing import Any
+
 from PIL import Image
 from fastapi.testclient import TestClient
 
@@ -15,7 +17,9 @@ _ADMIN_PASSWORD = "test-password-1"
 _ADMIN_USERNAME = "admin"
 
 
-def _image_upload(name: str, color: tuple[int, int, int]) -> tuple[str, io.BytesIO, str]:
+def _image_upload(
+    name: str, color: tuple[int, int, int]
+) -> tuple[str, io.BytesIO, str]:
     buffer = io.BytesIO()
     image = Image.new("RGB", (1200, 800), color=color)
     image.save(buffer, format="JPEG")
@@ -23,7 +27,7 @@ def _image_upload(name: str, color: tuple[int, int, int]) -> tuple[str, io.Bytes
     return (name, buffer, "image/jpeg")
 
 
-def _read_zip_entries(payload: bytes) -> tuple[list[str], dict[str, object]]:
+def _read_zip_entries(payload: bytes) -> tuple[list[str], dict[str, Any]]:
     with ZipFile(io.BytesIO(payload)) as archive:
         names = sorted(archive.namelist())
         if "backup-manifest.json" in names:
@@ -34,7 +38,9 @@ def _read_zip_entries(payload: bytes) -> tuple[list[str], dict[str, object]]:
     return names, manifest
 
 
-def _make_backup_zip(*, database_name: str = "spf5000.ddb", manifest_name: str = "backup-manifest.json") -> bytes:
+def _make_backup_zip(
+    *, database_name: str = "spf5000.ddb", manifest_name: str = "backup-manifest.json"
+) -> bytes:
     buffer = io.BytesIO()
     with ZipFile(buffer, mode="w", compression=ZIP_DEFLATED) as archive:
         archive.writestr(database_name, settings.database_path.read_bytes())
@@ -61,7 +67,9 @@ def test_backup_routes_require_admin_authentication(fresh_client: TestClient) ->
     )
     assert import_response.status_code == 401
 
-    collection_response = fresh_client.get("/api/backup/collections/default-collection/export")
+    collection_response = fresh_client.get(
+        "/api/backup/collections/default-collection/export"
+    )
     assert collection_response.status_code == 401
 
 
@@ -107,7 +115,9 @@ def test_database_import_rejects_invalid_archives(test_client: TestClient) -> No
         assert response.json()["detail"] == expected_detail
 
 
-def test_database_import_restores_database_and_clears_session(test_client: TestClient) -> None:
+def test_database_import_restores_database_and_clears_session(
+    test_client: TestClient,
+) -> None:
     export_response = test_client.get("/api/backup/database/export")
     assert export_response.status_code == 200
     backup_bytes = export_response.content
@@ -154,10 +164,14 @@ def test_database_import_restores_database_and_clears_session(test_client: TestC
 
     collections_response = test_client.get("/api/collections")
     assert collections_response.status_code == 200
-    assert all(item["id"] != created_collection_id for item in collections_response.json())
+    assert all(
+        item["id"] != created_collection_id for item in collections_response.json()
+    )
 
 
-def test_collection_export_skips_missing_files_and_records_manifest(test_client: TestClient) -> None:
+def test_collection_export_skips_missing_files_and_records_manifest(
+    test_client: TestClient,
+) -> None:
     collection_response = test_client.post(
         "/api/collections",
         json={
@@ -189,16 +203,23 @@ def test_collection_export_skips_missing_files_and_records_manifest(test_client:
 
     names, manifest = _read_zip_entries(export_response.content)
     assert "collection-export-manifest.json" in names
-    image_entries = [name for name in names if name != "collection-export-manifest.json"]
+    image_entries = [
+        name for name in names if name != "collection-export-manifest.json"
+    ]
     assert len(image_entries) == 1
     assert manifest["type"] == "collection-export"
     assert manifest["collection"]["id"] == collection_id
     assert manifest["exported_count"] == 1
     assert manifest["skipped_count"] == 1
-    assert manifest["skipped_files"][0]["reason"] == "Original file is missing from managed storage."
+    assert (
+        manifest["skipped_files"][0]["reason"]
+        == "Original file is missing from managed storage."
+    )
 
 
-def test_collection_export_fails_when_no_exportable_files_remain(test_client: TestClient) -> None:
+def test_collection_export_fails_when_no_exportable_files_remain(
+    test_client: TestClient,
+) -> None:
     collection_response = test_client.post(
         "/api/collections",
         json={
@@ -224,4 +245,7 @@ def test_collection_export_fails_when_no_exportable_files_remain(test_client: Te
 
     export_response = test_client.get(f"/api/backup/collections/{collection_id}/export")
     assert export_response.status_code == 400
-    assert export_response.json()["detail"] == "Collection has no exportable original files."
+    assert (
+        export_response.json()["detail"]
+        == "Collection has no exportable original files."
+    )

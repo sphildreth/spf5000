@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 from pathlib import Path
 
 from app.models.asset import AssetBackground
@@ -18,7 +18,7 @@ from app.services.background_service import (
     derive_background_meta,
 )
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = structlog.get_logger(__name__)
 
 
 class DisplayService:
@@ -64,16 +64,27 @@ class DisplayService:
     def update_config(self, updates: dict[str, object]) -> DisplayProfile:
         # Handle settings-backed display fields separately — persisted in settings, not display_profiles.
         if (
-            ("background_fill_mode" in updates and updates["background_fill_mode"] is not None)
-            or ("shuffle_bag_enabled" in updates and updates["shuffle_bag_enabled"] is not None)
+            "background_fill_mode" in updates
+            and updates["background_fill_mode"] is not None
+        ) or (
+            "shuffle_bag_enabled" in updates
+            and updates["shuffle_bag_enabled"] is not None
         ):
             frame_settings = self.settings_repo.get_settings()
-            if "background_fill_mode" in updates and updates["background_fill_mode"] is not None:
+            if (
+                "background_fill_mode" in updates
+                and updates["background_fill_mode"] is not None
+            ):
                 mode = str(updates["background_fill_mode"])
                 if mode in VALID_BACKGROUND_FILL_MODES:
                     frame_settings.background_fill_mode = mode
-            if "shuffle_bag_enabled" in updates and updates["shuffle_bag_enabled"] is not None:
-                frame_settings.shuffle_bag_enabled = bool(updates["shuffle_bag_enabled"])
+            if (
+                "shuffle_bag_enabled" in updates
+                and updates["shuffle_bag_enabled"] is not None
+            ):
+                frame_settings.shuffle_bag_enabled = bool(
+                    updates["shuffle_bag_enabled"]
+                )
             self.settings_repo.update_settings(frame_settings)
 
         profile = self.get_config()
@@ -109,20 +120,35 @@ class DisplayService:
     def get_playlist(self, collection_id: str | None = None) -> DisplayPlaylist:
         profile = self.get_config()
         resolved_collection_id = collection_id or profile.selected_collection_id
-        collection = self.collection_repo.get_collection(resolved_collection_id) if resolved_collection_id else None
+        collection = (
+            self.collection_repo.get_collection(resolved_collection_id)
+            if resolved_collection_id
+            else None
+        )
         assets = self.asset_repo.list_assets(collection_id=resolved_collection_id)
-        revision_input = "|".join([profile.updated_at, *(asset.updated_at for asset in assets)])
-        playlist_revision = hashlib.sha256(revision_input.encode("utf-8")).hexdigest()[:16] if revision_input else "empty"
+        revision_input = "|".join(
+            [profile.updated_at, *(asset.updated_at for asset in assets)]
+        )
+        playlist_revision = (
+            hashlib.sha256(revision_input.encode("utf-8")).hexdigest()[:16]
+            if revision_input
+            else "empty"
+        )
 
         if profile.shuffle_enabled:
             assets = sorted(
                 assets,
                 key=lambda asset: hashlib.sha256(
-                    f"{profile.id}:{playlist_revision}:{asset.id}:{asset.checksum_sha256}".encode("utf-8")
+                    f"{profile.id}:{playlist_revision}:{asset.id}:{asset.checksum_sha256}".encode(
+                        "utf-8"
+                    )
                 ).hexdigest(),
             )
         else:
-            assets = sorted(assets, key=lambda asset: (asset.filename.lower(), asset.imported_at, asset.id))
+            assets = sorted(
+                assets,
+                key=lambda asset: (asset.filename.lower(), asset.imported_at, asset.id),
+            )
 
         items = []
         for asset in assets:
@@ -157,7 +183,9 @@ class DisplayService:
         Returns ``None`` on any failure so playlist assembly is never blocked.
         """
         try:
-            meta: dict[str, object] = json.loads(getattr(asset, "metadata_json", "{}") or "{}")
+            meta: dict[str, object] = json.loads(
+                getattr(asset, "metadata_json", "{}") or "{}"
+            )
         except (json.JSONDecodeError, TypeError):
             meta = {}
 
@@ -168,7 +196,11 @@ class DisplayService:
         # Lazy derivation — find the display variant path and compute colours.
         try:
             display_variant = next(
-                (variant for variant in getattr(asset, "variants", []) if getattr(variant, "kind", "") == "display"),
+                (
+                    variant
+                    for variant in getattr(asset, "variants", [])
+                    if getattr(variant, "kind", "") == "display"
+                ),
                 None,
             )
             if display_variant is None:
@@ -186,9 +218,15 @@ class DisplayService:
                 "dominant_color": bg.dominant_color,
                 "gradient_colors": bg.gradient_colors,
             }
-            self.asset_repo.update_metadata_json(asset.id, json.dumps(meta, sort_keys=True))  # type: ignore[union-attr]
+            self.asset_repo.update_metadata_json(
+                asset.id, json.dumps(meta, sort_keys=True)
+            )  # type: ignore[union-attr]
 
             return bg
         except Exception:
-            LOGGER.warning("Background derivation failed for asset %s", getattr(asset, "id", "?"), exc_info=True)
+            LOGGER.warning(
+                "background_derivation_failed",
+                asset_id=getattr(asset, "id", None),
+                exc_info=True,
+            )
             return None

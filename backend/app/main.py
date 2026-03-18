@@ -79,7 +79,7 @@ def create_app() -> FastAPI:
         session_cookie="spf5000_session",
         max_age=7 * 24 * 60 * 60,  # 7 days
         same_site="lax",
-        https_only=False,
+        https_only=settings.session_https_only,
     )
 
     app.add_middleware(

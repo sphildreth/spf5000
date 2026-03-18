@@ -28,7 +28,9 @@ class GooglePhotosAccountSummaryResponse(BaseModel):
     connected_at: str | None = None
 
     @classmethod
-    def from_domain(cls, account: GooglePhotosAccount) -> "GooglePhotosAccountSummaryResponse":
+    def from_domain(
+        cls, account: GooglePhotosAccount
+    ) -> "GooglePhotosAccountSummaryResponse":
         return cls(
             subject=account.account_subject,
             email=account.account_email,
@@ -78,7 +80,9 @@ class GooglePhotosMediaSourceResponse(BaseModel):
     asset_count: int = 0
 
     @classmethod
-    def from_domain(cls, media_source: GooglePhotosMediaSource) -> "GooglePhotosMediaSourceResponse":
+    def from_domain(
+        cls, media_source: GooglePhotosMediaSource
+    ) -> "GooglePhotosMediaSourceResponse":
         return cls(
             id=media_source.media_source_id,
             display_name=media_source.display_name,
@@ -106,7 +110,9 @@ class GooglePhotosSyncRunResponse(BaseModel):
     completed_at: str | None = None
 
     @classmethod
-    def from_domain(cls, sync_run: GooglePhotosSyncRun) -> "GooglePhotosSyncRunResponse":
+    def from_domain(
+        cls, sync_run: GooglePhotosSyncRun
+    ) -> "GooglePhotosSyncRunResponse":
         payload = asdict(sync_run)
         payload["updated_count"] = sync_run.duplicate_count
         payload["removed_count"] = 0
@@ -134,15 +140,12 @@ class GooglePhotosStatusResponse(BaseModel):
     provider_configured: bool
     sync_cadence_seconds: int
     connection_state: str
-    auth_flow: GooglePhotosAuthFlowResponse | None = None
     pending_auth: GooglePhotosAuthFlowResponse | None = None
-    linked_account: GooglePhotosAccountSummaryResponse | None = None
     account: GooglePhotosAccountSummaryResponse | None = None
     device: GooglePhotosDeviceResponse | None = None
     selected_media_sources: list[GooglePhotosMediaSourceResponse]
     latest_sync_run: GooglePhotosSyncRunResponse | None = None
     cached_asset_count: int
-    current_error: str | None = None
     error: str | None = None
     warnings: list[str]
     warning: str | None = None

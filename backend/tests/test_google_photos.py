@@ -49,7 +49,9 @@ class FakeGooglePhotosClient:
     def scope(self) -> str:
         return "openid email profile https://www.googleapis.com/auth/photosambient.mediaitems"
 
-    def start_device_flow(self, *, request_id: str, display_name: str) -> dict[str, object]:
+    def start_device_flow(
+        self, *, request_id: str, display_name: str
+    ) -> dict[str, object]:
         self.device["displayName"] = display_name
         return {
             "device_code": f"device-code-{request_id}",
@@ -63,7 +65,9 @@ class FakeGooglePhotosClient:
     def poll_device_flow(self, *, device_code: str) -> dict[str, object]:
         self.poll_attempts += 1
         if self.poll_attempts == 1:
-            from app.providers.google_photos.errors import GooglePhotosAuthorizationPending
+            from app.providers.google_photos.errors import (
+                GooglePhotosAuthorizationPending,
+            )
 
             raise GooglePhotosAuthorizationPending()
         return {
@@ -88,14 +92,18 @@ class FakeGooglePhotosClient:
             "picture": "https://example.com/picture.jpg",
         }
 
-    def create_device(self, *, access_token: str, request_id: str, display_name: str) -> dict[str, object]:
+    def create_device(
+        self, *, access_token: str, request_id: str, display_name: str
+    ) -> dict[str, object]:
         self.device["displayName"] = display_name
         return dict(self.device)
 
     def get_device(self, *, access_token: str, device_id: str) -> dict[str, object]:
         return dict(self.device)
 
-    def delete_device(self, *, access_token: str, device_id: str | None, request_id: str | None) -> None:
+    def delete_device(
+        self, *, access_token: str, device_id: str | None, request_id: str | None
+    ) -> None:
         self.deleted_device_ids.append(device_id or request_id or "")
 
     def list_media_items(
@@ -121,12 +129,16 @@ class FakeGooglePhotosClient:
 def _configure_google_settings(monkeypatch) -> None:
     monkeypatch.setattr(settings, "google_photos_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_photos_client_secret", "test-client-secret")
-    monkeypatch.setattr(settings, "google_photos_provider_display_name", "Google Photos")
+    monkeypatch.setattr(
+        settings, "google_photos_provider_display_name", "Google Photos"
+    )
     monkeypatch.setattr(settings, "google_photos_sync_cadence_seconds", 3600)
 
 
 def _install_fake_client(monkeypatch, fake_client: FakeGooglePhotosClient) -> None:
-    monkeypatch.setattr(GooglePhotosService, "client_factory", staticmethod(lambda: fake_client))
+    monkeypatch.setattr(
+        GooglePhotosService, "client_factory", staticmethod(lambda: fake_client)
+    )
 
 
 def _expire_active_flow() -> None:
@@ -149,18 +161,21 @@ def test_google_photos_status_and_device_flow_routes(test_client, monkeypatch) -
     assert status_body["configured"] is True
     assert status_body["connection_state"] == "disconnected"
 
-    start_response = test_client.post("/api/google-photos/connect/start", json={"device_display_name": "SPF5000 Test Frame"})
+    start_response = test_client.post(
+        "/api/google-photos/connect/start",
+        json={"device_display_name": "SPF5000 Test Frame"},
+    )
     assert start_response.status_code == 200
     start_body = start_response.json()
     assert start_body["connection_state"] == "awaiting_authorization"
-    assert start_body["auth_flow"]["user_code"] == "ABCD-EFGH"
+    assert start_body["pending_auth"]["user_code"] == "ABCD-EFGH"
 
     _expire_active_flow()
     pending_response = test_client.post("/api/google-photos/connect/poll", json={})
     assert pending_response.status_code == 200
     pending_body = pending_response.json()
     assert pending_body["connection_state"] == "awaiting_authorization"
-    assert pending_body["auth_flow"]["status"] == "polling"
+    assert pending_body["pending_auth"]["status"] == "polling"
 
     _expire_active_flow()
     fake_client.device["mediaSourcesSet"] = True
@@ -172,13 +187,21 @@ def test_google_photos_status_and_device_flow_routes(test_client, monkeypatch) -
     assert connected_response.status_code == 200
     connected_body = connected_response.json()
     assert connected_body["connection_state"] == "connected"
-    assert connected_body["linked_account"]["email"] == "user@example.com"
-    assert connected_body["device"]["settings_uri"] == "https://photos.google.test/settings/device-1"
-    assert {item["id"] for item in connected_body["selected_media_sources"]} == {"album-1", "highlights"}
+    assert connected_body["account"]["email"] == "user@example.com"
+    assert (
+        connected_body["device"]["settings_uri"]
+        == "https://photos.google.test/settings/device-1"
+    )
+    assert {item["id"] for item in connected_body["selected_media_sources"]} == {
+        "album-1",
+        "highlights",
+    }
     assert any("Highlights" in warning for warning in connected_body["warnings"])
 
 
-def test_google_photos_sync_and_disconnect_preserve_cached_assets(test_client, monkeypatch) -> None:
+def test_google_photos_sync_and_disconnect_preserve_cached_assets(
+    test_client, monkeypatch
+) -> None:
     fake_client = FakeGooglePhotosClient()
     fake_client.poll_attempts = 1
     fake_client.device["mediaSourcesSet"] = True
@@ -210,7 +233,10 @@ def test_google_photos_sync_and_disconnect_preserve_cached_assets(test_client, m
     disconnect_body = disconnect_response.json()
     assert disconnect_body["connection_state"] == "disconnected"
     assert disconnect_body["cached_asset_count"] == 1
-    assert any("Cached Google Photos assets" in warning for warning in disconnect_body["warnings"])
+    assert any(
+        "Cached Google Photos assets" in warning
+        for warning in disconnect_body["warnings"]
+    )
     assert fake_client.deleted_device_ids == ["device-1"]
 
 

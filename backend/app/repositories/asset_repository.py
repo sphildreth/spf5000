@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
-from app.db.connection import get_connection, is_null_connection
+from app.db.connection import (
+    exclusive_database_access,
+    get_connection,
+    is_null_connection,
+)
 from app.models.asset import Asset, AssetVariant
-from app.repositories.base import bool_to_int, int_to_bool, row_to_dict, rows_to_dicts, utc_now
+from app.repositories.base import (
+    bool_to_int,
+    int_to_bool,
+    row_to_dict,
+    rows_to_dicts,
+    utc_now,
+)
 
 
 class AssetRepository:
@@ -32,7 +43,9 @@ class AssetRepository:
                     order by imported_at desc, id desc
                     """
                 )
-            assets = [self._to_model(row) for row in rows_to_dicts(cursor, cursor.fetchall())]
+            assets = [
+                self._to_model(row) for row in rows_to_dicts(cursor, cursor.fetchall())
+            ]
         return self._attach_related(assets)
 
     def get_asset(self, asset_id: str) -> Asset | None:
@@ -49,83 +62,89 @@ class AssetRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return None
-            cursor = conn.execute("select * from assets where checksum_sha256 = ?", (checksum_sha256,))
+            cursor = conn.execute(
+                "select * from assets where checksum_sha256 = ?", (checksum_sha256,)
+            )
             row = row_to_dict(cursor, cursor.fetchone())
         if row is None:
             return None
         return self._attach_related([self._to_model(row)])[0]
 
     def create_asset(self, asset: Asset) -> Asset:
-        with get_connection() as conn:
-            if is_null_connection(conn):
-                return asset
-            conn.execute(
-                """
-                insert into assets (
-                    id, source_id, checksum_sha256, filename, original_filename, original_extension,
-                    mime_type, width, height, size_bytes, imported_from_path, local_original_path,
-                    metadata_json, created_at, updated_at, imported_at, is_active
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    asset.id,
-                    asset.source_id,
-                    asset.checksum_sha256,
-                    asset.filename,
-                    asset.original_filename,
-                    asset.original_extension,
-                    asset.mime_type,
-                    asset.width,
-                    asset.height,
-                    asset.size_bytes,
-                    asset.imported_from_path,
-                    asset.local_original_path,
-                    asset.metadata_json,
-                    asset.created_at,
-                    asset.updated_at,
-                    asset.imported_at,
-                    bool_to_int(asset.is_active),
-                ),
-            )
-            for variant in asset.variants:
+        with exclusive_database_access():
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return asset
                 conn.execute(
                     """
-                    insert into asset_variants (
-                        id, asset_id, kind, local_path, mime_type, width, height, size_bytes, created_at
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    insert into assets (
+                        id, source_id, checksum_sha256, filename, original_filename, original_extension,
+                        mime_type, width, height, size_bytes, imported_from_path, local_original_path,
+                        metadata_json, created_at, updated_at, imported_at, is_active
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        variant.id,
-                        variant.asset_id,
-                        variant.kind,
-                        variant.local_path,
-                        variant.mime_type,
-                        variant.width,
-                        variant.height,
-                        variant.size_bytes,
-                        variant.created_at,
+                        asset.id,
+                        asset.source_id,
+                        asset.checksum_sha256,
+                        asset.filename,
+                        asset.original_filename,
+                        asset.original_extension,
+                        asset.mime_type,
+                        asset.width,
+                        asset.height,
+                        asset.size_bytes,
+                        asset.imported_from_path,
+                        asset.local_original_path,
+                        asset.metadata_json,
+                        asset.created_at,
+                        asset.updated_at,
+                        asset.imported_at,
+                        bool_to_int(asset.is_active),
                     ),
                 )
-            for index, collection_id in enumerate(asset.collection_ids):
-                existing = conn.execute(
-                    "select asset_id from collection_assets where collection_id = ? and asset_id = ?",
-                    (collection_id, asset.id),
-                ).fetchone()
-                if existing is None:
+                for variant in asset.variants:
                     conn.execute(
                         """
-                        insert into collection_assets (collection_id, asset_id, sort_order, added_at)
-                        values (?, ?, ?, ?)
+                        insert into asset_variants (
+                            id, asset_id, kind, local_path, mime_type, width, height, size_bytes, created_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (collection_id, asset.id, index, asset.created_at),
+                        (
+                            variant.id,
+                            variant.asset_id,
+                            variant.kind,
+                            variant.local_path,
+                            variant.mime_type,
+                            variant.width,
+                            variant.height,
+                            variant.size_bytes,
+                            variant.created_at,
+                        ),
                     )
+                for index, collection_id in enumerate(asset.collection_ids):
+                    existing = conn.execute(
+                        "select asset_id from collection_assets where collection_id = ? and asset_id = ?",
+                        (collection_id, asset.id),
+                    ).fetchone()
+                    if existing is None:
+                        conn.execute(
+                            """
+                            insert into collection_assets (collection_id, asset_id, sort_order, added_at)
+                            values (?, ?, ?, ?)
+                            """,
+                            (collection_id, asset.id, index, asset.created_at),
+                        )
         return self.get_asset(asset.id) or asset
 
     def add_asset_to_collection(self, asset_id: str, collection_id: str) -> None:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return
-            conn.execute("update assets set is_active = 1, updated_at = ? where id = ?", (utc_now(), asset_id))
+            conn.execute(
+                "update assets set is_active = 1, updated_at = ? where id = ?",
+                (utc_now(), asset_id),
+            )
             existing = conn.execute(
                 "select asset_id from collection_assets where collection_id = ? and asset_id = ?",
                 (collection_id, asset_id),
@@ -225,7 +244,7 @@ class AssetRepository:
         return assets
 
     @staticmethod
-    def _to_model(row: dict[str, object]) -> Asset:
+    def _to_model(row: dict[str, Any]) -> Asset:
         return Asset(
             id=str(row["id"]),
             source_id=str(row["source_id"]),
@@ -247,7 +266,7 @@ class AssetRepository:
         )
 
     @staticmethod
-    def _variant_from_row(row: dict[str, object]) -> AssetVariant:
+    def _variant_from_row(row: dict[str, Any]) -> AssetVariant:
         return AssetVariant(
             id=str(row["id"]),
             asset_id=str(row["asset_id"]),

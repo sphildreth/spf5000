@@ -11,3 +11,4 @@ httpx==0.28.1
 itsdangerous==2.2.0
 slowapi==0.1.9
 pytest==9.0.2
+structlog==25.1.0

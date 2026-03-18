@@ -7,7 +7,13 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.models.weather import WeatherAlert, WeatherCurrentConditions, WeatherLocation, build_location_key, normalize_alert_severity
+from app.models.weather import (
+    WeatherAlert,
+    WeatherCurrentConditions,
+    WeatherLocation,
+    build_location_key,
+    normalize_alert_severity,
+)
 from app.repositories.base import utc_now
 from app.weather.errors import WeatherConfigurationError, WeatherProviderError
 from app.weather.policies import event_priority, resolve_default_escalation_mode
@@ -35,13 +41,17 @@ class NWSWeatherProvider:
             "configured": configured,
         }
 
-    def get_current_conditions(self, location: WeatherLocation) -> WeatherCurrentConditions:
+    def get_current_conditions(
+        self, location: WeatherLocation
+    ) -> WeatherCurrentConditions:
         self._ensure_location(location)
         location_key = build_location_key(location)
         points_payload = self._get_json(
             POINTS_URL.format(latitude=location.latitude, longitude=location.longitude)
         )
-        properties = self._require_dict(points_payload.get("properties"), "NWS points response missing properties")
+        properties = self._require_dict(
+            points_payload.get("properties"), "NWS points response missing properties"
+        )
         observation_stations_url = self._require_string(
             properties.get("observationStations"),
             "NWS points response missing observationStations URL",
@@ -50,49 +60,76 @@ class NWSWeatherProvider:
             properties.get("forecastHourly"),
             "NWS points response missing forecastHourly URL",
         )
-        relative_location = self._parse_relative_location(properties.get("relativeLocation"))
+        relative_location = self._parse_relative_location(
+            properties.get("relativeLocation")
+        )
         location_label = location.label or relative_location or location_key
 
         observation_payload: dict[str, Any] | None = None
         observation_station_id = self._first_station_id(observation_stations_url)
         if observation_station_id:
-            observation_payload = self._get_json(f"https://api.weather.gov/stations/{observation_station_id}/observations/latest")
+            observation_payload = self._get_json(
+                f"https://api.weather.gov/stations/{observation_station_id}/observations/latest"
+            )
         forecast_payload = self._get_json(forecast_hourly_url)
 
         observation_props = (
-            self._require_dict(observation_payload.get("properties"), "NWS observation response missing properties")
+            self._require_dict(
+                observation_payload.get("properties"),
+                "NWS observation response missing properties",
+            )
             if observation_payload
             else {}
         )
         current_period = self._first_forecast_period(forecast_payload)
 
-        temperature_c = self._measurement_to_celsius(observation_props.get("temperature"))
+        temperature_c = self._measurement_to_celsius(
+            observation_props.get("temperature")
+        )
         if temperature_c is None and current_period is not None:
             temperature_c = self._forecast_temperature_to_celsius(current_period)
 
-        humidity_percent = self._optional_int(self._measurement_value(observation_props.get("relativeHumidity")))
+        humidity_percent = self._optional_int(
+            self._measurement_value(observation_props.get("relativeHumidity"))
+        )
         wind_speed_mph = self._measurement_to_mph(observation_props.get("windSpeed"))
         if wind_speed_mph is None and current_period is not None:
-            wind_speed_mph = self._wind_speed_string_to_mph(self._optional_string(current_period.get("windSpeed")))
+            wind_speed_mph = self._wind_speed_string_to_mph(
+                self._optional_string(current_period.get("windSpeed"))
+            )
 
         precipitation_probability_percent = None
         if current_period is not None:
             precipitation_probability_percent = self._optional_int(
-                self._measurement_value(current_period.get("probabilityOfPrecipitation"))
+                self._measurement_value(
+                    current_period.get("probabilityOfPrecipitation")
+                )
             )
 
-        condition = self._optional_string(observation_props.get("textDescription")) or self._optional_string(
-            None if current_period is None else current_period.get("shortForecast")
-        ) or "Unavailable"
+        condition = (
+            self._optional_string(observation_props.get("textDescription"))
+            or self._optional_string(
+                None if current_period is None else current_period.get("shortForecast")
+            )
+            or "Unavailable"
+        )
         icon_token = self._icon_token(
             self._optional_string(observation_props.get("icon"))
-            or self._optional_string(None if current_period is None else current_period.get("icon")),
+            or self._optional_string(
+                None if current_period is None else current_period.get("icon")
+            ),
             condition,
         )
-        wind_direction = self._optional_string(observation_props.get("windDirection", {}).get("value")) if isinstance(
-            observation_props.get("windDirection"),
-            dict,
-        ) else self._optional_string(observation_props.get("windDirection"))
+        wind_direction = (
+            self._optional_string(
+                observation_props.get("windDirection", {}).get("value")
+            )
+            if isinstance(
+                observation_props.get("windDirection"),
+                dict,
+            )
+            else self._optional_string(observation_props.get("windDirection"))
+        )
 
         return WeatherCurrentConditions(
             provider_name=self.provider_name(),
@@ -107,7 +144,9 @@ class NWSWeatherProvider:
             wind_direction=wind_direction,
             precipitation_probability_percent=precipitation_probability_percent,
             observed_at=self._optional_string(observation_props.get("timestamp"))
-            or self._optional_string(None if current_period is None else current_period.get("startTime")),
+            or self._optional_string(
+                None if current_period is None else current_period.get("startTime")
+            ),
             fetched_at=utc_now(),
         )
 
@@ -127,12 +166,23 @@ class NWSWeatherProvider:
             if not isinstance(properties, dict):
                 continue
             event = self._optional_string(properties.get("event")) or "Weather Alert"
-            severity = normalize_alert_severity(self._optional_string(properties.get("severity")) or "unknown")
-            alert_id = self._optional_string(feature.get("id")) or self._optional_string(properties.get("id"))
-            source_alert_id = alert_id or hashlib.sha256(
-                f"{event}|{properties.get('sent')}|{properties.get('headline')}".encode("utf-8")
-            ).hexdigest()
-            escalation_mode = resolve_default_escalation_mode(event, self._optional_string(properties.get("status")))
+            severity = normalize_alert_severity(
+                self._optional_string(properties.get("severity")) or "unknown"
+            )
+            alert_id = self._optional_string(
+                feature.get("id")
+            ) or self._optional_string(properties.get("id"))
+            source_alert_id = (
+                alert_id
+                or hashlib.sha256(
+                    f"{event}|{properties.get('sent')}|{properties.get('headline')}".encode(
+                        "utf-8"
+                    )
+                ).hexdigest()
+            )
+            escalation_mode = resolve_default_escalation_mode(
+                event, self._optional_string(properties.get("status"))
+            )
             event_prio = event_priority(event)
             display_priority = (
                 event_prio * 10_000
@@ -153,12 +203,18 @@ class NWSWeatherProvider:
                     source_alert_id=source_alert_id,
                     event=event,
                     severity=severity,
-                    certainty=self._optional_string(properties.get("certainty")) or "Unknown",
-                    urgency=self._optional_string(properties.get("urgency")) or "Unknown",
+                    certainty=self._optional_string(properties.get("certainty"))
+                    or "Unknown",
+                    urgency=self._optional_string(properties.get("urgency"))
+                    or "Unknown",
                     headline=self._optional_string(properties.get("headline")) or event,
-                    description=self._optional_string(properties.get("description")) or "",
-                    instruction=self._optional_string(properties.get("instruction")) or "",
-                    area=self._optional_string(properties.get("areaDesc")) or location.label or location_key,
+                    description=self._optional_string(properties.get("description"))
+                    or "",
+                    instruction=self._optional_string(properties.get("instruction"))
+                    or "",
+                    area=self._optional_string(properties.get("areaDesc"))
+                    or location.label
+                    or location_key,
                     status=self._optional_string(properties.get("status")) or "Actual",
                     issued_at=self._optional_string(properties.get("sent")),
                     effective_at=self._optional_string(properties.get("effective")),
@@ -175,15 +231,39 @@ class NWSWeatherProvider:
             )
         return alerts
 
-    def _get_json(self, url: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get_json(
+        self, url: str, *, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         headers = {
             "Accept": "application/geo+json, application/json",
             "User-Agent": f"{settings.app_name}/{settings.app_version} (weather cache; admin-managed display)",
         }
-        with httpx.Client(timeout=self.timeout_seconds, headers=headers, follow_redirects=True) as client:
-            response = client.get(url, params=params)
+        last_exc: Exception | None = None
+        for attempt in range(4):
+            try:
+                with httpx.Client(
+                    timeout=self.timeout_seconds,
+                    headers=headers,
+                    follow_redirects=True,
+                ) as client:
+                    response = client.get(url, params=params)
+                if response.status_code not in {429, 500, 502, 503, 504}:
+                    break
+                last_exc = WeatherProviderError(
+                    f"NWS request failed with status {response.status_code} for {url}"
+                )
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_exc = exc
+            if attempt < 3:
+                import time
+
+                time.sleep(2.0**attempt)
+        else:
+            raise last_exc or WeatherProviderError(f"NWS request failed for {url}")
         if response.status_code >= 400:
-            raise WeatherProviderError(f"NWS request failed with status {response.status_code} for {url}")
+            raise WeatherProviderError(
+                f"NWS request failed with status {response.status_code} for {url}"
+            )
         try:
             payload = response.json()
         except ValueError as exc:
@@ -204,7 +284,9 @@ class NWSWeatherProvider:
             if isinstance(first_feature.get("id"), str):
                 return str(first_feature["id"]).rstrip("/").split("/")[-1]
             properties = first_feature.get("properties")
-            if isinstance(properties, dict) and isinstance(properties.get("stationIdentifier"), str):
+            if isinstance(properties, dict) and isinstance(
+                properties.get("stationIdentifier"), str
+            ):
                 return str(properties["stationIdentifier"])
         return None
 
@@ -299,7 +381,9 @@ class NWSWeatherProvider:
     @staticmethod
     def _icon_token(icon_url: str | None, condition: str) -> str:
         normalized = ((icon_url or "") + " " + (condition or "")).lower()
-        if any(token in normalized for token in ("tornado", "thunder", "tsra", "storm")):
+        if any(
+            token in normalized for token in ("tornado", "thunder", "tsra", "storm")
+        ):
             return "thunderstorm"
         if any(token in normalized for token in ("snow", "blizzard", "sleet")):
             return "snow"
@@ -347,7 +431,9 @@ class NWSWeatherProvider:
     @staticmethod
     def _ensure_location(location: WeatherLocation) -> None:
         if not location.is_configured:
-            raise WeatherConfigurationError("Weather location must include both latitude and longitude")
+            raise WeatherConfigurationError(
+                "Weather location must include both latitude and longitude"
+            )
 
 
 def alert_is_active(alert: WeatherAlert, *, now: datetime | None = None) -> bool:

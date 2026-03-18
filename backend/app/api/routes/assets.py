@@ -24,22 +24,29 @@ from app.schemas.asset import (
 from app.services.asset_service import AssetService
 
 router = APIRouter()
-service = AssetService()
-
 _admin_dep = [Depends(require_admin)]
 
 
+def get_asset_service() -> AssetService:
+    return AssetService()
+
+
 @router.get("", response_model=list[AssetResponse], dependencies=_admin_dep)
-def list_assets(collection_id: str | None = None) -> list[AssetResponse]:
+def list_assets(
+    collection_id: str | None = None,
+    svc: AssetService = Depends(get_asset_service),
+) -> list[AssetResponse]:
     return [
         AssetResponse.from_domain(asset)
-        for asset in service.list_assets(collection_id=collection_id)
+        for asset in svc.list_assets(collection_id=collection_id)
     ]
 
 
 @router.get("/{asset_id}", response_model=AssetResponse, dependencies=_admin_dep)
-def get_asset(asset_id: str) -> AssetResponse:
-    asset = service.get_asset(asset_id)
+def get_asset(
+    asset_id: str, svc: AssetService = Depends(get_asset_service)
+) -> AssetResponse:
+    asset = svc.get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found")
     return AssetResponse.from_domain(asset)
@@ -56,9 +63,10 @@ def upload_assets(
         list[UploadFile], File(description="One or more image files to import")
     ],
     collection_id: Annotated[str | None, Form()] = None,
+    svc: AssetService = Depends(get_asset_service),
 ) -> AssetUploadResponse:
     try:
-        summary = service.upload_files(files=files, collection_id=collection_id)
+        summary = svc.upload_files(files=files, collection_id=collection_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -67,9 +75,12 @@ def upload_assets(
 
 
 @router.post("/bulk-remove", response_model=BulkRemoveResponse, dependencies=_admin_dep)
-def bulk_remove_assets(body: BulkRemoveRequest) -> BulkRemoveResponse:
+def bulk_remove_assets(
+    body: BulkRemoveRequest,
+    svc: AssetService = Depends(get_asset_service),
+) -> BulkRemoveResponse:
     try:
-        summary = service.bulk_remove_from_collection(
+        summary = svc.bulk_remove_from_collection(
             collection_id=body.collection_id,
             asset_ids=body.asset_ids,
         )
@@ -90,9 +101,10 @@ def bulk_remove_assets(body: BulkRemoveRequest) -> BulkRemoveResponse:
 def remove_asset_from_collection(
     asset_id: str,
     collection_id: Annotated[str, Query(description="Collection membership to remove")],
+    svc: AssetService = Depends(get_asset_service),
 ) -> Response:
     try:
-        service.remove_from_collection(asset_id=asset_id, collection_id=collection_id)
+        svc.remove_from_collection(asset_id=asset_id, collection_id=collection_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -103,8 +115,12 @@ def remove_asset_from_collection(
 @router.get(
     "/{asset_id}/variants/{kind}"
 )  # intentionally public — served to the display client
-def get_asset_variant(asset_id: str, kind: str) -> FileResponse:
-    variant = service.get_variant_path(asset_id, kind)
+def get_asset_variant(
+    asset_id: str,
+    kind: str,
+    svc: AssetService = Depends(get_asset_service),
+) -> FileResponse:
+    variant = svc.get_variant_path(asset_id, kind)
     if variant is None:
         raise HTTPException(status_code=404, detail="Asset variant not found")
     path, media_type = variant

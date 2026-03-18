@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
 
 from app.core.config import settings
-from app.db.connection import decentdb, exclusive_database_access, get_connection, is_null_connection, reset_connection_state
+from app.db.connection import (
+    decentdb,
+    exclusive_database_access,
+    get_connection,
+    is_null_connection,
+    reset_connection_state,
+)
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = structlog.get_logger(__name__)
 
 DEFAULT_SOURCE_ID = "default-local-files"
 DEFAULT_COLLECTION_ID = "default-collection"
@@ -441,14 +447,18 @@ def initialize_storage() -> None:
 
     fallback_file = settings.fallback_assets_dir / "empty-display.jpg"
     if not fallback_file.exists():
-        image = Image.new("RGB", (settings.display_max_width, settings.display_max_height), color=(0, 0, 0))
+        image = Image.new(
+            "RGB",
+            (settings.display_max_width, settings.display_max_height),
+            color=(0, 0, 0),
+        )
         image.save(fallback_file, format="JPEG", quality=settings.jpeg_quality)
 
 
 def bootstrap_database() -> None:
     with get_connection() as conn:
         if is_null_connection(conn):
-            LOGGER.warning("DecentDB unavailable; running with NullConnection fallback")
+            LOGGER.warning("decentdb_unavailable_null_fallback")
             return
 
         existing_tables = set(conn.list_tables())
@@ -467,7 +477,12 @@ def bootstrap_database() -> None:
             "idle_message",
             "text not null default 'Add photos from the admin UI to begin playback.'",
         )
-        _ensure_column(conn, "display_profiles", "refresh_interval_seconds", "integer not null default 60")
+        _ensure_column(
+            conn,
+            "display_profiles",
+            "refresh_interval_seconds",
+            "integer not null default 60",
+        )
         _ensure_column(conn, "admin_users", "last_login_at", "text")
         _ensure_column(conn, "provider_auth_flows", "verification_uri_complete", "text")
         _ensure_column(conn, "provider_auth_flows", "last_polled_at", "text")
@@ -476,7 +491,9 @@ def bootstrap_database() -> None:
         _ensure_column(conn, "provider_accounts", "last_completed_sync_at", "text")
         _ensure_column(conn, "provider_assets", "cached_original_path", "text")
         _ensure_column(conn, "provider_assets", "checksum_sha256", "text")
-        _ensure_column(conn, "provider_sync_runs", "duplicate_count", "integer not null default 0")
+        _ensure_column(
+            conn, "provider_sync_runs", "duplicate_count", "integer not null default 0"
+        )
 
         now = utc_now()
         for key, value in DEFAULT_SETTINGS.items():
@@ -487,7 +504,12 @@ def bootstrap_database() -> None:
                     (key, value, now),
                 )
 
-        if conn.execute("select id from sources where id = ?", (DEFAULT_SOURCE_ID,)).fetchone() is None:
+        if (
+            conn.execute(
+                "select id from sources where id = ?", (DEFAULT_SOURCE_ID,)
+            ).fetchone()
+            is None
+        ):
             conn.execute(
                 """
                 insert into sources (
@@ -507,7 +529,12 @@ def bootstrap_database() -> None:
                 ),
             )
 
-        if conn.execute("select id from collections where id = ?", (DEFAULT_COLLECTION_ID,)).fetchone() is None:
+        if (
+            conn.execute(
+                "select id from collections where id = ?", (DEFAULT_COLLECTION_ID,)
+            ).fetchone()
+            is None
+        ):
             conn.execute(
                 """
                 insert into collections (
@@ -526,7 +553,12 @@ def bootstrap_database() -> None:
                 ),
             )
 
-        if conn.execute("select id from sources where id = ?", (GOOGLE_PHOTOS_SOURCE_ID,)).fetchone() is None:
+        if (
+            conn.execute(
+                "select id from sources where id = ?", (GOOGLE_PHOTOS_SOURCE_ID,)
+            ).fetchone()
+            is None
+        ):
             conn.execute(
                 """
                 insert into sources (
@@ -546,7 +578,13 @@ def bootstrap_database() -> None:
                 ),
             )
 
-        if conn.execute("select id from collections where id = ?", (GOOGLE_PHOTOS_COLLECTION_ID,)).fetchone() is None:
+        if (
+            conn.execute(
+                "select id from collections where id = ?",
+                (GOOGLE_PHOTOS_COLLECTION_ID,),
+            ).fetchone()
+            is None
+        ):
             conn.execute(
                 """
                 insert into collections (
@@ -565,7 +603,13 @@ def bootstrap_database() -> None:
                 ),
             )
 
-        if conn.execute("select id from display_profiles where id = ?", (DEFAULT_DISPLAY_PROFILE_ID,)).fetchone() is None:
+        if (
+            conn.execute(
+                "select id from display_profiles where id = ?",
+                (DEFAULT_DISPLAY_PROFILE_ID,),
+            ).fetchone()
+            is None
+        ):
             conn.execute(
                 """
                 insert into display_profiles (
@@ -640,11 +684,14 @@ def initialize_runtime() -> None:
 
         recovery_dir, moved_paths = _quarantine_unreadable_database()
         LOGGER.error(
-            "DecentDB bootstrap failed because %s appears unreadable or corrupt; moved %s to %s and retrying with a fresh database",
-            settings.database_path,
-            ", ".join(path.name for path in moved_paths),
-            recovery_dir,
+            "decentdb_bootstrap_failed_corrupt",
+            database_path=str(settings.database_path),
+            moved_files=[path.name for path in moved_paths],
+            recovery_dir=str(recovery_dir),
             exc_info=exc,
         )
         bootstrap_database()
-        LOGGER.warning("Recovered startup by quarantining unreadable database files in %s", recovery_dir)
+        LOGGER.warning(
+            "decentdb_recovered_from_quarantine",
+            recovery_dir=str(recovery_dir),
+        )

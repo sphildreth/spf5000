@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from app.db.connection import get_connection, is_null_connection
+from app.db.connection import (
+    exclusive_database_access,
+    get_connection,
+    is_null_connection,
+)
 from app.providers.google_photos.metadata import PROVIDER_NAME
 from app.providers.google_photos.models import (
     GooglePhotosAccount,
@@ -11,7 +15,15 @@ from app.providers.google_photos.models import (
     GooglePhotosProviderAsset,
     GooglePhotosSyncRun,
 )
-from app.repositories.base import bool_to_int, int_to_bool, json_dumps, json_loads, row_to_dict, rows_to_dicts, utc_now
+from app.repositories.base import (
+    bool_to_int,
+    int_to_bool,
+    json_dumps,
+    json_loads,
+    row_to_dict,
+    rows_to_dicts,
+    utc_now,
+)
 
 
 class GooglePhotosRepository:
@@ -19,7 +31,10 @@ class GooglePhotosRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return None
-            cursor = conn.execute("select * from provider_accounts where provider_name = ?", (PROVIDER_NAME,))
+            cursor = conn.execute(
+                "select * from provider_accounts where provider_name = ?",
+                (PROVIDER_NAME,),
+            )
             row = row_to_dict(cursor, cursor.fetchone())
         return None if row is None else self._account_from_row(row)
 
@@ -27,7 +42,10 @@ class GooglePhotosRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return account
-            existing = conn.execute("select id from provider_accounts where provider_name = ?", (PROVIDER_NAME,)).fetchone()
+            existing = conn.execute(
+                "select id from provider_accounts where provider_name = ?",
+                (PROVIDER_NAME,),
+            ).fetchone()
             values = (
                 account.id,
                 account.provider_name,
@@ -144,7 +162,9 @@ class GooglePhotosRepository:
             updated_at=now,
         )
 
-    def get_latest_auth_flow(self, *, include_completed: bool = True) -> GooglePhotosAuthFlow | None:
+    def get_latest_auth_flow(
+        self, *, include_completed: bool = True
+    ) -> GooglePhotosAuthFlow | None:
         query = "select * from provider_auth_flows where provider_name = ?"
         params: tuple[object, ...] = (PROVIDER_NAME,)
         if not include_completed:
@@ -238,11 +258,16 @@ class GooglePhotosRepository:
             )
         return self.get_latest_auth_flow() or flow
 
-    def replace_media_sources(self, media_sources: list[GooglePhotosMediaSource]) -> None:
+    def replace_media_sources(
+        self, media_sources: list[GooglePhotosMediaSource]
+    ) -> None:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return
-            conn.execute("delete from provider_media_sources where provider_name = ?", (PROVIDER_NAME,))
+            conn.execute(
+                "delete from provider_media_sources where provider_name = ?",
+                (PROVIDER_NAME,),
+            )
             for media_source in media_sources:
                 conn.execute(
                     """
@@ -338,7 +363,9 @@ class GooglePhotosRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return None
-            cursor = conn.execute("select * from provider_sync_runs where id = ?", (sync_run_id,))
+            cursor = conn.execute(
+                "select * from provider_sync_runs where id = ?", (sync_run_id,)
+            )
             row = row_to_dict(cursor, cursor.fetchone())
         return None if row is None else self._sync_run_from_row(row)
 
@@ -353,7 +380,9 @@ class GooglePhotosRepository:
             row = row_to_dict(cursor, cursor.fetchone())
         return None if row is None else self._sync_run_from_row(row)
 
-    def get_provider_asset(self, remote_media_id: str) -> GooglePhotosProviderAsset | None:
+    def get_provider_asset(
+        self, remote_media_id: str
+    ) -> GooglePhotosProviderAsset | None:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return None
@@ -366,79 +395,89 @@ class GooglePhotosRepository:
             return None
         return self._attach_asset_media_sources(self._provider_asset_from_row(row))
 
-    def upsert_provider_asset(self, provider_asset: GooglePhotosProviderAsset) -> GooglePhotosProviderAsset:
-        with get_connection() as conn:
-            if is_null_connection(conn):
-                return provider_asset
-            existing = conn.execute(
-                "select id from provider_assets where provider_name = ? and remote_media_id = ?",
-                (PROVIDER_NAME, provider_asset.remote_media_id),
-            ).fetchone()
-            values = (
-                provider_asset.id,
-                provider_asset.provider_name,
-                provider_asset.remote_media_id,
-                provider_asset.local_asset_id,
-                provider_asset.mime_type,
-                provider_asset.width,
-                provider_asset.height,
-                provider_asset.create_time,
-                provider_asset.imported_from_path,
-                provider_asset.remote_base_url,
-                provider_asset.cached_original_path,
-                provider_asset.checksum_sha256,
-                provider_asset.metadata_json,
-                provider_asset.first_synced_at,
-                provider_asset.last_synced_at,
-                provider_asset.last_seen_at,
-                bool_to_int(provider_asset.is_active),
-            )
-            if existing is None:
-                conn.execute(
-                    """
-                    insert into provider_assets (
-                        id, provider_name, remote_media_id, local_asset_id, mime_type, width, height, create_time,
-                        imported_from_path, remote_base_url, cached_original_path, checksum_sha256, metadata_json,
-                        first_synced_at, last_synced_at, last_seen_at, is_active
-                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    values,
+    def upsert_provider_asset(
+        self, provider_asset: GooglePhotosProviderAsset
+    ) -> GooglePhotosProviderAsset:
+        with exclusive_database_access():
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return provider_asset
+                existing = conn.execute(
+                    "select id from provider_assets where provider_name = ? and remote_media_id = ?",
+                    (PROVIDER_NAME, provider_asset.remote_media_id),
+                ).fetchone()
+                values = (
+                    provider_asset.id,
+                    provider_asset.provider_name,
+                    provider_asset.remote_media_id,
+                    provider_asset.local_asset_id,
+                    provider_asset.mime_type,
+                    provider_asset.width,
+                    provider_asset.height,
+                    provider_asset.create_time,
+                    provider_asset.imported_from_path,
+                    provider_asset.remote_base_url,
+                    provider_asset.cached_original_path,
+                    provider_asset.checksum_sha256,
+                    provider_asset.metadata_json,
+                    provider_asset.first_synced_at,
+                    provider_asset.last_synced_at,
+                    provider_asset.last_seen_at,
+                    bool_to_int(provider_asset.is_active),
                 )
-            else:
+                if existing is None:
+                    conn.execute(
+                        """
+                        insert into provider_assets (
+                            id, provider_name, remote_media_id, local_asset_id, mime_type, width, height, create_time,
+                            imported_from_path, remote_base_url, cached_original_path, checksum_sha256, metadata_json,
+                            first_synced_at, last_synced_at, last_seen_at, is_active
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        values,
+                    )
+                else:
+                    conn.execute(
+                        """
+                        update provider_assets
+                        set id = ?, local_asset_id = ?, mime_type = ?, width = ?, height = ?, create_time = ?,
+                            imported_from_path = ?, remote_base_url = ?, cached_original_path = ?, checksum_sha256 = ?,
+                            metadata_json = ?, first_synced_at = ?, last_synced_at = ?, last_seen_at = ?, is_active = ?
+                        where provider_name = ? and remote_media_id = ?
+                        """,
+                        (
+                            provider_asset.id,
+                            provider_asset.local_asset_id,
+                            provider_asset.mime_type,
+                            provider_asset.width,
+                            provider_asset.height,
+                            provider_asset.create_time,
+                            provider_asset.imported_from_path,
+                            provider_asset.remote_base_url,
+                            provider_asset.cached_original_path,
+                            provider_asset.checksum_sha256,
+                            provider_asset.metadata_json,
+                            provider_asset.first_synced_at,
+                            provider_asset.last_synced_at,
+                            provider_asset.last_seen_at,
+                            bool_to_int(provider_asset.is_active),
+                            PROVIDER_NAME,
+                            provider_asset.remote_media_id,
+                        ),
+                    )
                 conn.execute(
-                    """
-                    update provider_assets
-                    set id = ?, local_asset_id = ?, mime_type = ?, width = ?, height = ?, create_time = ?,
-                        imported_from_path = ?, remote_base_url = ?, cached_original_path = ?, checksum_sha256 = ?,
-                        metadata_json = ?, first_synced_at = ?, last_synced_at = ?, last_seen_at = ?, is_active = ?
-                    where provider_name = ? and remote_media_id = ?
-                    """,
-                    (
-                        provider_asset.id,
-                        provider_asset.local_asset_id,
-                        provider_asset.mime_type,
-                        provider_asset.width,
-                        provider_asset.height,
-                        provider_asset.create_time,
-                        provider_asset.imported_from_path,
-                        provider_asset.remote_base_url,
-                        provider_asset.cached_original_path,
-                        provider_asset.checksum_sha256,
-                        provider_asset.metadata_json,
-                        provider_asset.first_synced_at,
-                        provider_asset.last_synced_at,
-                        provider_asset.last_seen_at,
-                        bool_to_int(provider_asset.is_active),
-                        PROVIDER_NAME,
-                        provider_asset.remote_media_id,
-                    ),
+                    "delete from provider_asset_media_sources where provider_asset_id = ?",
+                    (provider_asset.id,),
                 )
-            conn.execute("delete from provider_asset_media_sources where provider_asset_id = ?", (provider_asset.id,))
-            for media_source_id in provider_asset.media_source_ids:
-                conn.execute(
-                    "insert into provider_asset_media_sources (provider_asset_id, media_source_id, added_at) values (?, ?, ?)",
-                    (provider_asset.id, media_source_id, provider_asset.last_seen_at),
-                )
+                for media_source_id in provider_asset.media_source_ids:
+                    conn.execute(
+                        "insert into provider_asset_media_sources (provider_asset_id, media_source_id, added_at) values (?, ?, ?)",
+                        (
+                            provider_asset.id,
+                            media_source_id,
+                            provider_asset.last_seen_at,
+                        ),
+                    )
         return self.get_provider_asset(provider_asset.remote_media_id) or provider_asset
 
     def count_provider_assets(self) -> int:
@@ -451,7 +490,9 @@ class GooglePhotosRepository:
             )
             return int(cursor.fetchone()[0])
 
-    def _attach_asset_media_sources(self, provider_asset: GooglePhotosProviderAsset) -> GooglePhotosProviderAsset:
+    def _attach_asset_media_sources(
+        self, provider_asset: GooglePhotosProviderAsset
+    ) -> GooglePhotosProviderAsset:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return provider_asset
@@ -468,26 +509,56 @@ class GooglePhotosRepository:
             id=str(row["id"]),
             provider_name=str(row["provider_name"]),
             connection_state=str(row["connection_state"]),
-            account_subject=None if row["account_subject"] is None else str(row["account_subject"]),
-            account_email=None if row["account_email"] is None else str(row["account_email"]),
-            account_display_name=None if row["account_display_name"] is None else str(row["account_display_name"]),
-            account_picture_url=None if row["account_picture_url"] is None else str(row["account_picture_url"]),
-            access_token=None if row["access_token"] is None else str(row["access_token"]),
-            refresh_token=None if row["refresh_token"] is None else str(row["refresh_token"]),
+            account_subject=None
+            if row["account_subject"] is None
+            else str(row["account_subject"]),
+            account_email=None
+            if row["account_email"] is None
+            else str(row["account_email"]),
+            account_display_name=None
+            if row["account_display_name"] is None
+            else str(row["account_display_name"]),
+            account_picture_url=None
+            if row["account_picture_url"] is None
+            else str(row["account_picture_url"]),
+            access_token=None
+            if row["access_token"] is None
+            else str(row["access_token"]),
+            refresh_token=None
+            if row["refresh_token"] is None
+            else str(row["refresh_token"]),
             scope=str(row["scope"] or ""),
-            access_token_expires_at=None if row["access_token_expires_at"] is None else str(row["access_token_expires_at"]),
+            access_token_expires_at=None
+            if row["access_token_expires_at"] is None
+            else str(row["access_token_expires_at"]),
             request_id=None if row["request_id"] is None else str(row["request_id"]),
             device_id=None if row["device_id"] is None else str(row["device_id"]),
-            device_display_name=None if row["device_display_name"] is None else str(row["device_display_name"]),
-            settings_uri=None if row["settings_uri"] is None else str(row["settings_uri"]),
+            device_display_name=None
+            if row["device_display_name"] is None
+            else str(row["device_display_name"]),
+            settings_uri=None
+            if row["settings_uri"] is None
+            else str(row["settings_uri"]),
             media_sources_set=int_to_bool(row["media_sources_set"]),
             device_poll_interval_seconds=int(row["device_poll_interval_seconds"] or 30),
-            device_created_at=None if row["device_created_at"] is None else str(row["device_created_at"]),
-            last_device_poll_at=None if row["last_device_poll_at"] is None else str(row["last_device_poll_at"]),
-            connected_at=None if row["connected_at"] is None else str(row["connected_at"]),
-            disconnected_at=None if row["disconnected_at"] is None else str(row["disconnected_at"]),
-            last_sync_requested_at=None if row["last_sync_requested_at"] is None else str(row["last_sync_requested_at"]),
-            last_completed_sync_at=None if row["last_completed_sync_at"] is None else str(row["last_completed_sync_at"]),
+            device_created_at=None
+            if row["device_created_at"] is None
+            else str(row["device_created_at"]),
+            last_device_poll_at=None
+            if row["last_device_poll_at"] is None
+            else str(row["last_device_poll_at"]),
+            connected_at=None
+            if row["connected_at"] is None
+            else str(row["connected_at"]),
+            disconnected_at=None
+            if row["disconnected_at"] is None
+            else str(row["disconnected_at"]),
+            last_sync_requested_at=None
+            if row["last_sync_requested_at"] is None
+            else str(row["last_sync_requested_at"]),
+            last_completed_sync_at=None
+            if row["last_completed_sync_at"] is None
+            else str(row["last_completed_sync_at"]),
             current_error=str(row["current_error"] or ""),
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
@@ -504,15 +575,23 @@ class GooglePhotosRepository:
             device_code=str(row["device_code"]),
             user_code=str(row["user_code"]),
             verification_uri=str(row["verification_uri"]),
-            verification_uri_complete=None if row["verification_uri_complete"] is None else str(row["verification_uri_complete"]),
+            verification_uri_complete=None
+            if row["verification_uri_complete"] is None
+            else str(row["verification_uri_complete"]),
             interval_seconds=int(row["interval_seconds"]),
             expires_at=str(row["expires_at"]),
             error_message=str(row["error_message"] or ""),
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
-            last_polled_at=None if row["last_polled_at"] is None else str(row["last_polled_at"]),
-            next_poll_at=None if row["next_poll_at"] is None else str(row["next_poll_at"]),
-            completed_at=None if row["completed_at"] is None else str(row["completed_at"]),
+            last_polled_at=None
+            if row["last_polled_at"] is None
+            else str(row["last_polled_at"]),
+            next_poll_at=None
+            if row["next_poll_at"] is None
+            else str(row["next_poll_at"]),
+            completed_at=None
+            if row["completed_at"] is None
+            else str(row["completed_at"]),
         )
 
     @staticmethod
@@ -544,7 +623,9 @@ class GooglePhotosRepository:
             skipped_count=int(row["skipped_count"]),
             error_count=int(row["error_count"]),
             started_at=str(row["started_at"]),
-            completed_at=None if row["completed_at"] is None else str(row["completed_at"]),
+            completed_at=None
+            if row["completed_at"] is None
+            else str(row["completed_at"]),
         )
 
     @staticmethod
@@ -553,15 +634,21 @@ class GooglePhotosRepository:
             id=str(row["id"]),
             provider_name=str(row["provider_name"]),
             remote_media_id=str(row["remote_media_id"]),
-            local_asset_id=None if row["local_asset_id"] is None else str(row["local_asset_id"]),
+            local_asset_id=None
+            if row["local_asset_id"] is None
+            else str(row["local_asset_id"]),
             mime_type=str(row["mime_type"]),
             width=int(row["width"] or 0),
             height=int(row["height"] or 0),
             create_time=None if row["create_time"] is None else str(row["create_time"]),
             imported_from_path=str(row["imported_from_path"]),
             remote_base_url=str(row["remote_base_url"] or ""),
-            cached_original_path=None if row["cached_original_path"] is None else str(row["cached_original_path"]),
-            checksum_sha256=None if row["checksum_sha256"] is None else str(row["checksum_sha256"]),
+            cached_original_path=None
+            if row["cached_original_path"] is None
+            else str(row["cached_original_path"]),
+            checksum_sha256=None
+            if row["checksum_sha256"] is None
+            else str(row["checksum_sha256"]),
             metadata_json=str(row["metadata_json"] or "{}"),
             first_synced_at=str(row["first_synced_at"]),
             last_synced_at=str(row["last_synced_at"]),

@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from typing import Generator
+
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
@@ -43,12 +45,16 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "log_dir", log_dir)
     monkeypatch.setattr(settings, "database_path", data_dir / "spf5000.ddb")
     monkeypatch.setattr(settings, "frontend_dist_dir", tmp_path / "frontend-dist")
-    monkeypatch.setattr(settings, "legacy_frontend_dist_dir", tmp_path / "frontend-dist-legacy")
+    monkeypatch.setattr(
+        settings, "legacy_frontend_dist_dir", tmp_path / "frontend-dist-legacy"
+    )
     monkeypatch.setattr(settings, "session_secret", _TEST_SESSION_SECRET)
 
 
 @pytest.fixture()
-def test_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def test_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient, None, None]:
     _patch_settings(monkeypatch, tmp_path)
     app = create_app()
     with TestClient(app, raise_server_exceptions=True) as client:
@@ -71,7 +77,9 @@ def test_get_settings_includes_theme_defaults(test_client: TestClient) -> None:
     resp = test_client.get("/api/settings")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["theme_id"] == "default-dark", "Default theme_id should be 'default-dark'"
+    assert body["theme_id"] == "default-dark", (
+        "Default theme_id should be 'default-dark'"
+    )
     assert body["home_city_accent_style"] == "default", (
         "Default home_city_accent_style should be 'default'"
     )
@@ -103,10 +111,15 @@ def test_put_settings_persists_home_city_accent_style(test_client: TestClient) -
     assert get_resp.json()["home_city_accent_style"] == "accent_glow"
 
 
-def test_put_settings_omitting_theme_fields_uses_defaults(test_client: TestClient) -> None:
+def test_put_settings_omitting_theme_fields_uses_defaults(
+    test_client: TestClient,
+) -> None:
     """A PUT that omits theme_id and home_city_accent_style should apply defaults."""
-    payload = {k: v for k, v in _FULL_SETTINGS_PAYLOAD.items()
-               if k not in ("theme_id", "home_city_accent_style")}
+    payload = {
+        k: v
+        for k, v in _FULL_SETTINGS_PAYLOAD.items()
+        if k not in ("theme_id", "home_city_accent_style")
+    }
     resp = test_client.put("/api/settings", json=payload)
     assert resp.status_code == 200
     body = resp.json()
@@ -130,7 +143,9 @@ def test_put_settings_round_trips_all_theme_fields(test_client: TestClient) -> N
 # ── Auth protection — existing routes should still be guarded ─────────────────
 
 
-def test_settings_requires_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_settings_requires_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """GET /api/settings must return 401 without a valid admin session."""
     _patch_settings(monkeypatch, tmp_path)
     app = create_app()
@@ -150,7 +165,9 @@ def test_settings_requires_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             assert resp.status_code == 401
 
 
-def test_put_settings_requires_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_put_settings_requires_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """PUT /api/settings must return 401 without a valid admin session."""
     _patch_settings(monkeypatch, tmp_path)
     app = create_app()

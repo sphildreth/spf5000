@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { getSession, logout as apiLogout } from '../api/auth'
 import type { AuthSessionResponse, AuthUser } from '../api/types'
@@ -21,11 +21,11 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null)
 
-function toSessionState(session: AuthSessionResponse): SessionState {
+function toSessionState(session: AuthSessionResponse, backendReachable: boolean): SessionState {
   return {
     status: session.authenticated ? 'authenticated' : 'anonymous',
     authAvailable: session.auth_available,
-    backendReachable: true,
+    backendReachable,
     bootstrapped: session.bootstrapped,
     user: session.user,
   }
@@ -39,12 +39,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     bootstrapped: false,
     user: null,
   })
+  const backendReachableRef = useRef(true)
 
   const refresh = useCallback(async () => {
     try {
       const session = await getSession()
-      setState(toSessionState(session))
+      backendReachableRef.current = true
+      setState(toSessionState(session, true))
     } catch {
+      backendReachableRef.current = false
       setState({
         status: 'anonymous',
         authAvailable: false,
@@ -58,7 +61,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       const session = await apiLogout()
-      setState(toSessionState(session))
+      setState(toSessionState(session, backendReachableRef.current))
     } catch {
       setState((current) => ({
         ...current,

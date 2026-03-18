@@ -12,22 +12,30 @@ from app.services.display_service import DisplayService
 from app.services.weather_service import WeatherService
 
 router = APIRouter()
-service = DisplayService()
-weather_service = WeatherService()
-
 _admin_dep = [Depends(require_admin)]
 
 
+def get_display_service() -> DisplayService:
+    return DisplayService()
+
+
+def get_weather_service() -> WeatherService:
+    return WeatherService()
+
+
 @router.get("/config", response_model=DisplayProfileResponse, dependencies=_admin_dep)
-def get_display_config() -> DisplayProfileResponse:
-    return DisplayProfileResponse.from_domain(service.get_config())
+def get_display_config(
+    svc: DisplayService = Depends(get_display_service),
+) -> DisplayProfileResponse:
+    return DisplayProfileResponse.from_domain(svc.get_config())
 
 
 @router.put("/config", response_model=DisplayProfileResponse, dependencies=_admin_dep)
 def update_display_config(
     request: DisplayConfigUpdateRequest,
+    svc: DisplayService = Depends(get_display_service),
 ) -> DisplayProfileResponse:
-    updated = service.update_config(request.model_dump(exclude_unset=True))
+    updated = svc.update_config(request.model_dump(exclude_unset=True))
     return DisplayProfileResponse.from_domain(updated)
 
 
@@ -36,21 +44,22 @@ def update_display_config(
 )  # intentionally public
 def get_display_playlist(
     collection_id: str | None = None,
+    svc: DisplayService = Depends(get_display_service),
 ) -> PublicDisplayPlaylistResponse:
     return PublicDisplayPlaylistResponse.from_domain(
-        service.get_playlist(collection_id=collection_id)
+        svc.get_playlist(collection_id=collection_id)
     )
 
 
 @router.get("/weather", response_model=DisplayWeatherResponse)  # intentionally public
-def get_display_weather() -> DisplayWeatherResponse:
-    return DisplayWeatherResponse.model_validate(
-        weather_service.get_display_weather_payload()
-    )
+def get_display_weather(
+    svc: WeatherService = Depends(get_weather_service),
+) -> DisplayWeatherResponse:
+    return DisplayWeatherResponse.model_validate(svc.get_display_weather_payload())
 
 
 @router.get("/alerts", response_model=DisplayAlertsResponse)  # intentionally public
-def get_display_alerts() -> DisplayAlertsResponse:
-    return DisplayAlertsResponse.model_validate(
-        weather_service.get_display_alerts_payload()
-    )
+def get_display_alerts(
+    svc: WeatherService = Depends(get_weather_service),
+) -> DisplayAlertsResponse:
+    return DisplayAlertsResponse.model_validate(svc.get_display_alerts_payload())

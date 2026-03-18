@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,6 +93,7 @@ def test_rate_limiting_login_endpoint(
         )
         assert resp.status_code == 200
 
+        resp2: Any = None
         for _ in range(10):
             resp2 = client.post(
                 "/api/auth/login",

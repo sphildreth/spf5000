@@ -4,6 +4,18 @@ interface WeatherWidgetProps {
   weather: DisplayWeather
 }
 
+const ICON_LABELS: Record<string, string> = {
+  sunny: 'Sunny',
+  'partly-cloudy': 'Partly cloudy',
+  cloudy: 'Cloudy',
+  rain: 'Rain',
+  thunderstorm: 'Thunderstorm',
+  snow: 'Snow',
+  fog: 'Foggy',
+  wind: 'Windy',
+  ice: 'Icy',
+}
+
 const ICONS: Record<string, string> = {
   sunny: '☀',
   'partly-cloudy': '⛅',
@@ -24,7 +36,7 @@ export function WeatherWidget({ weather }: WeatherWidgetProps) {
 
   return (
     <section className={`display-weather-widget display-weather-widget--${weather.position}`} aria-label="Current weather">
-      <div className="display-weather-widget__icon" aria-hidden="true">
+      <div className="display-weather-widget__icon" role="img" aria-label={ICON_LABELS[current.icon_token] ?? 'Weather'}>
         {ICONS[current.icon_token] ?? '☁'}
       </div>
       <div className="display-weather-widget__summary">

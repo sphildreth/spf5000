@@ -76,6 +76,7 @@ class Settings(BaseSettings):
 
     log_level: str = str(_logging.get("level", "INFO"))
     session_secret: str | None = _security.get("session_secret", None)
+    session_https_only: bool = bool(_security.get("session_https_only", False))
     rate_limit_enabled: bool = _security.get("rate_limit_enabled", True)
     google_photos_client_id: str | None = _google_photos.get("client_id")
     google_photos_client_secret: str | None = _google_photos.get("client_secret")
