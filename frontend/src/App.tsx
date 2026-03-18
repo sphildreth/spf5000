@@ -1,20 +1,31 @@
-import { Component, type ReactNode } from 'react'
+import { Component, Suspense, lazy, type ComponentType, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { useSession } from './context/SessionContext'
 import { AdminLayout } from './layouts/AdminLayout'
-import { BackupsPage } from './pages/BackupsPage'
-import { CollectionsPage } from './pages/CollectionsPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { DisplayPage } from './pages/DisplayPage'
-import { DisplaySettingsPage } from './pages/DisplaySettingsPage'
-import { DoctorPage } from './pages/DoctorPage'
-import { LibraryPage } from './pages/LibraryPage'
-import { LoginPage } from './pages/LoginPage'
-import { SetupPage } from './pages/SetupPage'
-import { SettingsPage } from './pages/SettingsPage'
-import { SourcesPage } from './pages/SourcesPage'
-import { WeatherPage } from './pages/WeatherPage'
+
+function lazyNamed<TModule extends Record<string, unknown>>(
+  loader: () => Promise<TModule>,
+  exportName: keyof TModule,
+) {
+  return lazy(async () => {
+    const module = await loader()
+    return { default: module[exportName] as ComponentType<any> }
+  })
+}
+
+const BackupsPage = lazyNamed(() => import('./pages/BackupsPage'), 'BackupsPage')
+const CollectionsPage = lazyNamed(() => import('./pages/CollectionsPage'), 'CollectionsPage')
+const DashboardPage = lazyNamed(() => import('./pages/DashboardPage'), 'DashboardPage')
+const DisplayPage = lazyNamed(() => import('./pages/DisplayPage'), 'DisplayPage')
+const DisplaySettingsPage = lazyNamed(() => import('./pages/DisplaySettingsPage'), 'DisplaySettingsPage')
+const DoctorPage = lazyNamed(() => import('./pages/DoctorPage'), 'DoctorPage')
+const LibraryPage = lazyNamed(() => import('./pages/LibraryPage'), 'LibraryPage')
+const LoginPage = lazyNamed(() => import('./pages/LoginPage'), 'LoginPage')
+const SetupPage = lazyNamed(() => import('./pages/SetupPage'), 'SetupPage')
+const SettingsPage = lazyNamed(() => import('./pages/SettingsPage'), 'SettingsPage')
+const SourcesPage = lazyNamed(() => import('./pages/SourcesPage'), 'SourcesPage')
+const WeatherPage = lazyNamed(() => import('./pages/WeatherPage'), 'WeatherPage')
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -64,6 +75,10 @@ function LoadingScreen() {
   )
 }
 
+function RouteSuspense({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<LoadingScreen />}>{children}</Suspense>
+}
+
 function RootRedirect() {
   const { state } = useSession()
   if (state.status === 'loading') return <LoadingScreen />
@@ -86,7 +101,7 @@ function RequireSetup() {
   if (state.bootstrapped) {
     return <Navigate to={state.status === 'authenticated' ? '/admin' : '/login'} replace />
   }
-  return <SetupPage />
+  return <RouteSuspense><SetupPage /></RouteSuspense>
 }
 
 function RequireUnauthenticated() {
@@ -94,26 +109,26 @@ function RequireUnauthenticated() {
   if (state.status === 'loading') return <LoadingScreen />
   if (!state.bootstrapped) return <Navigate to="/setup" replace />
   if (state.status === 'authenticated') return <Navigate to="/admin" replace />
-  return <LoginPage />
+  return <RouteSuspense><LoginPage /></RouteSuspense>
 }
 
 export default function App() {
   return (
-    <ErrorBoundary>
+      <ErrorBoundary>
       <Routes>
-        <Route path="/display" element={<DisplayPage />} />
+        <Route path="/display" element={<RouteSuspense><DisplayPage /></RouteSuspense>} />
         <Route path="/setup" element={<RequireSetup />} />
         <Route path="/login" element={<RequireUnauthenticated />} />
         <Route path="/admin" element={<RequireAdmin />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="library" element={<LibraryPage />} />
-          <Route path="collections" element={<CollectionsPage />} />
-          <Route path="backups" element={<BackupsPage />} />
-          <Route path="doctor" element={<DoctorPage />} />
-          <Route path="sources" element={<SourcesPage />} />
-          <Route path="display-settings" element={<DisplaySettingsPage />} />
-          <Route path="weather" element={<WeatherPage />} />
+          <Route index element={<RouteSuspense><DashboardPage /></RouteSuspense>} />
+          <Route path="settings" element={<RouteSuspense><SettingsPage /></RouteSuspense>} />
+          <Route path="library" element={<RouteSuspense><LibraryPage /></RouteSuspense>} />
+          <Route path="collections" element={<RouteSuspense><CollectionsPage /></RouteSuspense>} />
+          <Route path="backups" element={<RouteSuspense><BackupsPage /></RouteSuspense>} />
+          <Route path="doctor" element={<RouteSuspense><DoctorPage /></RouteSuspense>} />
+          <Route path="sources" element={<RouteSuspense><SourcesPage /></RouteSuspense>} />
+          <Route path="display-settings" element={<RouteSuspense><DisplaySettingsPage /></RouteSuspense>} />
+          <Route path="weather" element={<RouteSuspense><WeatherPage /></RouteSuspense>} />
         </Route>
         <Route path="/" element={<RootRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />

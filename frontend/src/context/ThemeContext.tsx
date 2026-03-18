@@ -330,7 +330,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const refreshThemes = useCallback(async () => {
     try {
-      const response = await getThemes()
+      const response = await getThemes({ force: true })
       const mergedThemes = mergeThemes(response.themes)
       const nextThemeId = response.active_theme_id || DEFAULT_THEME_ID
       const nextAccentStyle = response.home_city_accent_style || DEFAULT_ACCENT_STYLE
