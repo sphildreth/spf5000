@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.main import create_app
+from app.models.sleep_schedule import SleepSchedule
 from app.schemas.doctor import (
     DoctorResponse,
     HealthCheck,
@@ -262,6 +263,42 @@ class TestStorageDoctorChecks:
         data_dir_check = next((c for c in checks if c.id == "data_dir"), None)
         assert data_dir_check is not None
         assert data_dir_check.severity in [HealthSeverity.OK, HealthSeverity.WARNING]
+
+
+class TestDisplayDoctorChecks:
+    def test_sleep_schedule_reports_enabled_schedule(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.repositories.settings_repository.SettingsRepository.get_sleep_schedule",
+            lambda self: SleepSchedule(
+                sleep_schedule_enabled=True,
+                sleep_start_local_time="22:00",
+                sleep_end_local_time="08:00",
+            ),
+        )
+
+        check = DisplayDoctorChecks._check_sleep_schedule()
+
+        assert check.severity == HealthSeverity.INFO
+        assert check.summary == "Sleep schedule enabled (22:00 - 08:00)."
+
+    def test_sleep_schedule_reports_disabled_schedule(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "app.repositories.settings_repository.SettingsRepository.get_sleep_schedule",
+            lambda self: SleepSchedule(
+                sleep_schedule_enabled=False,
+                sleep_start_local_time="22:00",
+                sleep_end_local_time="08:00",
+            ),
+        )
+
+        check = DisplayDoctorChecks._check_sleep_schedule()
+
+        assert check.severity == HealthSeverity.INFO
+        assert check.summary == "Sleep schedule is disabled."
 
 
 class TestDoctorAPI:

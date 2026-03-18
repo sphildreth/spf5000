@@ -820,12 +820,15 @@ class DisplayDoctorChecks:
             settings_repo = SettingsRepository()
             schedule = settings_repo.get_sleep_schedule()
 
-            if schedule.enabled:
+            if schedule.sleep_schedule_enabled:
                 return HealthCheck(
                     id="sleep_schedule",
                     title="Sleep Schedule",
                     severity=HealthSeverity.INFO,
-                    summary=f"Sleep schedule enabled ({schedule.start_time} - {schedule.end_time}).",
+                    summary=(
+                        "Sleep schedule enabled "
+                        f"({schedule.sleep_start_local_time} - {schedule.sleep_end_local_time})."
+                    ),
                 )
 
             return HealthCheck(
@@ -834,12 +837,13 @@ class DisplayDoctorChecks:
                 severity=HealthSeverity.INFO,
                 summary="Sleep schedule is disabled.",
             )
-        except Exception:
+        except Exception as exc:
             return HealthCheck(
                 id="sleep_schedule",
                 title="Sleep Schedule",
                 severity=HealthSeverity.INFO,
                 summary="Could not verify sleep schedule.",
+                details=str(exc),
             )
 
 
