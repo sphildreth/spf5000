@@ -78,6 +78,19 @@ class PlaylistItemBackgroundResponse(BaseModel):
     gradient_colors: list[str]
 
 
+class PublicPlaylistItemResponse(BaseModel):
+    """Public playlist item - excludes sensitive metadata like checksums."""
+
+    asset_id: str
+    filename: str
+    display_url: str
+    thumbnail_url: str
+    width: int
+    height: int
+    mime_type: str
+    background: PlaylistItemBackgroundResponse | None = None
+
+
 class PlaylistItemResponse(BaseModel):
     asset_id: str
     filename: str
@@ -108,6 +121,54 @@ class PlaylistItemResponse(BaseModel):
             checksum_sha256=item.checksum_sha256,
             mime_type=item.mime_type,
             background=bg,
+        )
+
+    @classmethod
+    def from_domain_public(cls, item: PlaylistItem) -> "PublicPlaylistItemResponse":
+        bg: PlaylistItemBackgroundResponse | None = None
+        if item.background is not None:
+            bg = PlaylistItemBackgroundResponse(
+                ready=item.background.ready,
+                dominant_color=item.background.dominant_color,
+                gradient_colors=item.background.gradient_colors,
+            )
+        return PublicPlaylistItemResponse(
+            asset_id=item.asset_id,
+            filename=item.filename,
+            display_url=item.display_url,
+            thumbnail_url=item.thumbnail_url,
+            width=item.width,
+            height=item.height,
+            mime_type=item.mime_type,
+            background=bg,
+        )
+
+
+class PublicDisplayPlaylistResponse(BaseModel):
+    """Public playlist response - excludes sensitive metadata."""
+
+    collection_id: str | None
+    collection_name: str | None
+    shuffle_enabled: bool
+    playlist_revision: str
+    background_fill_mode: str
+    sleep_schedule: SleepScheduleResponse
+    profile: DisplayProfileResponse
+    items: list[PublicPlaylistItemResponse]
+
+    @classmethod
+    def from_domain(cls, playlist: DisplayPlaylist) -> "PublicDisplayPlaylistResponse":
+        return cls(
+            collection_id=playlist.collection_id,
+            collection_name=playlist.collection_name,
+            shuffle_enabled=playlist.shuffle_enabled,
+            playlist_revision=playlist.playlist_revision,
+            background_fill_mode=playlist.background_fill_mode,
+            sleep_schedule=SleepScheduleResponse.from_domain(playlist.sleep_schedule),
+            profile=DisplayProfileResponse.from_domain(playlist.profile),
+            items=[
+                PlaylistItemResponse.from_domain_public(item) for item in playlist.items
+            ],
         )
 
 

@@ -95,10 +95,13 @@ class AssetIngestService:
             original_destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, original_destination)
 
-        with Image.open(original_destination) as image:
-            normalized = ImageOps.exif_transpose(image)
+        original_image: Image.Image | None = None
+        normalized: Image.Image | None = None
+        try:
+            original_image = Image.open(original_destination)
+            normalized = ImageOps.exif_transpose(original_image)
             width, height = normalized.size
-            image_format = image.format or normalized.format or "JPEG"
+            image_format = original_image.format or normalized.format or "JPEG"
             mime_type = Image.MIME.get(image_format, "image/jpeg")
             complete_metadata = {
                 "format": image_format,
@@ -124,9 +127,11 @@ class AssetIngestService:
             background_metadata = self._derive_background_metadata(display_variant)
             if background_metadata is not None:
                 complete_metadata["background"] = background_metadata
-
-            if normalized is not image:
+        finally:
+            if normalized is not None and normalized is not original_image:
                 normalized.close()
+            if original_image is not None:
+                original_image.close()
 
         now = utc_now()
         original_name = Path(filename).name
@@ -169,24 +174,28 @@ class AssetIngestService:
         destination = self._build_managed_path(target_dir, checksum, ".jpg")
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        if kind == "display":
-            working = self._resize_display_variant(
-                image, max_width=max_width, max_height=max_height
+        working: Image.Image | None = None
+        rendered: Image.Image | None = None
+        width, height = 0, 0
+        try:
+            if kind == "display":
+                working = self._resize_display_variant(
+                    image, max_width=max_width, max_height=max_height
+                )
+            else:
+                working = image.copy()
+                working.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+            rendered = self._to_rgb(working)
+            rendered.save(
+                destination, format="JPEG", quality=settings.jpeg_quality, optimize=True
             )
-        else:
-            working = image.copy()
-            working.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-
-        rendered = self._to_rgb(working)
-        rendered.save(
-            destination, format="JPEG", quality=settings.jpeg_quality, optimize=True
-        )
-        width, height = rendered.size
-
-        if rendered is not working:
-            rendered.close()
-        if working is not image:
-            working.close()
+            width, height = rendered.size
+        finally:
+            if rendered is not None and rendered is not working:
+                rendered.close()
+            if working is not None and working is not image:
+                working.close()
 
         now = utc_now()
         return AssetVariant(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,12 @@ _ADMIN_USERNAME = "admin"
 _ADMIN_PASSWORD = "test-password-1"
 
 
+@pytest.fixture(autouse=True, scope="session")
+def disable_ratelimit() -> None:
+    """Disable rate limiting for all tests."""
+    os.environ["SPF5000_RATE_LIMIT"] = "false"
+
+
 def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     cache_dir = tmp_path / "cache"
@@ -23,7 +30,9 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "log_dir", log_dir)
     monkeypatch.setattr(settings, "database_path", data_dir / "spf5000.ddb")
     monkeypatch.setattr(settings, "frontend_dist_dir", tmp_path / "frontend-dist")
-    monkeypatch.setattr(settings, "legacy_frontend_dist_dir", tmp_path / "frontend-dist-legacy")
+    monkeypatch.setattr(
+        settings, "legacy_frontend_dist_dir", tmp_path / "frontend-dist-legacy"
+    )
     monkeypatch.setattr(settings, "session_secret", _TEST_SESSION_SECRET)
 
 

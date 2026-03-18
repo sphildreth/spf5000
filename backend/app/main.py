@@ -15,7 +15,10 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.bootstrap import initialize_runtime
-from app.runtime_coordinators import start_background_coordinators, stop_background_coordinators
+from app.runtime_coordinators import (
+    start_background_coordinators,
+    stop_background_coordinators,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -88,9 +91,17 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router, prefix="/api")
-    app.mount("/fallback", StaticFiles(directory=settings.fallback_assets_dir, check_dir=False), name="fallback")
+    app.mount(
+        "/fallback",
+        StaticFiles(directory=settings.fallback_assets_dir, check_dir=False),
+        name="fallback",
+    )
 
-    static_dir = settings.frontend_dist_dir if settings.frontend_dist_dir.exists() else settings.legacy_frontend_dist_dir
+    static_dir = (
+        settings.frontend_dist_dir
+        if settings.frontend_dist_dir.exists()
+        else settings.legacy_frontend_dist_dir
+    )
     if static_dir.exists():
         app.mount("/", SPAStaticFiles(directory=static_dir, html=True), name="frontend")
 

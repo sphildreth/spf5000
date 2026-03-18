@@ -389,7 +389,7 @@ export interface PlaylistItem {
   thumbnail_url: string
   width: number
   height: number
-  checksum_sha256: string
+  checksum_sha256?: string
   mime_type: string
   collection_name?: string
   source_name?: string

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -25,6 +26,20 @@ AMBIENT_API_BASE_URL = "https://photosambient.googleapis.com/v1"
 MEDIA_ITEMS_SCOPE = "https://www.googleapis.com/auth/photosambient.mediaitems"
 PROFILE_SCOPES = "openid email profile"
 DEFAULT_SCOPE = f"{PROFILE_SCOPES} {MEDIA_ITEMS_SCOPE}"
+
+_default_timeout = httpx.Timeout(30.0, connect=10.0)
+_client_lock = threading.Lock()
+_shared_client: httpx.Client | None = None
+
+
+def _get_shared_client() -> httpx.Client:
+    global _shared_client
+    with _client_lock:
+        if _shared_client is None:
+            _shared_client = httpx.Client(
+                timeout=_default_timeout, follow_redirects=True
+            )
+        return _shared_client
 
 
 class GooglePhotosClient:
@@ -187,29 +202,25 @@ class GooglePhotosClient:
         self, *, access_token: str, base_url: str, dest_path: Any
     ) -> None:
         url = f"{base_url}=d"
-        with httpx.Client(
-            timeout=self.timeout_seconds, follow_redirects=True
-        ) as client:
-            with client.stream(
-                "GET", url, headers=self._auth_headers(access_token)
-            ) as response:
-                if response.status_code >= 400:
-                    response.read()
-                    raise GooglePhotosApiError(
-                        f"Google Photos media download failed with status {response.status_code}",
-                        status_code=response.status_code,
-                        payload=self._decode_payload(response),
-                    )
-                with open(dest_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192 * 8):
-                        f.write(chunk)
+        client = _get_shared_client()
+        with client.stream(
+            "GET", url, headers=self._auth_headers(access_token)
+        ) as response:
+            if response.status_code >= 400:
+                response.read()
+                raise GooglePhotosApiError(
+                    f"Google Photos media download failed with status {response.status_code}",
+                    status_code=response.status_code,
+                    payload=self._decode_payload(response),
+                )
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192 * 8):
+                    f.write(chunk)
 
     def download_media(self, *, access_token: str, base_url: str) -> bytes:
         url = f"{base_url}=d"
-        with httpx.Client(
-            timeout=self.timeout_seconds, follow_redirects=True
-        ) as client:
-            response = client.get(url, headers=self._auth_headers(access_token))
+        client = _get_shared_client()
+        response = client.get(url, headers=self._auth_headers(access_token))
         if response.status_code >= 400:
             raise GooglePhotosApiError(
                 f"Google Photos media download failed with status {response.status_code}",
@@ -219,27 +230,27 @@ class GooglePhotosClient:
         return response.content
 
     def _post_form(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(url, data=payload)
+        client = _get_shared_client()
+        response = client.post(url, data=payload)
         return self._decode_json_response(response)
 
     def _post_json(
         self, url: str, payload: dict[str, Any], *, headers: dict[str, str]
     ) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(url, json=payload, headers=headers)
+        client = _get_shared_client()
+        response = client.post(url, json=payload, headers=headers)
         return self._decode_json_response(response)
 
     def _get_json(
         self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(url, headers=headers, params=params)
+        client = _get_shared_client()
+        response = client.get(url, headers=headers, params=params)
         return self._decode_json_response(response)
 
     def _delete(self, url: str, *, headers: dict[str, str]) -> None:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.delete(url, headers=headers)
+        client = _get_shared_client()
+        response = client.delete(url, headers=headers)
         if response.status_code >= 400:
             raise GooglePhotosApiError(
                 f"Google Photos delete failed with status {response.status_code}",

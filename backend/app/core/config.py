@@ -56,7 +56,9 @@ _google_photos = _providers.get("google_photos", {})
 _data_dir_default = _resolve_path(_paths.get("data_dir"), BACKEND_DIR / "data")
 _cache_dir_default = _resolve_path(_paths.get("cache_dir"), BACKEND_DIR / "cache")
 _log_dir_default = _resolve_path(_paths.get("log_dir"), BACKEND_DIR / "logs")
-_database_path_default = _resolve_path(_paths.get("database_path"), _data_dir_default / "spf5000.ddb")
+_database_path_default = _resolve_path(
+    _paths.get("database_path"), _data_dir_default / "spf5000.ddb"
+)
 
 
 class Settings(BaseSettings):
@@ -68,14 +70,21 @@ class Settings(BaseSettings):
     host: str = _server.get("host", "0.0.0.0")
     port: int = _server.get("port", 8000)
     debug: bool = _server.get("debug", False)
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
+    )
 
     log_level: str = str(_logging.get("level", "INFO"))
     session_secret: str | None = _security.get("session_secret", None)
+    rate_limit_enabled: bool = _security.get("rate_limit_enabled", True)
     google_photos_client_id: str | None = _google_photos.get("client_id")
     google_photos_client_secret: str | None = _google_photos.get("client_secret")
-    google_photos_provider_display_name: str = str(_google_photos.get("provider_display_name", "Google Photos"))
-    google_photos_sync_cadence_seconds: int = int(_google_photos.get("sync_cadence_seconds", 3600))
+    google_photos_provider_display_name: str = str(
+        _google_photos.get("provider_display_name", "Google Photos")
+    )
+    google_photos_sync_cadence_seconds: int = int(
+        _google_photos.get("sync_cadence_seconds", 3600)
+    )
 
     data_dir: Path = _data_dir_default
     cache_dir: Path = _cache_dir_default
