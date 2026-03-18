@@ -555,7 +555,8 @@ class GooglePhotosService:
                 return account
         account = self._ensure_access_token(account)
         device_payload = self.client_factory().get_device(
-            access_token=account.access_token or "", device_id=account.device_id
+            access_token=account.access_token or "",
+            device_id=account.device_id or "",  # type: ignore[arg-type]
         )
         self._apply_device_payload(account, device_payload, poll_at=utc_now())
         account.updated_at = utc_now()
@@ -608,7 +609,10 @@ class GooglePhotosService:
             else {}
         )
         account.device_poll_interval_seconds = parse_duration_seconds(
-            self._optional_str(polling_config.get("pollInterval")), default=30
+            self._optional_str(polling_config.get("pollInterval"))  # type: ignore[union-attr]
+            if isinstance(polling_config, dict)
+            else None,
+            default=30,
         )
         account.device_created_at = (
             self._optional_str(payload.get("createTime")) or account.device_created_at

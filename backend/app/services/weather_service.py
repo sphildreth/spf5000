@@ -8,6 +8,7 @@ import httpx
 
 from app.models.weather import (
     ResolvedWeatherAlert,
+    WeatherAlert,
     WeatherCurrentConditions,
     WeatherProviderState,
     WeatherRefreshRun,
@@ -48,13 +49,20 @@ class WeatherService:
         with _REFRESH_LOCK:
             settings = self.get_settings()
             self._upsert_configuration_state(settings)
-            if not settings.weather_enabled or not settings.weather_location.is_configured:
+            if (
+                not settings.weather_enabled
+                or not settings.weather_location.is_configured
+            ):
                 return self.get_status_payload()
 
             state = self.get_provider_state()
-            if self._is_due(state.last_weather_refresh_at, minutes=settings.weather_refresh_minutes):
+            if self._is_due(
+                state.last_weather_refresh_at, minutes=settings.weather_refresh_minutes
+            ):
                 self._force_refresh_current_conditions(settings, trigger=trigger)
-            if self._is_due(state.last_alert_refresh_at, minutes=_ALERT_REFRESH_MINUTES):
+            if self._is_due(
+                state.last_alert_refresh_at, minutes=_ALERT_REFRESH_MINUTES
+            ):
                 self._force_refresh_alerts(settings, trigger=trigger)
             return self.get_status_payload()
 
@@ -62,9 +70,13 @@ class WeatherService:
         with _REFRESH_LOCK:
             settings = self.get_settings()
             if not settings.weather_enabled:
-                raise WeatherConfigurationError("Enable weather before requesting a manual weather refresh")
+                raise WeatherConfigurationError(
+                    "Enable weather before requesting a manual weather refresh"
+                )
             if not settings.weather_location.is_configured:
-                raise WeatherConfigurationError("Set a weather location before requesting a manual weather refresh")
+                raise WeatherConfigurationError(
+                    "Set a weather location before requesting a manual weather refresh"
+                )
             self._force_refresh_current_conditions(settings, trigger=trigger)
             self._force_refresh_alerts(settings, trigger=trigger)
             return self.get_status_payload()
@@ -78,10 +90,14 @@ class WeatherService:
         health = provider.health_check(settings.weather_location)
         return WeatherProviderState(
             provider_name=settings.weather_provider,
-            provider_display_name=str(health.get("display_name", provider.provider_display_name())),
+            provider_display_name=str(
+                health.get("display_name", provider.provider_display_name())
+            ),
             status=self._state_status(settings, current_error=""),
             available=bool(health.get("available", True)),
-            configured=bool(health.get("configured", settings.weather_location.is_configured)),
+            configured=bool(
+                health.get("configured", settings.weather_location.is_configured)
+            ),
             location_label=settings.weather_location.label,
             updated_at=utc_now(),
         )
@@ -93,15 +109,24 @@ class WeatherService:
         alerts = self._active_alerts(settings)
         resolved_alerts = resolve_active_alerts(alerts, settings)
         dominant = resolved_alerts[0] if resolved_alerts else None
-        presentation = self._display_presentation(settings, dominant, len(resolved_alerts))
+        presentation = self._display_presentation(
+            settings, dominant, len(resolved_alerts)
+        )
         return {
             "provider_status": self._provider_state_payload(state),
-            "current_conditions": None if current is None else self._conditions_payload(current, settings),
-            "dominant_alert": None if dominant is None else self._alert_payload(dominant, dominant=True),
+            "current_conditions": None
+            if current is None
+            else self._conditions_payload(current, settings),
+            "dominant_alert": None
+            if dominant is None
+            else self._alert_payload(dominant, dominant=True),
             "active_alert_count": len(resolved_alerts),
             "current_display_action": presentation["mode"],
             "recent_refresh_runs": [
-                self._refresh_run_payload(item) for item in self.repo.list_refresh_runs(settings.weather_provider, limit=6)
+                self._refresh_run_payload(item)
+                for item in self.repo.list_refresh_runs(
+                    settings.weather_provider, limit=6
+                )
             ],
         }
 
@@ -114,8 +139,12 @@ class WeatherService:
         return {
             "provider_status": self._provider_state_payload(state),
             "alert_count": len(resolved_alerts),
-            "dominant_alert": None if dominant is None else self._alert_payload(dominant, dominant=True),
-            "active_alerts": [self._alert_payload(alert, dominant=False) for alert in resolved_alerts],
+            "dominant_alert": None
+            if dominant is None
+            else self._alert_payload(dominant, dominant=True),
+            "active_alerts": [
+                self._alert_payload(alert, dominant=False) for alert in resolved_alerts
+            ],
         }
 
     def get_display_weather_payload(self) -> dict[str, object]:
@@ -130,7 +159,9 @@ class WeatherService:
             "show_humidity": settings.weather_show_humidity,
             "show_wind": settings.weather_show_wind,
             "provider_status": self._provider_state_payload(state),
-            "current_conditions": None if current is None else self._conditions_payload(current, settings),
+            "current_conditions": None
+            if current is None
+            else self._conditions_payload(current, settings),
         }
 
     def get_display_alerts_payload(self) -> dict[str, object]:
@@ -141,33 +172,62 @@ class WeatherService:
         state = self.get_provider_state()
         return {
             "provider_status": self._provider_state_payload(state),
-            "dominant_alert": None if dominant is None else self._alert_payload(dominant, dominant=True),
-            "active_alerts": [self._alert_payload(alert, dominant=False) for alert in resolved_alerts],
-            "presentation": self._display_presentation(settings, dominant, len(resolved_alerts)),
+            "dominant_alert": None
+            if dominant is None
+            else self._alert_payload(dominant, dominant=True),
+            "active_alerts": [
+                self._alert_payload(alert, dominant=False) for alert in resolved_alerts
+            ],
+            "presentation": self._display_presentation(
+                settings, dominant, len(resolved_alerts)
+            ),
         }
 
     def _provider(self, provider_name: str) -> WeatherProvider:
         factory = self.provider_factories.get(provider_name)
         if factory is None:
-            raise WeatherConfigurationError(f"Unsupported weather provider {provider_name!r}")
+            raise WeatherConfigurationError(
+                f"Unsupported weather provider {provider_name!r}"
+            )
         return factory()
 
-    def _upsert_configuration_state(self, settings: WeatherSettings, *, current_error: str | None = None) -> WeatherProviderState:
+    def _upsert_configuration_state(
+        self, settings: WeatherSettings, *, current_error: str | None = None
+    ) -> WeatherProviderState:
         provider = self._provider(settings.weather_provider)
         health = provider.health_check(settings.weather_location)
         existing = self.repo.get_provider_state(settings.weather_provider)
         state = WeatherProviderState(
             provider_name=settings.weather_provider,
-            provider_display_name=str(health.get("display_name", provider.provider_display_name())),
-            status=self._state_status(settings, current_error=current_error if current_error is not None else (existing.current_error if existing else "")),
+            provider_display_name=str(
+                health.get("display_name", provider.provider_display_name())
+            ),
+            status=self._state_status(
+                settings,
+                current_error=current_error
+                if current_error is not None
+                else (existing.current_error if existing else ""),
+            ),
             available=bool(health.get("available", True)),
-            configured=bool(health.get("configured", settings.weather_location.is_configured)),
+            configured=bool(
+                health.get("configured", settings.weather_location.is_configured)
+            ),
             location_label=settings.weather_location.label,
-            last_weather_refresh_at=None if existing is None else existing.last_weather_refresh_at,
-            last_alert_refresh_at=None if existing is None else existing.last_alert_refresh_at,
-            last_successful_weather_refresh_at=None if existing is None else existing.last_successful_weather_refresh_at,
-            last_successful_alert_refresh_at=None if existing is None else existing.last_successful_alert_refresh_at,
-            current_error=current_error if current_error is not None else ("" if existing is None else existing.current_error),
+            last_weather_refresh_at=None
+            if existing is None
+            else existing.last_weather_refresh_at,
+            last_alert_refresh_at=None
+            if existing is None
+            else existing.last_alert_refresh_at,
+            last_successful_weather_refresh_at=None
+            if existing is None
+            else existing.last_successful_weather_refresh_at,
+            last_successful_alert_refresh_at=None
+            if existing is None
+            else existing.last_successful_alert_refresh_at,
+            current_error=current_error
+            if current_error is not None
+            else ("" if existing is None else existing.current_error),
             updated_at=utc_now(),
         )
         return self.repo.upsert_provider_state(state)
@@ -182,7 +242,9 @@ class WeatherService:
             return "degraded"
         return "ready"
 
-    def _force_refresh_current_conditions(self, settings: WeatherSettings, *, trigger: str) -> WeatherRefreshRun:
+    def _force_refresh_current_conditions(
+        self, settings: WeatherSettings, *, trigger: str
+    ) -> WeatherRefreshRun:
         started_at = utc_now()
         refresh_run = WeatherRefreshRun(
             id=f"weather-refresh-{uuid4().hex[:12]}",
@@ -225,7 +287,9 @@ class WeatherService:
             refresh_run.completed_at = started_at
             return self.repo.update_refresh_run(refresh_run)
 
-    def _force_refresh_alerts(self, settings: WeatherSettings, *, trigger: str) -> WeatherRefreshRun:
+    def _force_refresh_alerts(
+        self, settings: WeatherSettings, *, trigger: str
+    ) -> WeatherRefreshRun:
         started_at = utc_now()
         refresh_run = WeatherRefreshRun(
             id=f"weather-refresh-{uuid4().hex[:12]}",
@@ -243,7 +307,9 @@ class WeatherService:
         location_key = build_location_key(settings.weather_location)
         try:
             alerts = provider.get_active_alerts(settings.weather_location)
-            self.repo.replace_active_alerts(settings.weather_provider, location_key, alerts)
+            self.repo.replace_active_alerts(
+                settings.weather_provider, location_key, alerts
+            )
             state.status = self._state_status(settings, current_error="")
             state.last_alert_refresh_at = started_at
             state.last_successful_alert_refresh_at = started_at
@@ -274,26 +340,37 @@ class WeatherService:
         location_key = build_location_key(settings.weather_location)
         if not location_key:
             return None
-        current = self.repo.get_current_conditions(settings.weather_provider, location_key)
+        current = self.repo.get_current_conditions(
+            settings.weather_provider, location_key
+        )
         if current is None:
             return None
-        if self._is_stale(state.last_successful_weather_refresh_at, minutes=settings.weather_refresh_minutes * 2):
+        if self._is_stale(
+            state.last_successful_weather_refresh_at,
+            minutes=settings.weather_refresh_minutes * 2,
+        ):
             current.is_stale = True
         return current
 
-    def _active_alerts(self, settings: WeatherSettings) -> list[object]:
+    def _active_alerts(self, settings: WeatherSettings) -> list[WeatherAlert]:
         location_key = build_location_key(settings.weather_location)
         if not location_key:
             return []
         now = datetime.now(UTC)
-        return [alert for alert in self.repo.list_alerts(settings.weather_provider, location_key) if alert_is_active(alert, now=now)]
+        return [
+            alert
+            for alert in self.repo.list_alerts(settings.weather_provider, location_key)
+            if alert_is_active(alert, now=now)
+        ]
 
     @staticmethod
     def _is_due(last_refresh_at: str | None, *, minutes: int) -> bool:
         if not last_refresh_at:
             return True
         try:
-            last_refresh = datetime.fromisoformat(last_refresh_at.replace("Z", "+00:00"))
+            last_refresh = datetime.fromisoformat(
+                last_refresh_at.replace("Z", "+00:00")
+            )
         except ValueError:
             return True
         if last_refresh.tzinfo is None:
@@ -305,16 +382,28 @@ class WeatherService:
         if not last_success_at:
             return True
         try:
-            last_success = datetime.fromisoformat(last_success_at.replace("Z", "+00:00"))
+            last_success = datetime.fromisoformat(
+                last_success_at.replace("Z", "+00:00")
+            )
         except ValueError:
             return True
         if last_success.tzinfo is None:
             last_success = last_success.replace(tzinfo=UTC)
         return datetime.now(UTC) - last_success >= timedelta(minutes=minutes)
 
-    def _conditions_payload(self, current: WeatherCurrentConditions, settings: WeatherSettings) -> dict[str, object]:
-        temperature = current.temperature_c if settings.weather_units == "c" else temperature_c_to_f(current.temperature_c)
-        wind_speed = current.wind_speed_mph if settings.weather_units == "f" else wind_speed_mph_to_kph(current.wind_speed_mph)
+    def _conditions_payload(
+        self, current: WeatherCurrentConditions, settings: WeatherSettings
+    ) -> dict[str, object]:
+        temperature = (
+            current.temperature_c
+            if settings.weather_units == "c"
+            else temperature_c_to_f(current.temperature_c)
+        )
+        wind_speed = (
+            current.wind_speed_mph
+            if settings.weather_units == "f"
+            else wind_speed_mph_to_kph(current.wind_speed_mph)
+        )
         return {
             "provider_name": current.provider_name,
             "provider_display_name": current.provider_display_name,
@@ -350,7 +439,9 @@ class WeatherService:
             "updated_at": state.updated_at,
         }
 
-    def _alert_payload(self, resolved: ResolvedWeatherAlert, *, dominant: bool) -> dict[str, object]:
+    def _alert_payload(
+        self, resolved: ResolvedWeatherAlert, *, dominant: bool
+    ) -> dict[str, object]:
         alert = resolved.alert
         return {
             "id": alert.id,
@@ -407,7 +498,11 @@ class WeatherService:
                 "repeat_display_seconds": settings.weather_alert_repeat_display_seconds,
                 "alert_count": alert_count,
             }
-        fallback_mode = "banner" if dominant.effective_escalation_mode == "fullscreen_repeat" else None
+        fallback_mode = (
+            "banner"
+            if dominant.effective_escalation_mode == "fullscreen_repeat"
+            else None
+        )
         return {
             "mode": dominant.effective_escalation_mode,
             "fallback_mode": fallback_mode,

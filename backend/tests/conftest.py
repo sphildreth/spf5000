@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -37,7 +38,9 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
 
 @pytest.fixture()
-def fresh_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def fresh_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient, None, None]:
     """A TestClient for a fresh (un-bootstrapped) install with no admin session."""
     _patch_settings(monkeypatch, tmp_path)
     app = create_app()
@@ -46,7 +49,9 @@ def fresh_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 @pytest.fixture()
-def test_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def test_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient, None, None]:
     """A TestClient that has completed setup and holds a valid admin session.
 
     Used by existing tests that exercise admin-protected routes.

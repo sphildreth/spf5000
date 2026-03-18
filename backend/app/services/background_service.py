@@ -103,7 +103,11 @@ def derive_background_meta(image_path: Path) -> AssetBackground:
 
 def background_meta_from_dict(data: dict[str, object]) -> AssetBackground:
     """Reconstruct an :class:`AssetBackground` from its serialised dict form."""
+    gradient_colors_raw = data.get("gradient_colors")
+    gradient_color_list: list[object] = (
+        gradient_colors_raw if isinstance(gradient_colors_raw, list) else []
+    )
     return AssetBackground(
         dominant_color=str(data.get("dominant_color", "")),
-        gradient_colors=[str(c) for c in (data.get("gradient_colors") or [])],
+        gradient_colors=[str(c) for c in gradient_color_list],
     )
