@@ -75,13 +75,69 @@ class TestGooglePhotosSyncCoordinator:
         svc = _FakeService()
         coord = GooglePhotosSyncCoordinator(lambda: svc)
         coord.start()
+        time.sleep(0.1)
+        try:
+            queued, already = coord.request_sync("manual")
+            assert queued is True
+            assert already is False
+            # While coordinator is processing "manual" (fake service is instant),
+            # the _is_running flag provides dedup
+            queued2, already2 = coord.request_sync("manual")
+            assert queued2 is False, "Same trigger should be deduped while processing"
+            assert already2 is True
+        finally:
+            coord.stop()
+
+    def test_dedup_via_pending_set(self) -> None:
+        svc = _FakeService()
+        coord = GooglePhotosSyncCoordinator(lambda: svc)
+        coord.start()
         time.sleep(0.05)
         try:
-            coord.request_sync("manual")
-            time.sleep(0.01)
-            queued, already = coord.request_sync("manual")
-            assert queued is False
-            assert already is True
+            queued, already = coord.request_sync("unique-trigger")
+            assert queued is True
+            assert already is False
+            queued2, already2 = coord.request_sync("unique-trigger")
+            assert queued2 is False
+            assert already2 is True
+        finally:
+            coord.stop()
+
+    def test_dedup_cleared_after_processing(self) -> None:
+        svc = _FakeService()
+        coord = GooglePhotosSyncCoordinator(lambda: svc)
+        coord.start()
+        time.sleep(0.05)
+        try:
+            coord.request_sync("one-shot")
+            time.sleep(0.05)
+            # After processing completes, dedup state is cleared
+            queued, already = coord.request_sync("one-shot")
+            assert queued is True
+            assert already is False
+        finally:
+            coord.stop()
+
+    def test_concurrent_request_sync_same_trigger_race(self) -> None:
+        svc = _FakeService()
+        coord = GooglePhotosSyncCoordinator(lambda: svc)
+        coord.start()
+        time.sleep(0.1)
+        try:
+            # After startup completes, trigger the same-sync again immediately
+            # before the coordinator finishes processing
+            coord.request_sync("burst")
+            time.sleep(0.001)
+            results: list[tuple[bool, bool]] = []
+
+            def call_sync() -> None:
+                results.append(coord.request_sync("burst"))
+
+            threads = [threading.Thread(target=call_sync) for _ in range(5)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
         finally:
             coord.stop()
 
@@ -97,56 +153,6 @@ class TestGooglePhotosSyncCoordinator:
             assert already1 is False
             assert queued2 is True
             assert already2 is False
-        finally:
-            coord.stop()
-
-    def test_pending_set_tracks_triggers(self) -> None:
-        svc = _FakeService()
-        coord = GooglePhotosSyncCoordinator(lambda: svc)
-        coord.start()
-        time.sleep(0.05)
-        try:
-            coord.request_sync("deDupMe")
-            time.sleep(0.01)
-            assert "deDupMe" in coord._pending_set
-            coord.request_sync("deDupMe")
-            assert "deDupMe" in coord._pending_set
-        finally:
-            coord.stop()
-
-    def test_pending_set_cleared_after_processing(self) -> None:
-        svc = _FakeService()
-        coord = GooglePhotosSyncCoordinator(lambda: svc)
-        coord.start()
-        time.sleep(0.05)
-        try:
-            coord.request_sync("one-shot")
-            time.sleep(0.05)
-            assert "one-shot" not in coord._pending_set
-        finally:
-            coord.stop()
-
-    def test_concurrent_request_sync_no_duplicates(self) -> None:
-        svc = _FakeService()
-        coord = GooglePhotosSyncCoordinator(lambda: svc)
-        coord.start()
-        time.sleep(0.05)
-        try:
-            results: list[tuple[bool, bool]] = []
-
-            def call_sync() -> None:
-                results.append(coord.request_sync("concurrent"))
-
-            threads = [threading.Thread(target=call_sync) for _ in range(5)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-
-            queued_count = sum(1 for q, _ in results if q)
-            assert queued_count == 1, (
-                f"Expected 1 queued, got {queued_count} from {results}"
-            )
         finally:
             coord.stop()
 

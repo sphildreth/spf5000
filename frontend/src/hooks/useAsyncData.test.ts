@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { act } from 'react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { useAsyncData } from '../hooks/useAsyncData'
 
 describe('useAsyncData', () => {
@@ -16,9 +17,9 @@ describe('useAsyncData', () => {
     const { result } = renderHook(() =>
       useAsyncData(async () => ({ value: 42 }), []),
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toEqual({ value: 42 })
     expect(result.current.error).toBeNull()
   })
@@ -27,21 +28,21 @@ describe('useAsyncData', () => {
     const { result } = renderHook(() =>
       useAsyncData(async () => { throw new Error('load failed') }, []),
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toBeNull()
     expect(result.current.error).toBe('load failed')
   })
 
-  it('converts non-Error throws to string', async () => {
+  it('converts non-Error throws to generic message', async () => {
     const { result } = renderHook(() =>
       useAsyncData(async () => { throw 'string error' }, []),
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
-    expect(result.current.error).toBe('string error')
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+    expect(result.current.error).toBe('Something went wrong.')
   })
 
   it('reload calls the loader again', async () => {
@@ -49,15 +50,15 @@ describe('useAsyncData', () => {
     const { result } = renderHook(() =>
       useAsyncData(async () => { callCount++; return { count: callCount } }, []),
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toEqual({ count: 1 })
 
     await result.current.reload()
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toEqual({ count: 2 })
   })
 
@@ -65,10 +66,12 @@ describe('useAsyncData', () => {
     const { result } = renderHook(() =>
       useAsyncData(async () => ({ value: 1 }), []),
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
-    result.current.setData({ value: 99 })
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+    act(() => {
+      result.current.setData({ value: 99 })
+    })
     expect(result.current.data).toEqual({ value: 99 })
   })
 
@@ -78,15 +81,15 @@ describe('useAsyncData', () => {
         useAsyncData(async () => ({ id }), [id]),
       { initialProps: { id: 1 } },
     )
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toEqual({ id: 1 })
 
     rerender({ id: 2 })
-    await vi.waitFor(() =>
-      expect(result.current.loading).toBe(false),
-    )
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
     expect(result.current.data).toEqual({ id: 2 })
   })
 })
