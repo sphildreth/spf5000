@@ -63,7 +63,7 @@ def is_null_connection(conn: Any) -> bool:
 
 _local = threading.local()
 _connection_lock = threading.RLock()
-_connection_epoch = 0
+_connection_generation = 0
 
 
 LOGGER = structlog.get_logger(__name__)
@@ -133,7 +133,14 @@ def exclusive_database_access() -> Iterator[None]:
 
 def reset_connection_state() -> None:
     with _connection_lock:
+        global _connection_generation
+        _connection_generation += 1
         _close_thread_connection()
+        if decentdb is not None:
+            try:
+                decentdb.evict_shared_wal(str(settings.database_path))
+            except Exception:
+                pass
 
 
 def _recover_database_open_failure(exc: Exception) -> bool:
@@ -189,13 +196,13 @@ def _get_thread_connection(db_path: str) -> Any:
     if conn_info:
         cached_path = conn_info.get("path")
         cached_conn = conn_info.get("conn")
-        cached_epoch = conn_info.get("epoch")
-        if cached_path == db_path and cached_conn is not None and cached_epoch == _connection_epoch:
+        cached_gen = conn_info.get("gen")
+        if cached_path == db_path and cached_conn is not None and cached_gen == _connection_generation:
             return cached_conn
         _close_thread_connection()
 
     conn = _TrackedConnection(_connect_with_recovery(db_path))
-    _local.conn_info = {"conn": conn, "path": db_path, "epoch": _connection_epoch}
+    _local.conn_info = {"conn": conn, "path": db_path, "gen": _connection_generation}
     return conn
 
 
@@ -217,13 +224,7 @@ def get_connection() -> Iterator[Any]:
         try:
             yield conn
             conn.commit()
-            if conn.dirty:
-                global _connection_epoch
-                _connection_epoch += 1
-                conn.dirty = False
-                conn_info = getattr(_local, "conn_info", None)
-                if conn_info is not None:
-                    conn_info["epoch"] = _connection_epoch
+            conn.dirty = False
         except Exception:
             try:
                 conn.rollback()

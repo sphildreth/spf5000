@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.db import bootstrap, connection
 from app.db.connection import get_connection, is_null_connection
 from app.main import create_app
+from app.runtime_coordinators import stop_background_coordinators
 
 _TEST_SESSION_SECRET = "spf5000-test-session-secret-32bytes!!"
 
@@ -106,6 +107,17 @@ def test_request_time_open_failure_recovers_by_quarantining_database(
     with TestClient(app, raise_server_exceptions=True) as client:
         db_path = settings.database_path
         original_db_bytes = db_path.read_bytes()
+
+        # Stop background coordinators so they don't race with WAL
+        # corruption below and trigger their own separate recovery.
+        stop_background_coordinators(app)
+
+        # Close all connections and evict shared WAL before corrupting the
+        # WAL file on disk.  With shared WAL, the in-memory overlay reads
+        # from the on-disk WAL file so writing garbage while a shared WAL
+        # is live would corrupt running connections.
+        connection.reset_connection_state()
+
         wal_path = Path(f"{db_path}-wal")
         wal_path.write_bytes(b"wal-bytes")
         shm_path = Path(f"{db_path}-shm")
