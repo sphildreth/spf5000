@@ -258,11 +258,15 @@ class NWSWeatherProvider:
             try:
                 client = _get_shared_client()
                 last_response = client.get(url, params=params, headers=headers)
-                if last_response.status_code not in {429, 500, 502, 503, 504}:
-                    break
-                last_exc = WeatherProviderError(
-                    f"NWS request failed with status {last_response.status_code} for {url}"
-                )
+                try:
+                    if last_response.status_code not in {429, 500, 502, 503, 504}:
+                        break
+                    last_exc = WeatherProviderError(
+                        f"NWS request failed with status {last_response.status_code} for {url}"
+                    )
+                finally:
+                    if last_response.status_code in {429, 500, 502, 503, 504}:
+                        last_response.close()
             except (httpx.ConnectError, httpx.TimeoutException) as exc:
                 last_exc = exc
             if attempt < 3:
@@ -271,17 +275,21 @@ class NWSWeatherProvider:
                 time.sleep(2.0**attempt)
         else:
             raise last_exc or WeatherProviderError(f"NWS request failed for {url}")
-        if last_response.status_code >= 400:
-            raise WeatherProviderError(
-                f"NWS request failed with status {last_response.status_code} for {url}"
-            )
+        
         try:
-            payload = last_response.json()
-        except ValueError as exc:
-            raise WeatherProviderError(f"NWS returned invalid JSON for {url}") from exc
-        if not isinstance(payload, dict):
-            raise WeatherProviderError(f"NWS returned a non-object payload for {url}")
-        return payload
+            if last_response.status_code >= 400:
+                raise WeatherProviderError(
+                    f"NWS request failed with status {last_response.status_code} for {url}"
+                )
+            try:
+                payload = last_response.json()
+            except ValueError as exc:
+                raise WeatherProviderError(f"NWS returned invalid JSON for {url}") from exc
+            if not isinstance(payload, dict):
+                raise WeatherProviderError(f"NWS returned a non-object payload for {url}")
+            return payload
+        finally:
+            last_response.close()
 
     def _first_station_id(self, url: str) -> str | None:
         payload = self._get_json(url)
