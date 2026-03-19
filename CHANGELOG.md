@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Updated SPF5000's documented DecentDB baseline to `v1.7.4+` for the upstream core-engine memory-leak fixes, while keeping the Pi installer on the default `DECENTDB_RELEASE_TAG=latest` behavior.
+
 ## [1.0.0] - 2026-03-16
 
 ### Added

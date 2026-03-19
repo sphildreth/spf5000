@@ -63,9 +63,52 @@ def is_null_connection(conn: Any) -> bool:
 
 _local = threading.local()
 _connection_lock = threading.RLock()
+_connection_epoch = 0
 
 
 LOGGER = structlog.get_logger(__name__)
+
+
+def _statement_mutates(sql: Any) -> bool:
+    if not isinstance(sql, str):
+        return False
+
+    statement = sql.lstrip().split(None, 1)
+    if not statement:
+        return False
+
+    return statement[0].lower() in {
+        "insert",
+        "update",
+        "delete",
+        "replace",
+        "create",
+        "alter",
+        "drop",
+    }
+
+
+class _TrackedConnection:
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.dirty = False
+
+    def execute(self, sql: Any, *args: Any, **kwargs: Any) -> Any:
+        if _statement_mutates(sql):
+            self.dirty = True
+        return self._inner.execute(sql, *args, **kwargs)
+
+    def commit(self) -> None:
+        self._inner.commit()
+
+    def rollback(self) -> None:
+        self._inner.rollback()
+
+    def close(self) -> None:
+        self._inner.close()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
 
 
 def _close_thread_connection() -> None:
@@ -141,6 +184,21 @@ def _connect_with_recovery(db_path: str) -> Any:
         return decentdb.connect(db_path)
 
 
+def _get_thread_connection(db_path: str) -> Any:
+    conn_info = getattr(_local, "conn_info", None)
+    if conn_info:
+        cached_path = conn_info.get("path")
+        cached_conn = conn_info.get("conn")
+        cached_epoch = conn_info.get("epoch")
+        if cached_path == db_path and cached_conn is not None and cached_epoch == _connection_epoch:
+            return cached_conn
+        _close_thread_connection()
+
+    conn = _TrackedConnection(_connect_with_recovery(db_path))
+    _local.conn_info = {"conn": conn, "path": db_path, "epoch": _connection_epoch}
+    return conn
+
+
 @contextmanager
 def get_connection() -> Iterator[Any]:
     with _connection_lock:
@@ -154,13 +212,21 @@ def get_connection() -> Iterator[Any]:
             return
 
         db_path = str(settings.database_path)
-        conn = _connect_with_recovery(db_path)
+        conn = _get_thread_connection(db_path)
 
         try:
             yield conn
             conn.commit()
+            if conn.dirty:
+                global _connection_epoch
+                _connection_epoch += 1
+                conn.dirty = False
+                conn_info = getattr(_local, "conn_info", None)
+                if conn_info is not None:
+                    conn_info["epoch"] = _connection_epoch
         except Exception:
-            conn.rollback()
+            try:
+                conn.rollback()
+            finally:
+                _close_thread_connection()
             raise
-        finally:
-            conn.close()

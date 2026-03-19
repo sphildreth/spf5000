@@ -1,4 +1,5 @@
 # Install the DecentDB Python binding separately from a checkout or other supported source.
+# Use DecentDB v1.7.4 or newer so SPF5000 picks up the upstream memory-leak fixes.
 # Example:
 #   python -m pip install -e /path/to/decentdb/bindings/python
 fastapi==0.135.1

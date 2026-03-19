@@ -49,7 +49,7 @@ Common options:
 - `--skip-apt` - skip apt installation and validate only
 - `--force` - overwrite an existing generated config and bypass the non-Pi hardware guard
 
-The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to override that latest-release behavior.
+The installer uses `DECENTDB_RELEASE_TAG=latest` by default. Set `DECENTDB_RELEASE_TAG=vX.Y.Z` in the environment if you want to override that latest-release behavior. For SPF5000, use DecentDB `v1.7.4` or newer so the Pi install picks up the upstream core-engine memory-leak fixes.
 
 The runtime user should be a normal Raspberry Pi OS desktop account with a home directory. The installer writes the Chromium kiosk desktop entry to that user's `~/.config/autostart/` path and also adds a managed command block to `~/.config/labwc/autostart` so Raspberry Pi OS Desktop's default `labwc` Wayland session can launch the same kiosk script after login. Desktop Autologin should be configured for the same account.
 

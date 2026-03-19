@@ -59,6 +59,30 @@ def test_rate_limiting_check_function_respects_env(
     assert check_rate_limit("192.168.1.100", "1/minute") is False
 
 
+def test_rate_limit_prunes_stale_ip_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Expired IP buckets should not remain in the in-memory rate-limit map forever."""
+    from app.api import rate_limit
+
+    rate_limit._request_counts.clear()
+    rate_limit._last_global_prune_at = 0.0
+    rate_limit._largest_tracked_window_seconds = 0.0
+    monkeypatch.setenv("SPF5000_RATE_LIMIT", "true")
+
+    timestamps = iter([0.0, 61.0])
+    monkeypatch.setattr(rate_limit.time, "time", lambda: next(timestamps))
+
+    assert rate_limit.check_rate_limit("10.0.0.1", "1/minute") is True
+    assert "10.0.0.1" in rate_limit._request_counts
+
+    assert rate_limit.check_rate_limit("10.0.0.2", "1/minute") is True
+    assert "10.0.0.1" not in rate_limit._request_counts
+    assert set(rate_limit._request_counts) == {"10.0.0.2"}
+
+    rate_limit._request_counts.clear()
+    rate_limit._last_global_prune_at = 0.0
+    rate_limit._largest_tracked_window_seconds = 0.0
+
+
 def test_rate_limiting_login_endpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -111,7 +111,6 @@ Weather and alert overlays are also display concerns, but they still follow the 
 - for source-based local development, a local **DecentDB checkout** so you can install the Python binding and build the native library
 
 SPF5000 does **not** install DecentDB from `backend/requirements.txt`. You must make both the editable Python binding and the native library available separately.
-
 For local development in this repo, the expected DecentDB path is still a source checkout. The Raspberry Pi appliance installer uses a different path: it downloads the latest matching release bundle for the native library and the matching source archive for the Python binding.
 
 ### 1. Start the backend

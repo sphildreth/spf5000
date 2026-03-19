@@ -12,6 +12,9 @@ limiter = Limiter(key_func=get_remote_address)
 
 _request_counts: dict[str, list[float]] = defaultdict(list)
 _request_lock = threading.Lock()
+_last_global_prune_at = 0.0
+_largest_tracked_window_seconds = 0.0
+_GLOBAL_PRUNE_INTERVAL_SECONDS = 60.0
 
 
 def is_rate_limit_enabled() -> bool:
@@ -53,8 +56,27 @@ def check_rate_limit(ip_address: str, limit: str) -> bool:
     cutoff = now - period_seconds
 
     with _request_lock:
+        global _last_global_prune_at, _largest_tracked_window_seconds
+
+        if period_seconds > _largest_tracked_window_seconds:
+            _largest_tracked_window_seconds = period_seconds
+
+        if (
+            _largest_tracked_window_seconds > 0
+            and now - _last_global_prune_at >= _GLOBAL_PRUNE_INTERVAL_SECONDS
+        ):
+            stale_cutoff = now - _largest_tracked_window_seconds
+            for tracked_ip, tracked_requests in list(_request_counts.items()):
+                tracked_requests[:] = [t for t in tracked_requests if t > stale_cutoff]
+                if not tracked_requests:
+                    del _request_counts[tracked_ip]
+            _last_global_prune_at = now
+
         requests = _request_counts[ip_address]
         requests[:] = [t for t in requests if t > cutoff]
+        if not requests and ip_address in _request_counts:
+            del _request_counts[ip_address]
+            requests = _request_counts[ip_address]
 
         if len(requests) >= limit_count:
             return False

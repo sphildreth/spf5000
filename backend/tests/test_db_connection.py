@@ -51,7 +51,7 @@ class _FakeDecentDb:
         return conn
 
 
-def test_runtime_connections_close_after_each_context(
+def test_runtime_connections_reuse_cached_connection_until_reset(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -62,16 +62,17 @@ def test_runtime_connections_close_after_each_context(
     monkeypatch.setattr(connection, "decentdb", fake_decentdb)
 
     with connection.get_connection() as first:
-        assert first is fake_decentdb.connections[0]
+        assert first._inner is fake_decentdb.connections[0]
 
     assert fake_decentdb.connections[0].commit_calls == 1
-    assert fake_decentdb.connections[0].closed is True
+    assert fake_decentdb.connections[0].closed is False
 
     with connection.get_connection() as second:
-        assert second is fake_decentdb.connections[1]
+        assert second._inner is fake_decentdb.connections[0]
 
-    assert len(fake_decentdb.connections) == 2
-    assert fake_decentdb.connections[1].commit_calls == 1
-    assert fake_decentdb.connections[1].closed is True
+    assert len(fake_decentdb.connections) == 1
+    assert fake_decentdb.connections[0].commit_calls == 2
+    assert fake_decentdb.connections[0].closed is False
 
     connection.reset_connection_state()
+    assert fake_decentdb.connections[0].closed is True

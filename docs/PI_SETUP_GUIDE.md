@@ -75,7 +75,7 @@ Do not use Raspberry Pi OS Lite unless you are intentionally replacing the brows
 - Chromium autostart installation
 - service enable/start
 
-By default, the installer fetches the latest DecentDB release for both the Python binding source archive and the native release bundle. You can override that with `DECENTDB_RELEASE_TAG=vX.Y.Z` if you need to test or pin a different upstream DecentDB release.
+By default, the installer fetches the latest DecentDB release for both the Python binding source archive and the native release bundle. You can override that with `DECENTDB_RELEASE_TAG=vX.Y.Z` if you need to test or pin a different upstream DecentDB release. For SPF5000, use DecentDB `v1.7.4` or newer so the install includes the upstream core-engine memory-leak fixes.
 
 The installer also detects whether the target OS exposes Chromium as `chromium` or `chromium-browser`, so the package name does not need to be adjusted manually between Debian and Raspberry Pi OS variants.
 
