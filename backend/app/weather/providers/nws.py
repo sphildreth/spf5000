@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,11 +22,24 @@ from app.weather.policies import event_priority, resolve_default_escalation_mode
 POINTS_URL = "https://api.weather.gov/points/{latitude},{longitude}"
 ALERTS_URL = "https://api.weather.gov/alerts/active"
 
+_default_timeout = httpx.Timeout(20.0, connect=10.0)
+_client_lock = threading.Lock()
+_shared_client: httpx.Client | None = None
+
+
+def _get_shared_client() -> httpx.Client:
+    global _shared_client
+    with _client_lock:
+        if _shared_client is None:
+            _shared_client = httpx.Client(
+                timeout=_default_timeout,
+                follow_redirects=True,
+                limits=httpx.Limits(max_keepalive_connections=2, max_connections=4),
+            )
+        return _shared_client
+
 
 class NWSWeatherProvider:
-    def __init__(self, timeout_seconds: float = 20.0) -> None:
-        self.timeout_seconds = timeout_seconds
-
     def provider_name(self) -> str:
         return "nws"
 
@@ -239,18 +253,15 @@ class NWSWeatherProvider:
             "User-Agent": f"{settings.app_name}/{settings.app_version} (weather cache; admin-managed display)",
         }
         last_exc: Exception | None = None
+        last_response: httpx.Response | None = None
         for attempt in range(4):
             try:
-                with httpx.Client(
-                    timeout=self.timeout_seconds,
-                    headers=headers,
-                    follow_redirects=True,
-                ) as client:
-                    response = client.get(url, params=params)
-                if response.status_code not in {429, 500, 502, 503, 504}:
+                client = _get_shared_client()
+                last_response = client.get(url, params=params, headers=headers)
+                if last_response.status_code not in {429, 500, 502, 503, 504}:
                     break
                 last_exc = WeatherProviderError(
-                    f"NWS request failed with status {response.status_code} for {url}"
+                    f"NWS request failed with status {last_response.status_code} for {url}"
                 )
             except (httpx.ConnectError, httpx.TimeoutException) as exc:
                 last_exc = exc
@@ -260,12 +271,12 @@ class NWSWeatherProvider:
                 time.sleep(2.0**attempt)
         else:
             raise last_exc or WeatherProviderError(f"NWS request failed for {url}")
-        if response.status_code >= 400:
+        if last_response.status_code >= 400:
             raise WeatherProviderError(
-                f"NWS request failed with status {response.status_code} for {url}"
+                f"NWS request failed with status {last_response.status_code} for {url}"
             )
         try:
-            payload = response.json()
+            payload = last_response.json()
         except ValueError as exc:
             raise WeatherProviderError(f"NWS returned invalid JSON for {url}") from exc
         if not isinstance(payload, dict):
