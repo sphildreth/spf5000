@@ -85,27 +85,52 @@ def test_runtime_connections_do_not_accumulate_per_worker_thread(
 ) -> None:
     _patch_settings(monkeypatch, tmp_path)
     fake_decentdb = _FakeDecentDb()
-    seen_connection_ids: list[int] = []
+    monkeypatch.setattr(connection, "_MAX_CACHED_THREAD_CONNECTIONS", 2)
+    release_threads = threading.Event()
+    thread_ready = {
+        "t1": threading.Event(),
+        "t2": threading.Event(),
+        "t3": threading.Event(),
+    }
+    seen_connections: dict[str, _FakeConnection] = {}
     seen_lock = threading.Lock()
-    ready = threading.Barrier(4)
 
     connection.reset_connection_state()
     monkeypatch.setattr(connection, "decentdb", fake_decentdb)
 
-    def use_connection_once() -> None:
-        ready.wait()
+    def use_connection_once(name: str) -> None:
         with connection.get_connection() as conn:
             with seen_lock:
-                seen_connection_ids.append(id(conn._inner))
+                seen_connections[name] = conn._inner
+        thread_ready[name].set()
+        release_threads.wait()
 
-    threads = [threading.Thread(target=use_connection_once) for _ in range(4)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    first = threading.Thread(target=use_connection_once, args=("t1",))
+    second = threading.Thread(target=use_connection_once, args=("t2",))
+    third = threading.Thread(target=use_connection_once, args=("t3",))
 
-    assert len(fake_decentdb.connections) == 1
-    assert len(set(seen_connection_ids)) == 1
+    first.start()
+    assert thread_ready["t1"].wait(timeout=2)
 
+    second.start()
+    assert thread_ready["t2"].wait(timeout=2)
+
+    assert len(fake_decentdb.connections) == 2
+    assert fake_decentdb.connections[0].closed is False
+    assert fake_decentdb.connections[1].closed is False
+
+    third.start()
+    assert thread_ready["t3"].wait(timeout=2)
+
+    assert len(fake_decentdb.connections) == 3
+    assert seen_connections["t1"].closed is True
+    assert seen_connections["t2"].closed is False
+    assert seen_connections["t3"].closed is False
+
+    release_threads.set()
+    first.join()
+    second.join()
+    third.join()
     connection.reset_connection_state()
-    assert fake_decentdb.connections[0].closed is True
+    assert seen_connections["t2"].closed is True
+    assert seen_connections["t3"].closed is True
