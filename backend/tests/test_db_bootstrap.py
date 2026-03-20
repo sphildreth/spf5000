@@ -106,7 +106,6 @@ def test_request_time_open_failure_recovers_by_quarantining_database(
     app = create_app()
     with TestClient(app, raise_server_exceptions=True) as client:
         db_path = settings.database_path
-        original_db_bytes = db_path.read_bytes()
 
         # Stop background coordinators so they don't race with WAL
         # corruption below and trigger their own separate recovery.
@@ -117,6 +116,7 @@ def test_request_time_open_failure_recovers_by_quarantining_database(
         # from the on-disk WAL file so writing garbage while a shared WAL
         # is live would corrupt running connections.
         connection.reset_connection_state()
+        original_db_bytes = db_path.read_bytes()
 
         wal_path = Path(f"{db_path}-wal")
         wal_path.write_bytes(b"wal-bytes")

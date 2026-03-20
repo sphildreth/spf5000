@@ -64,6 +64,9 @@ def is_null_connection(conn: Any) -> bool:
 _local = threading.local()
 _connection_lock = threading.RLock()
 _connection_generation = 0
+# DB access is already serialized by _connection_lock, so keep one shared
+# cached handle instead of retaining one native connection per worker thread.
+_shared_conn_info: dict[str, Any] | None = None
 
 
 LOGGER = structlog.get_logger(__name__)
@@ -111,8 +114,9 @@ class _TrackedConnection:
         return getattr(self._inner, name)
 
 
-def _close_thread_connection() -> None:
-    conn_info = getattr(_local, "conn_info", None)
+def _close_cached_connection() -> None:
+    global _shared_conn_info
+    conn_info = _shared_conn_info
     if not conn_info:
         return
 
@@ -122,7 +126,7 @@ def _close_thread_connection() -> None:
             conn.close()
         except Exception:
             pass
-    _local.conn_info = None
+    _shared_conn_info = None
 
 
 @contextmanager
@@ -135,7 +139,7 @@ def reset_connection_state() -> None:
     with _connection_lock:
         global _connection_generation
         _connection_generation += 1
-        _close_thread_connection()
+        _close_cached_connection()
         if decentdb is not None:
             try:
                 decentdb.evict_shared_wal(str(settings.database_path))
@@ -171,7 +175,7 @@ def _recover_database_open_failure(exc: Exception) -> bool:
         from app.db.bootstrap import bootstrap_database
 
         bootstrap_database()
-        _close_thread_connection()
+        _close_cached_connection()
         LOGGER.warning(
             "decentdb_recovered_from_quarantine",
             recovery_dir=str(recovery_dir),
@@ -191,18 +195,19 @@ def _connect_with_recovery(db_path: str) -> Any:
         return decentdb.connect(db_path)
 
 
-def _get_thread_connection(db_path: str) -> Any:
-    conn_info = getattr(_local, "conn_info", None)
+def _get_cached_connection(db_path: str) -> Any:
+    global _shared_conn_info
+    conn_info = _shared_conn_info
     if conn_info:
         cached_path = conn_info.get("path")
         cached_conn = conn_info.get("conn")
         cached_gen = conn_info.get("gen")
         if cached_path == db_path and cached_conn is not None and cached_gen == _connection_generation:
             return cached_conn
-        _close_thread_connection()
+        _close_cached_connection()
 
     conn = _TrackedConnection(_connect_with_recovery(db_path))
-    _local.conn_info = {"conn": conn, "path": db_path, "gen": _connection_generation}
+    _shared_conn_info = {"conn": conn, "path": db_path, "gen": _connection_generation}
     return conn
 
 
@@ -219,7 +224,7 @@ def get_connection() -> Iterator[Any]:
             return
 
         db_path = str(settings.database_path)
-        conn = _get_thread_connection(db_path)
+        conn = _get_cached_connection(db_path)
 
         try:
             yield conn
@@ -229,5 +234,5 @@ def get_connection() -> Iterator[Any]:
             try:
                 conn.rollback()
             finally:
-                _close_thread_connection()
+                _close_cached_connection()
             raise

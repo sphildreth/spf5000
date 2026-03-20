@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -73,6 +74,38 @@ def test_runtime_connections_reuse_cached_connection_until_reset(
     assert len(fake_decentdb.connections) == 1
     assert fake_decentdb.connections[0].commit_calls == 2
     assert fake_decentdb.connections[0].closed is False
+
+    connection.reset_connection_state()
+    assert fake_decentdb.connections[0].closed is True
+
+
+def test_runtime_connections_do_not_accumulate_per_worker_thread(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_settings(monkeypatch, tmp_path)
+    fake_decentdb = _FakeDecentDb()
+    seen_connection_ids: list[int] = []
+    seen_lock = threading.Lock()
+    ready = threading.Barrier(4)
+
+    connection.reset_connection_state()
+    monkeypatch.setattr(connection, "decentdb", fake_decentdb)
+
+    def use_connection_once() -> None:
+        ready.wait()
+        with connection.get_connection() as conn:
+            with seen_lock:
+                seen_connection_ids.append(id(conn._inner))
+
+    threads = [threading.Thread(target=use_connection_once) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(fake_decentdb.connections) == 1
+    assert len(set(seen_connection_ids)) == 1
 
     connection.reset_connection_state()
     assert fake_decentdb.connections[0].closed is True
