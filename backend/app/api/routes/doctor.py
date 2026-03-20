@@ -30,16 +30,14 @@ def refresh_doctor_report(admin: dict = Depends(require_admin)) -> DoctorRespons
 
 @router.get("/doctor/export")
 def export_doctor_report(admin: dict = Depends(require_admin)) -> Response:
-    report = _doctor_service.run_all_checks()
     export_time = datetime.now(timezone.utc).isoformat()
-    export_data = {
-        "exported_at": export_time,
-        "report": report.model_dump(mode="json"),
-    }
+    export_data = _doctor_service.build_support_snapshot()
     return Response(
         content=json.dumps(export_data, indent=2),
         media_type="application/json",
         headers={
-            "Content-Disposition": f"attachment; filename=spf5000-doctor-report-{export_time[:10]}.json"
+            "Content-Disposition": (
+                f"attachment; filename=spf5000-support-snapshot-{export_time[:10]}.json"
+            )
         },
     )

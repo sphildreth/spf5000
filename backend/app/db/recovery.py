@@ -19,6 +19,7 @@ _RECOVERABLE_DATABASE_ERROR_MARKERS = (
     'corruption',
     'not a database',
     'invalid page',
+    'page id out of bounds',
     'checksum',
     'unreadable',
 )

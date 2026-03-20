@@ -26,6 +26,20 @@ export interface GetAdminLogsOptions {
 }
 
 export async function getAdminLogs(options: GetAdminLogsOptions = {}): Promise<AdminLogsResponse> {
+  const query = buildAdminLogsQuery(options, { includeLimit: true })
+  const payload = await apiGet<unknown>(query ? `/api/admin/logs?${query}` : '/api/admin/logs')
+  return normalizeAdminLogsResponse(payload)
+}
+
+export function getAdminLogsDownloadUrl(options: GetAdminLogsOptions = {}): string {
+  const query = buildAdminLogsQuery(options, { includeLimit: false })
+  return query ? `/api/admin/logs/download?${query}` : '/api/admin/logs/download'
+}
+
+function buildAdminLogsQuery(
+  options: GetAdminLogsOptions,
+  { includeLimit }: { includeLimit: boolean },
+): string {
   const params = new URLSearchParams()
 
   const file = typeof options.file === 'string' ? options.file.trim() : ''
@@ -33,13 +47,11 @@ export async function getAdminLogs(options: GetAdminLogsOptions = {}): Promise<A
     params.set('file', file)
   }
 
-  if (typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
+  if (includeLimit && typeof options.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0) {
     params.set('limit', String(Math.trunc(options.limit)))
   }
 
-  const query = params.toString()
-  const payload = await apiGet<unknown>(query ? `/api/admin/logs?${query}` : '/api/admin/logs')
-  return normalizeAdminLogsResponse(payload)
+  return params.toString()
 }
 
 function normalizeAdminLogsResponse(payload: unknown): AdminLogsResponse {

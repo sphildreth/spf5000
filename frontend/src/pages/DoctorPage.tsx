@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-import { getDoctorReport, type DoctorReport, type HealthCheck, type HealthCheckGroup } from '../api/doctor'
+import { getDoctorReport, getDoctorSnapshotUrl, type DoctorReport, type HealthCheck, type HealthCheckGroup } from '../api/doctor'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
 import { useAsyncData } from '../hooks/useAsyncData'
@@ -161,15 +161,15 @@ export function DoctorPage() {
     navigator.clipboard.writeText(reportText)
   }, [data])
 
-  const handleExportJson = useCallback(() => {
-    window.location.href = '/api/admin/doctor/export'
+  const handleDownloadSnapshot = useCallback(() => {
+    window.location.href = getDoctorSnapshotUrl()
   }, [])
 
   return (
     <div className="page-stack">
       <PageHeader
         title="Doctor"
-        description="System health check, troubleshooting, and configuration validation."
+        description="System health checks, troubleshooting, and exportable debug snapshots for support."
         actions={
           <div className="page-header-actions">
             <button
@@ -192,9 +192,9 @@ export function DoctorPage() {
                 <button
                   type="button"
                   className="button button--ghost"
-                  onClick={() => void handleExportJson()}
+                  onClick={() => void handleDownloadSnapshot()}
                 >
-                  Export JSON
+                  Download Snapshot
                 </button>
               </>
             )}

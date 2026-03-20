@@ -31,6 +31,10 @@ export async function getDoctorReport(): Promise<DoctorReport> {
   return normalizeDoctorReport(payload)
 }
 
+export function getDoctorSnapshotUrl(): string {
+  return '/api/admin/doctor/export'
+}
+
 function normalizeDoctorReport(payload: unknown): DoctorReport {
   const record = asRecord(payload)
 

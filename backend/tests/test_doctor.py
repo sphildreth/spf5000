@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Generator
 
@@ -210,6 +211,33 @@ class TestDoctorService:
                     HealthSeverity.INFO,
                 ]
 
+    def test_build_support_snapshot_contains_troubleshooting_sections(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_settings(monkeypatch, tmp_path)
+
+        service = DoctorService()
+        snapshot = service.build_support_snapshot()
+
+        assert snapshot["snapshot_version"] == 1
+        assert "exported_at" in snapshot
+        assert snapshot["report"]["overall_status"] in [
+            HealthSeverity.OK,
+            HealthSeverity.WARNING,
+            HealthSeverity.ERROR,
+        ]
+        assert snapshot["application"]["pid"] == os.getpid()
+        assert "python_executable" in snapshot["application"]
+        assert "platform" in snapshot["system"]
+        assert "disk_usage" in snapshot["system"]
+        assert snapshot["process"]["pid"] == os.getpid()
+        assert "status" in snapshot["process"]
+        assert "pmap" in snapshot["process"]
+        assert "top_processes_by_rss" in snapshot["process"]
+        assert "files" in snapshot["database"]
+        assert "connection_check" in snapshot["database"]
+        assert "files" in snapshot["logs"]
+
 
 class TestApplicationDoctorChecks:
     def test_returns_checks(
@@ -387,3 +415,42 @@ class TestDoctorAPI:
             assert response.status_code == 200
             body = response.json()
             assert "overall_status" in body
+
+    def test_doctor_export_endpoint_requires_auth(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_settings(monkeypatch, tmp_path)
+        app = create_app()
+        with TestClient(app) as client:
+            response = client.get("/api/admin/doctor/export")
+            assert response.status_code == 401
+
+    def test_doctor_export_endpoint_returns_support_snapshot(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _patch_settings(monkeypatch, tmp_path)
+        app = create_app()
+        with TestClient(app, raise_server_exceptions=True) as client:
+            client.post(
+                "/api/setup",
+                json={
+                    "username": "testadmin",
+                    "password": "testpass123",
+                    "confirm_password": "testpass123",
+                },
+            )
+
+            response = client.get("/api/admin/doctor/export")
+
+            assert response.status_code == 200
+            assert response.headers["content-type"].startswith("application/json")
+            assert "spf5000-support-snapshot-" in response.headers["content-disposition"]
+            body = response.json()
+            assert body["snapshot_version"] == 1
+            assert "exported_at" in body
+            assert "report" in body
+            assert "application" in body
+            assert "system" in body
+            assert "process" in body
+            assert "database" in body
+            assert "logs" in body

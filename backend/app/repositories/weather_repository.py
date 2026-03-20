@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from app.db.connection import get_connection, is_null_connection
+from typing import Callable, TypeVar
+
+import structlog
+
+from app.db.bootstrap import INDEX_STATEMENTS, TABLE_STATEMENTS
+from app.db.connection import (
+    exclusive_database_access,
+    get_connection,
+    is_null_connection,
+    reset_connection_state,
+)
+from app.db.recovery import is_recoverable_database_error
 from app.models.weather import (
     WeatherAlert,
     WeatherCurrentConditions,
@@ -30,6 +41,12 @@ _WEATHER_SETTING_KEYS = (
     "weather_alert_repeat_display_seconds",
 )
 _DEFAULT_SETTINGS = WeatherSettings()
+_REFRESH_RUNS_TABLE = "weather_refresh_runs"
+_REFRESH_RUNS_INDEXES = ("idx_weather_refresh_runs_provider_started",)
+_T = TypeVar("_T")
+
+
+LOGGER = structlog.get_logger(__name__)
 
 
 class WeatherRepository:
@@ -330,63 +347,91 @@ class WeatherRepository:
         return [self._alert_from_row(row) for row in rows]
 
     def create_refresh_run(self, refresh_run: WeatherRefreshRun) -> WeatherRefreshRun:
-        with get_connection() as conn:
-            if is_null_connection(conn):
-                return refresh_run
-            conn.execute(
-                """
-                insert into weather_refresh_runs (
-                    id, provider_name, refresh_kind, trigger, status, message, error_message, started_at, completed_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    refresh_run.id,
-                    refresh_run.provider_name,
-                    refresh_run.refresh_kind,
-                    refresh_run.trigger,
-                    refresh_run.status,
-                    refresh_run.message,
-                    refresh_run.error_message,
-                    refresh_run.started_at,
-                    refresh_run.completed_at,
-                ),
-            )
-        return self.get_refresh_run(refresh_run.id) or refresh_run
+        def operation() -> WeatherRefreshRun:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return refresh_run
+                conn.execute(
+                    """
+                    insert into weather_refresh_runs (
+                        id, provider_name, refresh_kind, trigger, status, message, error_message, started_at, completed_at
+                    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        refresh_run.id,
+                        refresh_run.provider_name,
+                        refresh_run.refresh_kind,
+                        refresh_run.trigger,
+                        refresh_run.status,
+                        refresh_run.message,
+                        refresh_run.error_message,
+                        refresh_run.started_at,
+                        refresh_run.completed_at,
+                    ),
+                )
+            return self.get_refresh_run(refresh_run.id) or refresh_run
+
+        return self._with_refresh_run_storage_recovery(
+            "create_refresh_run", operation
+        )
 
     def update_refresh_run(self, refresh_run: WeatherRefreshRun) -> WeatherRefreshRun:
-        with get_connection() as conn:
-            if is_null_connection(conn):
-                return refresh_run
-            conn.execute(
-                """
-                update weather_refresh_runs
-                set provider_name = ?, refresh_kind = ?, trigger = ?, status = ?, message = ?, error_message = ?,
-                    started_at = ?, completed_at = ?
-                where id = ?
-                """,
-                (
-                    refresh_run.provider_name,
-                    refresh_run.refresh_kind,
-                    refresh_run.trigger,
-                    refresh_run.status,
-                    refresh_run.message,
-                    refresh_run.error_message,
-                    refresh_run.started_at,
-                    refresh_run.completed_at,
-                    refresh_run.id,
-                ),
-            )
-        return self.get_refresh_run(refresh_run.id) or refresh_run
+        def operation() -> WeatherRefreshRun:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return refresh_run
+                conn.execute(
+                    """
+                    update weather_refresh_runs
+                    set provider_name = ?, refresh_kind = ?, trigger = ?, status = ?, message = ?, error_message = ?,
+                        started_at = ?, completed_at = ?
+                    where id = ?
+                    """,
+                    (
+                        refresh_run.provider_name,
+                        refresh_run.refresh_kind,
+                        refresh_run.trigger,
+                        refresh_run.status,
+                        refresh_run.message,
+                        refresh_run.error_message,
+                        refresh_run.started_at,
+                        refresh_run.completed_at,
+                        refresh_run.id,
+                    ),
+                )
+            return self.get_refresh_run(refresh_run.id) or refresh_run
+
+        return self._with_refresh_run_storage_recovery(
+            "update_refresh_run", operation
+        )
 
     def get_refresh_run(self, refresh_run_id: str) -> WeatherRefreshRun | None:
-        with get_connection() as conn:
-            if is_null_connection(conn):
-                return None
-            cursor = conn.execute("select * from weather_refresh_runs where id = ?", (refresh_run_id,))
-            row = row_to_dict(cursor, cursor.fetchone())
+        row = self._with_refresh_run_storage_recovery(
+            "get_refresh_run",
+            lambda: self._get_refresh_run_row(refresh_run_id),
+        )
         return None if row is None else self._refresh_run_from_row(row)
 
     def list_refresh_runs(self, provider_name: str, *, limit: int = 10) -> list[WeatherRefreshRun]:
+        rows = self._with_refresh_run_storage_recovery(
+            "list_refresh_runs",
+            lambda: self._list_refresh_run_rows(provider_name, limit),
+        )
+        return [self._refresh_run_from_row(row) for row in rows]
+
+    def _get_refresh_run_row(self, refresh_run_id: str) -> dict[str, object] | None:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return None
+            cursor = conn.execute(
+                "select * from weather_refresh_runs where id = ?",
+                (refresh_run_id,),
+            )
+            return row_to_dict(cursor, cursor.fetchone())
+
+    def _list_refresh_run_rows(
+        self, provider_name: str, limit: int
+    ) -> list[dict[str, object]]:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return []
@@ -399,8 +444,45 @@ class WeatherRepository:
                 """,
                 (provider_name, max(1, limit)),
             )
-            rows = rows_to_dicts(cursor, cursor.fetchall())
-        return [self._refresh_run_from_row(row) for row in rows]
+            return rows_to_dicts(cursor, cursor.fetchall())
+
+    def _with_refresh_run_storage_recovery(
+        self, operation_name: str, operation: Callable[[], _T]
+    ) -> _T:
+        try:
+            return operation()
+        except Exception as exc:
+            if not is_recoverable_database_error(exc):
+                raise
+
+            LOGGER.warning(
+                "weather_refresh_runs_storage_corrupt_repairing",
+                operation=operation_name,
+                exc_info=exc,
+            )
+            self._repair_refresh_run_storage()
+            LOGGER.warning(
+                "weather_refresh_runs_storage_rebuilt",
+                operation=operation_name,
+            )
+            return operation()
+
+    def _repair_refresh_run_storage(self) -> None:
+        # Refresh-run history is operational metadata; if its pages/indexes are
+        # corrupt we can rebuild just this table instead of quarantining the
+        # entire library metadata database.
+        with exclusive_database_access():
+            reset_connection_state()
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return
+                for index_name in _REFRESH_RUNS_INDEXES:
+                    conn.execute(f"drop index if exists {index_name}")
+                conn.execute(f"drop table if exists {_REFRESH_RUNS_TABLE}")
+                conn.execute(TABLE_STATEMENTS[_REFRESH_RUNS_TABLE])
+                for index_name in _REFRESH_RUNS_INDEXES:
+                    conn.execute(INDEX_STATEMENTS[index_name])
+            reset_connection_state()
 
     @staticmethod
     def _provider_state_from_row(row: dict[str, object]) -> WeatherProviderState:

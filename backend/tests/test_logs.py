@@ -57,10 +57,37 @@ class TestLogService:
         assert response.truncated is True
         assert response.lines == ["current-2"]
 
+    def test_returns_download_path_for_current_log_when_none_selected(
+        self, log_service: LogService
+    ) -> None:
+        _write_log(settings.log_dir / "spf5000.log.1", ["backup-1"])
+        _write_log(settings.log_dir / "spf5000.log", ["current-1"])
+
+        path = log_service.get_log_download_path()
+
+        assert path == (settings.log_dir / "spf5000.log").resolve()
+
+    def test_returns_download_path_for_selected_rotated_log(
+        self, log_service: LogService
+    ) -> None:
+        _write_log(settings.log_dir / "spf5000.log", ["current"])
+        _write_log(settings.log_dir / "spf5000.log.2", ["backup-2"])
+
+        path = log_service.get_log_download_path(selected_file="spf5000.log.2")
+
+        assert path == (settings.log_dir / "spf5000.log.2").resolve()
+
 
 class TestLogAPI:
     def test_logs_endpoint_requires_authentication(self, fresh_client: TestClient) -> None:
         response = fresh_client.get("/api/admin/logs")
+
+        assert response.status_code == 401
+
+    def test_download_logs_endpoint_requires_authentication(
+        self, fresh_client: TestClient
+    ) -> None:
+        response = fresh_client.get("/api/admin/logs/download")
 
         assert response.status_code == 401
 
@@ -140,6 +167,69 @@ class TestLogAPI:
         _write_log(settings.log_dir / "spf5000.log", ["current"])
 
         response = test_client.get("/api/admin/logs", params={"file": "spf5000.log.2"})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Requested log file does not exist."
+
+    def test_log_download_endpoint_returns_not_found_when_no_logs_exist(
+        self, test_client: TestClient
+    ) -> None:
+        response = test_client.get("/api/admin/logs/download")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "No managed log files are available."
+
+    def test_download_logs_endpoint_returns_current_file_when_unset(
+        self, test_client: TestClient
+    ) -> None:
+        _write_log(settings.log_dir / "spf5000.log", ["current-1", "current-2"])
+        _write_log(settings.log_dir / "spf5000.log.1", ["backup"])
+
+        response = test_client.get("/api/admin/logs/download")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain")
+        assert response.headers["content-disposition"] == 'attachment; filename="spf5000.log"'
+        assert response.text == "current-1\ncurrent-2\n"
+
+    def test_download_logs_endpoint_returns_selected_rotated_file(
+        self, test_client: TestClient
+    ) -> None:
+        _write_log(settings.log_dir / "spf5000.log", ["current"])
+        _write_log(settings.log_dir / "spf5000.log.1", ["old-1", "old-2"])
+
+        response = test_client.get(
+            "/api/admin/logs/download", params={"file": "spf5000.log.1"}
+        )
+
+        assert response.status_code == 200
+        assert (
+            response.headers["content-disposition"]
+            == 'attachment; filename="spf5000.log.1"'
+        )
+        assert response.text == "old-1\nold-2\n"
+
+    def test_download_logs_endpoint_rejects_unmanaged_file_requests(
+        self, test_client: TestClient
+    ) -> None:
+        response = test_client.get(
+            "/api/admin/logs/download", params={"file": "../secrets.txt"}
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]
+            == "Requested log file is not managed by SPF5000."
+        )
+
+    def test_download_logs_endpoint_returns_not_found_for_missing_file(
+        self, test_client: TestClient
+    ) -> None:
+        _write_log(settings.log_dir / "spf5000.log", ["current"])
+
+        response = test_client.get(
+            "/api/admin/logs/download", params={"file": "spf5000.log.2"}
+        )
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Requested log file does not exist."

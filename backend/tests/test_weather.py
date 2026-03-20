@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from app.models.weather import WeatherAlert, WeatherCurrentConditions, WeatherLocation, WeatherProviderState, WeatherSettings
+import decentdb
+
+from app.models.weather import (
+    WeatherAlert,
+    WeatherCurrentConditions,
+    WeatherLocation,
+    WeatherProviderState,
+    WeatherRefreshRun,
+    WeatherSettings,
+)
 from app.repositories.base import utc_now
 from app.repositories.weather_repository import WeatherRepository
 from app.services.weather_service import WeatherService
@@ -310,6 +319,61 @@ def test_manual_weather_refresh_uses_fake_provider_and_updates_cached_state(test
     display_alerts = test_client.get("/api/display/alerts")
     assert display_alerts.status_code == 200
     assert display_alerts.json()["presentation"]["mode"] == "fullscreen_repeat"
+
+
+def test_weather_status_repairs_corrupt_refresh_run_history(test_client, monkeypatch) -> None:
+    repo = WeatherRepository()
+    _seed_weather_cache(repo)
+    calls = {"count": 0, "repaired": 0}
+
+    def flaky_list_rows(self: WeatherRepository, provider_name: str, limit: int) -> list[dict[str, object]]:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise decentdb.OperationalError("Page id out of bounds")
+        return []
+
+    def repair_storage(self: WeatherRepository) -> None:
+        calls["repaired"] += 1
+
+    monkeypatch.setattr(WeatherRepository, "_list_refresh_run_rows", flaky_list_rows)
+    monkeypatch.setattr(WeatherRepository, "_repair_refresh_run_storage", repair_storage)
+
+    response = test_client.get("/api/weather/status")
+
+    assert response.status_code == 200
+    assert response.json()["recent_refresh_runs"] == []
+    assert calls == {"count": 2, "repaired": 1}
+
+
+def test_refresh_run_storage_repair_recreates_history_table(test_client) -> None:
+    repo = WeatherRepository()
+    refresh_run = WeatherRefreshRun(
+        id="weather-refresh-1",
+        provider_name="nws",
+        refresh_kind="weather",
+        trigger="manual",
+        status="succeeded",
+        message="done",
+        error_message="",
+        started_at="2026-03-16T18:00:00+00:00",
+        completed_at="2026-03-16T18:01:00+00:00",
+    )
+
+    created = repo.create_refresh_run(refresh_run)
+    assert created.id == refresh_run.id
+    assert len(repo.list_refresh_runs("nws")) == 1
+
+    repo._repair_refresh_run_storage()
+
+    assert repo.list_refresh_runs("nws") == []
+
+
+def test_recoverable_database_error_detects_page_id_out_of_bounds() -> None:
+    exc = decentdb.OperationalError("Page id out of bounds")
+
+    from app.db.recovery import is_recoverable_database_error
+
+    assert is_recoverable_database_error(exc) is True
 
 
 def test_weather_routes_require_auth(fresh_client) -> None:

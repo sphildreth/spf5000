@@ -44,6 +44,13 @@ class LogService:
             fetched_at=fetched_at,
         )
 
+    def get_log_download_path(self, *, selected_file: str | None = None) -> Path:
+        files = self.list_log_files()
+        resolved_name = self._resolve_selected_file_name(selected_file, files)
+        if resolved_name is None:
+            raise FileNotFoundError("No managed log files are available.")
+        return self._resolve_allowed_log_path(resolved_name)
+
     def list_log_files(self) -> list[LogFileInfo]:
         if not settings.log_dir.exists():
             return []

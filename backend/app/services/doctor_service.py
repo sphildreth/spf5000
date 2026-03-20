@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+import platform
 import shutil
 import socket
+import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from app.core.config import settings
 from app.db.connection import (
@@ -25,6 +29,7 @@ from app.schemas.doctor import (
     HealthCheckGroup,
     HealthSeverity,
 )
+from app.services.log_service import LogService
 from app.services.weather_service import WeatherService
 
 
@@ -950,6 +955,112 @@ class DoctorService:
 
         return DoctorResponse.from_groups(groups)
 
+    def build_support_snapshot(self) -> dict[str, Any]:
+        exported_at = datetime.now(UTC).isoformat()
+        report = self.run_all_checks()
+        pid = os.getpid()
+        return {
+            "snapshot_version": 1,
+            "exported_at": exported_at,
+            "report": report.model_dump(mode="json"),
+            "application": self._collect_application_snapshot(pid),
+            "system": self._collect_system_snapshot(),
+            "process": self._collect_process_snapshot(pid),
+            "database": self._collect_database_snapshot(),
+            "logs": self._collect_logs_snapshot(),
+        }
+
+    def _collect_application_snapshot(self, pid: int) -> dict[str, Any]:
+        return {
+            "app_name": settings.app_name,
+            "app_version": settings.app_version,
+            "pid": pid,
+            "parent_pid": os.getppid(),
+            "hostname": socket.gethostname(),
+            "python_executable": sys.executable,
+            "python_version": sys.version,
+            "argv": list(sys.argv),
+            "working_directory": str(Path.cwd()),
+        }
+
+    def _collect_system_snapshot(self) -> dict[str, Any]:
+        uname = platform.uname()
+        disk_usage = self._collect_disk_usage(settings.data_dir)
+        return {
+            "current_time_utc": datetime.now(UTC).isoformat(),
+            "platform": {
+                "system": uname.system,
+                "node": uname.node,
+                "release": uname.release,
+                "version": uname.version,
+                "machine": uname.machine,
+                "processor": uname.processor,
+                "python_implementation": platform.python_implementation(),
+            },
+            "load_average": self._collect_load_average(),
+            "uptime_seconds": self._collect_system_uptime_seconds(),
+            "memory_info": self._read_key_value_file(Path("/proc/meminfo")),
+            "disk_usage": disk_usage,
+            "paths": {
+                "data_dir": str(settings.data_dir),
+                "cache_dir": str(settings.cache_dir),
+                "log_dir": str(settings.log_dir),
+                "storage_dir": str(settings.storage_dir),
+                "database_path": str(settings.database_path),
+                "staging_dir": str(settings.staging_dir),
+            },
+        }
+
+    def _collect_process_snapshot(self, pid: int) -> dict[str, Any]:
+        proc_root = Path("/proc") / str(pid)
+        status = self._read_key_value_file(proc_root / "status")
+        return {
+            "pid": pid,
+            "cmdline": self._read_cmdline(proc_root / "cmdline"),
+            "open_file_descriptor_count": self._count_directory_entries(proc_root / "fd"),
+            "status": status,
+            "smaps_rollup": self._read_key_value_file(proc_root / "smaps_rollup"),
+            "top_processes_by_rss": self._collect_top_processes(limit=12),
+            "pmap": self._collect_pmap_snapshot(pid),
+        }
+
+    def _collect_database_snapshot(self) -> dict[str, Any]:
+        sidecar_paths = [
+            settings.database_path,
+            Path(f"{settings.database_path}-wal"),
+            Path(f"{settings.database_path}-shm"),
+        ]
+        return {
+            "decentdb_available": is_decentdb_available(),
+            "files": [self._stat_path(path) for path in sidecar_paths],
+            "connection_check": self._collect_database_connection_check(),
+            "recent_recovery_directories": self._list_recent_directories(
+                settings.staging_dir / "database-recovery",
+                limit=5,
+            ),
+        }
+
+    def _collect_logs_snapshot(self) -> dict[str, Any]:
+        log_service = LogService()
+        files = [file.model_dump(mode="json") for file in log_service.list_log_files()]
+        current_excerpt: dict[str, Any] | None = None
+        try:
+            viewer = log_service.get_logs(line_limit=40)
+            if viewer.selected_file is not None:
+                current_excerpt = {
+                    "selected_file": viewer.selected_file,
+                    "line_limit": viewer.line_limit,
+                    "total_lines": viewer.total_lines,
+                    "truncated": viewer.truncated,
+                    "lines": viewer.lines,
+                }
+        except Exception as exc:
+            current_excerpt = {"error": str(exc)}
+        return {
+            "files": files,
+            "current_excerpt": current_excerpt,
+        }
+
     @staticmethod
     def _compute_group_status(checks: list[HealthCheck]) -> HealthSeverity:
         if any(c.severity == HealthSeverity.ERROR for c in checks):
@@ -959,3 +1070,243 @@ class DoctorService:
         if any(c.severity == HealthSeverity.INFO for c in checks):
             return HealthSeverity.INFO
         return HealthSeverity.OK
+
+    @staticmethod
+    def _collect_load_average() -> dict[str, float] | None:
+        try:
+            one, five, fifteen = os.getloadavg()
+        except OSError:
+            return None
+        return {
+            "one_minute": round(one, 2),
+            "five_minutes": round(five, 2),
+            "fifteen_minutes": round(fifteen, 2),
+        }
+
+    @staticmethod
+    def _collect_system_uptime_seconds() -> float | None:
+        uptime_path = Path("/proc/uptime")
+        if not uptime_path.is_file():
+            return None
+        try:
+            first_value = uptime_path.read_text(encoding="utf-8").split()[0]
+            return round(float(first_value), 2)
+        except (OSError, ValueError, IndexError):
+            return None
+
+    @staticmethod
+    def _read_key_value_file(path: Path) -> dict[str, str] | None:
+        if not path.is_file():
+            return None
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            return {"error": str(exc)}
+
+        values: dict[str, str] = {}
+        for line in lines:
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            values[key.strip()] = value.strip()
+        return values
+
+    @staticmethod
+    def _read_cmdline(path: Path) -> list[str]:
+        if not path.is_file():
+            return []
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            return []
+        return [part.decode("utf-8", errors="replace") for part in raw.split(b"\x00") if part]
+
+    @staticmethod
+    def _count_directory_entries(path: Path) -> int | None:
+        if not path.is_dir():
+            return None
+        try:
+            return len(list(path.iterdir()))
+        except OSError:
+            return None
+
+    def _collect_top_processes(self, *, limit: int) -> dict[str, Any]:
+        result = self._run_command(
+            [
+                "ps",
+                "-eo",
+                "pid=,ppid=,rss=,vsz=,stat=,%mem=,%cpu=,etime=,comm=",
+                "--sort=-rss",
+            ]
+        )
+        if result["returncode"] != 0:
+            return {
+                "error": result["stderr"] or result["stdout"] or "ps command failed",
+                "command": result["command"],
+            }
+
+        rows: list[dict[str, Any]] = []
+        for line in result["stdout"].splitlines():
+            parts = line.split(None, 8)
+            if len(parts) != 9:
+                continue
+            pid, ppid, rss, vsz, state, mem_percent, cpu_percent, elapsed, command = parts
+            rows.append(
+                {
+                    "pid": int(pid),
+                    "parent_pid": int(ppid),
+                    "rss_kb": int(rss),
+                    "vsz_kb": int(vsz),
+                    "state": state,
+                    "mem_percent": mem_percent,
+                    "cpu_percent": cpu_percent,
+                    "elapsed": elapsed,
+                    "command": command,
+                }
+            )
+            if len(rows) >= limit:
+                break
+
+        return {
+            "command": result["command"],
+            "rows": rows,
+        }
+
+    def _collect_pmap_snapshot(self, pid: int) -> dict[str, Any]:
+        result = self._run_command(["pmap", "-x", str(pid)])
+        if result["returncode"] != 0:
+            return {
+                "error": result["stderr"] or result["stdout"] or "pmap command failed",
+                "command": result["command"],
+            }
+
+        lines = result["stdout"].splitlines()
+        summary: dict[str, Any] | None = None
+        mappings: list[dict[str, Any]] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("Address") or stripped.endswith(":"):
+                continue
+            if stripped.startswith("total kB"):
+                parts = stripped.split()
+                if len(parts) >= 5:
+                    try:
+                        summary = {
+                            "virtual_kb": int(parts[2]),
+                            "rss_kb": int(parts[3]),
+                            "dirty_kb": int(parts[4]),
+                        }
+                    except ValueError:
+                        summary = {"raw": stripped}  # type: ignore[assignment]
+                continue
+
+            parts = stripped.split(None, 5)
+            if len(parts) < 5:
+                continue
+            address, kbytes, rss, dirty, mode = parts[:5]
+            mapping = parts[5] if len(parts) > 5 else ""
+            try:
+                mappings.append(
+                    {
+                        "address": address,
+                        "kbytes": int(kbytes),
+                        "rss_kb": int(rss),
+                        "dirty_kb": int(dirty),
+                        "mode": mode,
+                        "mapping": mapping,
+                    }
+                )
+            except ValueError:
+                continue
+
+        mappings.sort(key=lambda item: item["rss_kb"], reverse=True)
+        return {
+            "command": result["command"],
+            "summary": summary,
+            "top_rss_mappings": mappings[:20],
+        }
+
+    @staticmethod
+    def _run_command(command: list[str]) -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            return {
+                "command": command,
+                "returncode": 127,
+                "stdout": "",
+                "stderr": str(exc),
+            }
+        return {
+            "command": command,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+
+    def _collect_database_connection_check(self) -> dict[str, Any]:
+        if decentdb is None:
+            return {"ok": False, "error": "DecentDB library not available"}
+        try:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return {"ok": False, "error": "Null database connection"}
+                conn.execute("SELECT 1").fetchone()
+                tables = sorted(conn.list_tables())
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        return {
+            "ok": True,
+            "table_count": len(tables),
+            "tables": tables,
+        }
+
+    @staticmethod
+    def _stat_path(path: Path) -> dict[str, Any]:
+        exists = path.exists()
+        info: dict[str, Any] = {
+            "path": str(path),
+            "exists": exists,
+            "is_file": path.is_file(),
+            "is_dir": path.is_dir(),
+        }
+        if not exists:
+            return info
+        try:
+            stat = path.stat()
+        except OSError as exc:
+            info["error"] = str(exc)
+            return info
+        info["size_bytes"] = stat.st_size
+        info["modified_at"] = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()
+        return info
+
+    @staticmethod
+    def _list_recent_directories(path: Path, *, limit: int) -> list[dict[str, Any]]:
+        if not path.is_dir():
+            return []
+        try:
+            entries = [entry for entry in path.iterdir() if entry.is_dir()]
+        except OSError:
+            return []
+        entries.sort(key=lambda entry: entry.stat().st_mtime, reverse=True)
+        return [DoctorService._stat_path(entry) for entry in entries[:limit]]
+
+    @staticmethod
+    def _collect_disk_usage(path: Path) -> dict[str, Any]:
+        try:
+            usage = shutil.disk_usage(path)
+        except OSError as exc:
+            return {"error": str(exc)}
+        return {
+            "path": str(path),
+            "total_bytes": usage.total,
+            "used_bytes": usage.used,
+            "free_bytes": usage.free,
+            "used_percent": round((usage.used / usage.total) * 100, 2) if usage.total else 0.0,
+        }

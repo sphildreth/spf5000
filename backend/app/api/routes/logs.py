@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 
 from app.api.deps import require_admin
 from app.schemas.logs import LogViewerResponse
@@ -24,3 +25,22 @@ def get_logs(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/logs/download")
+def download_logs(
+    file: Annotated[str | None, Query()] = None,
+    _admin: dict = Depends(require_admin),
+) -> FileResponse:
+    try:
+        path = _log_service.get_log_download_path(selected_file=file)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return FileResponse(
+        path=path,
+        media_type="text/plain",
+        filename=path.name,
+    )

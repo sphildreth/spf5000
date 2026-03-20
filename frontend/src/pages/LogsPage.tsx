@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { getAdminLogs, type AdminLogsResponse } from '../api/logs'
+import { getAdminLogs, getAdminLogsDownloadUrl, type AdminLogsResponse } from '../api/logs'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -41,6 +41,10 @@ export function LogsPage() {
     return data.files.find((file) => file.name === data.selected_file) ?? null
   }, [data])
 
+  const downloadUrl = useMemo(() => {
+    return getAdminLogsDownloadUrl({ file: data?.selected_file ?? selectedFile })
+  }, [data?.selected_file, selectedFile])
+
   const renderedLineStart = useMemo(() => {
     if (!data || data.lines.length === 0) {
       return 1
@@ -55,9 +59,21 @@ export function LogsPage() {
         title="Logs"
         description="Inspect recent admin logs without leaving the SPF5000 console. Choose a file, adjust the line limit, and refresh on demand."
         actions={
-          <button type="button" className="button button--ghost" onClick={() => void reload()} disabled={loading}>
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className="button-row">
+            <button type="button" className="button button--ghost" onClick={() => void reload()} disabled={loading}>
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                startLogDownload(downloadUrl)
+              }}
+              disabled={!data?.selected_file}
+            >
+              Download file
+            </button>
+          </div>
         }
       />
 
@@ -112,7 +128,7 @@ export function LogsPage() {
 
             <p className="card-muted">
               This viewer shows a recent slice of server logs returned by <code>/api/admin/logs</code>. There is no live
-              streaming; use Refresh whenever you want a fresh snapshot.
+              streaming; use Refresh whenever you want a fresh snapshot, or Download file to save the full log.
             </p>
           </div>
         </Card>
@@ -208,4 +224,14 @@ export function LogsPage() {
       ) : null}
     </div>
   )
+}
+
+function startLogDownload(path: string) {
+  const link = document.createElement('a')
+  link.href = path
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.append(link)
+  link.click()
+  link.remove()
 }
