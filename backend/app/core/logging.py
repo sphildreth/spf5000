@@ -10,6 +10,8 @@ from app.core.config import settings
 
 
 LOG_FORMAT = "%(message)s"
+LOG_FILENAME = "spf5000.log"
+LOG_BACKUP_COUNT = 3
 
 
 def _resolve_log_level() -> int:
@@ -38,9 +40,9 @@ def configure_logging() -> None:
     root_logger.addHandler(console_handler)
 
     file_handler = RotatingFileHandler(
-        settings.log_dir / "spf5000.log",
+        settings.log_dir / LOG_FILENAME,
         maxBytes=1_048_576,
-        backupCount=3,
+        backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT))

@@ -1,3 +1,33 @@
-from app.api.routes import assets, auth, backup, collections, display, google_photos, health, imports, settings, sources, weather
+from app.api.routes import (
+    assets,
+    auth,
+    backup,
+    collections,
+    display,
+    doctor,
+    google_photos,
+    health,
+    imports,
+    logs,
+    settings,
+    sources,
+    themes,
+    weather,
+)
 
-__all__ = ["assets", "auth", "backup", "collections", "display", "google_photos", "health", "imports", "settings", "sources", "weather"]
+__all__ = [
+    "assets",
+    "auth",
+    "backup",
+    "collections",
+    "display",
+    "doctor",
+    "google_photos",
+    "health",
+    "imports",
+    "logs",
+    "settings",
+    "sources",
+    "themes",
+    "weather",
+]

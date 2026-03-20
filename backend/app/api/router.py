@@ -11,6 +11,7 @@ from app.api.routes import (
     google_photos,
     health,
     imports,
+    logs,
     settings,
     sources,
     themes,
@@ -56,6 +57,9 @@ api_router.include_router(
 )
 api_router.include_router(
     doctor.router, prefix="/admin", tags=["doctor"], dependencies=_admin_dep
+)
+api_router.include_router(
+    logs.router, prefix="/admin", tags=["logs"], dependencies=_admin_dep
 )
 
 # Assets: list + detail are protected; variant fetch is public (served by display client).

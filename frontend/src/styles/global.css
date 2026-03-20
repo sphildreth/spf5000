@@ -1710,3 +1710,53 @@ textarea {
     min-height: 22vh;
   }
 }
+
+
+.logs-badges {
+  margin: 0 0 1rem;
+}
+
+.logs-meta-list dd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.logs-output-summary {
+  margin: 0 0 1rem;
+}
+
+.logs-panel {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(10, 13, 18, 0.9);
+  overflow: auto;
+  max-height: min(70vh, 48rem);
+}
+
+.logs-panel-lines {
+  margin: 0;
+  padding: 1rem 1.25rem 1rem 4.5rem;
+}
+
+.logs-panel-line {
+  padding: 0.28rem 0;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.logs-panel-line + .logs-panel-line {
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.logs-panel-line::marker {
+  color: var(--muted);
+}
+
+.logs-panel-line code {
+  font: inherit;
+}

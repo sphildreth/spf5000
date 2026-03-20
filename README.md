@@ -63,6 +63,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🌙 **Smart Scheduling** — App-managed sleep schedule stored in DecentDB, evaluated in a configurable display timezone with Pi-local fallback, and surfaced in the admin UI with both Pi-local and display-time clocks.
 - 🍓 **Pi-Ready** — Includes appliance scripts for install, uninstall, and health checks on Raspberry Pi OS Desktop.
 - 🔍 **Doctor Page** — Built-in health diagnostics page that aggregates subsystem status, identifies problems, and provides actionable remediation guidance.
+- 📜 **Admin Log Viewer** — Inspect recent SPF5000 log files and rotated backups from the admin UI without dropping to SSH.
 
 ## Architecture at a glance
 
@@ -340,6 +341,7 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 
 - health and system status
 - setup and auth/session
+- doctor diagnostics and admin log viewing
 - settings, display timezone, and sleep schedule
 - weather settings, cached conditions, and alert status
 - collections and assets

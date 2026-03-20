@@ -21,6 +21,7 @@ const DisplayPage = lazyNamed(() => import('./pages/DisplayPage'), 'DisplayPage'
 const DisplaySettingsPage = lazyNamed(() => import('./pages/DisplaySettingsPage'), 'DisplaySettingsPage')
 const DoctorPage = lazyNamed(() => import('./pages/DoctorPage'), 'DoctorPage')
 const LibraryPage = lazyNamed(() => import('./pages/LibraryPage'), 'LibraryPage')
+const LogsPage = lazyNamed(() => import('./pages/LogsPage'), 'LogsPage')
 const LoginPage = lazyNamed(() => import('./pages/LoginPage'), 'LoginPage')
 const SetupPage = lazyNamed(() => import('./pages/SetupPage'), 'SetupPage')
 const SettingsPage = lazyNamed(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="collections" element={<RouteSuspense><CollectionsPage /></RouteSuspense>} />
           <Route path="backups" element={<RouteSuspense><BackupsPage /></RouteSuspense>} />
           <Route path="doctor" element={<RouteSuspense><DoctorPage /></RouteSuspense>} />
+          <Route path="logs" element={<RouteSuspense><LogsPage /></RouteSuspense>} />
           <Route path="sources" element={<RouteSuspense><SourcesPage /></RouteSuspense>} />
           <Route path="display-settings" element={<RouteSuspense><DisplaySettingsPage /></RouteSuspense>} />
           <Route path="weather" element={<RouteSuspense><WeatherPage /></RouteSuspense>} />
