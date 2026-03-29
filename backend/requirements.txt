@@ -1,5 +1,5 @@
 # Install the DecentDB Python binding separately from a checkout or other supported source.
-# Use DecentDB v2.0.0 or newer for the latest features and improvements.
+# Use DecentDB v2.0.1 or newer for the latest features and improvements.
 # Example:
 #   python -m pip install -e /path/to/decentdb/bindings/python
 fastapi==0.135.1

@@ -42,6 +42,30 @@ def _get_package_version(package_name: str) -> str | None:
         return None
 
 
+def _get_decentdb_display_version() -> tuple[str | None, str | None]:
+    metadata_version = _get_package_version("decentdb")
+    if decentdb is None:
+        return metadata_version, None
+
+    try:
+        engine_version = str(decentdb.engine_version())
+    except Exception:
+        return metadata_version, None
+
+    if not engine_version:
+        return metadata_version, None
+
+    if metadata_version and metadata_version != engine_version:
+        return (
+            engine_version,
+            "Loaded DecentDB engine reports "
+            f"{engine_version}, while installed Python package metadata reports {metadata_version}. "
+            "If you are developing from a checkout, refresh the editable install metadata to keep them in sync.",
+        )
+
+    return engine_version, None
+
+
 class ApplicationDoctorChecks:
     @staticmethod
     def run() -> list[HealthCheck]:
@@ -95,9 +119,17 @@ class ApplicationDoctorChecks:
     def _check_dependencies() -> HealthCheck:
         deps = []
         missing = []
+        details = []
+
+        decentdb_version, decentdb_note = _get_decentdb_display_version()
+        if decentdb_version:
+            deps.append(f"DecentDB {decentdb_version}")
+        else:
+            missing.append("DecentDB")
+        if decentdb_note:
+            details.append(decentdb_note)
 
         dep_map = [
-            ("decentdb", "DecentDB"),
             ("fastapi", "FastAPI"),
             ("uvicorn", "Uvicorn"),
         ]
@@ -110,12 +142,15 @@ class ApplicationDoctorChecks:
                 missing.append(label)
 
         if missing:
+            details.append(
+                f"Could not determine versions for: {', '.join(missing)}."
+            )
             return HealthCheck(
                 id="dependencies",
                 title="Dependencies",
                 severity=HealthSeverity.WARNING,
                 summary=f"Installed: {', '.join(deps)}.",
-                details=f"Could not determine versions for: {', '.join(missing)}.",
+                details=" ".join(details),
             )
 
         return HealthCheck(
@@ -123,6 +158,7 @@ class ApplicationDoctorChecks:
             title="Dependencies",
             severity=HealthSeverity.INFO,
             summary=f"{', '.join(deps)}.",
+            details=" ".join(details) if details else None,
         )
 
 

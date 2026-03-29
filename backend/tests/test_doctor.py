@@ -267,6 +267,34 @@ class TestApplicationDoctorChecks:
         assert version_check is not None
         assert version_check.severity == HealthSeverity.INFO
 
+    def test_dependency_check_prefers_live_decentdb_engine_version(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        versions = {
+            "decentdb": "2.0.0",
+            "fastapi": "0.135.1",
+            "uvicorn": "0.41.0",
+        }
+
+        monkeypatch.setattr(
+            "app.services.doctor_service._get_package_version",
+            lambda package_name: versions.get(package_name),
+        )
+
+        class _FakeDecentDb:
+            @staticmethod
+            def engine_version() -> str:
+                return "2.0.1"
+
+        monkeypatch.setattr("app.services.doctor_service.decentdb", _FakeDecentDb())
+
+        check = ApplicationDoctorChecks._check_dependencies()
+
+        assert check.severity == HealthSeverity.INFO
+        assert check.summary == "DecentDB 2.0.1, FastAPI 0.135.1, Uvicorn 0.41.0."
+        assert check.details is not None
+        assert "package metadata reports 2.0.0" in check.details
+
 
 class TestDatabaseDoctorChecks:
     def test_database_file_check(

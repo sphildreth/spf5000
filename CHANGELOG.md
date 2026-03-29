@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Updated SPF5000's documented DecentDB baseline to `v2.0.0+` for the latest features and improvements, while keeping the Pi installer on the default `DECENTDB_RELEASE_TAG=latest` behavior.
+- Updated SPF5000's documented DecentDB baseline to `v2.0.1+` for the latest features and improvements, while keeping the Pi installer on the default `DECENTDB_RELEASE_TAG=latest` behavior.
 
 ## [1.0.0] - 2026-03-16
 
