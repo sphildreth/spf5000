@@ -48,7 +48,9 @@ class ImportService:
                 f"Source {source_id} does not support local scan/import operations"
             )
         provider = self.source_service.get_provider(source.provider_type)
-        scan_result = provider.scan_directory(source.import_path)
+        scan_result = provider.scan_directory(
+            source.import_path, sample_limit=max_samples
+        )
         now = utc_now()
         job = ImportJob(
             id=f"scan-{uuid4().hex}",
@@ -62,9 +64,7 @@ class ImportService:
             duplicate_count=0,
             skipped_count=scan_result.ignored_count,
             error_count=0,
-            sample_filenames=[
-                item.filename for item in scan_result.discovered[:max_samples]
-            ],
+            sample_filenames=[item.filename for item in scan_result.discovered],
             message=f"Scanned {scan_result.discovered_count} supported files",
             started_at=now,
             completed_at=now,
@@ -84,7 +84,6 @@ class ImportService:
                 f"Source {source_id} does not support local scan/import operations"
             )
         provider = self.source_service.get_provider(source.provider_type)
-        scan_result = provider.scan_directory(source.import_path)
         started_at = utc_now()
         job = ImportJob(
             id=f"import-{uuid4().hex}",
@@ -92,22 +91,31 @@ class ImportService:
             status="running",
             source_id=source.id,
             collection_id=collection_id,
-            import_path=scan_result.import_path,
-            discovered_count=scan_result.discovered_count,
+            import_path=str(Path(source.import_path).resolve()),
+            discovered_count=0,
             imported_count=0,
             duplicate_count=0,
-            skipped_count=scan_result.ignored_count,
+            skipped_count=0,
             error_count=0,
-            sample_filenames=[
-                item.filename for item in scan_result.discovered[:max_samples]
-            ],
+            sample_filenames=[],
             message="Import in progress",
             started_at=started_at,
             completed_at=None,
         )
         self.import_repo.create_job(job)
 
-        for candidate in scan_result.discovered:
+        walk_directory = getattr(provider, "walk_directory", None)
+        if callable(walk_directory):
+            walk = walk_directory(source.import_path, sample_limit=max_samples)
+            candidates = walk
+        else:
+            walk = None
+            candidates = provider.iter_directory(source.import_path)
+
+        for candidate in candidates:
+            job.discovered_count += 1
+            if len(job.sample_filenames) < max_samples:
+                job.sample_filenames.append(candidate.filename)
             try:
                 ingest_result = self.ingest_service.ingest_file(
                     source_id=source.id,
@@ -124,6 +132,9 @@ class ImportService:
                 job.error_count += 1
                 job.message = f"Import completed with {job.error_count} errors"
                 LOGGER.error("import_job_error", error=str(exc))
+
+        if walk is not None:
+            job.skipped_count = walk.ignored_count
 
         job.status = "completed" if job.error_count == 0 else "completed_with_errors"
         job.message = f"Imported {job.imported_count} new assets, {job.duplicate_count} duplicates, {job.error_count} errors"

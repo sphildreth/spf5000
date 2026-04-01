@@ -126,11 +126,11 @@ def test_request_time_open_failure_recovers_by_quarantining_database(
         original_connect = connection.decentdb.connect
         attempts = {"count": 0}
 
-        def flaky_connect(path: str):
+        def flaky_connect(path: str, **kwargs):
             attempts["count"] += 1
             if attempts["count"] == 1:
                 raise decentdb.OperationalError("Invalid page ID in WAL frame")
-            return original_connect(path)
+            return original_connect(path, **kwargs)
 
         monkeypatch.setattr(connection.decentdb, "connect", flaky_connect)
 

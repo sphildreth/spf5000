@@ -8,7 +8,13 @@ from app.db.connection import (
     get_connection,
     is_null_connection,
 )
-from app.models.asset import Asset, AssetVariant
+from app.models.asset import (
+    Asset,
+    AssetListItem,
+    AssetVariant,
+    PlaylistAsset,
+    PlaylistAssetStats,
+)
 from app.repositories.base import (
     bool_to_int,
     int_to_bool,
@@ -19,6 +25,162 @@ from app.repositories.base import (
 
 
 class AssetRepository:
+    def list_asset_summaries(self, collection_id: str | None = None) -> list[AssetListItem]:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return []
+            if collection_id:
+                cursor = conn.execute(
+                    """
+                    select
+                        assets.id,
+                        assets.source_id,
+                        assets.filename,
+                        assets.original_filename,
+                        assets.mime_type,
+                        assets.width,
+                        assets.height,
+                        assets.size_bytes,
+                        assets.imported_from_path,
+                        assets.imported_at,
+                        assets.updated_at
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and assets.is_active = 1
+                    order by lower(assets.filename) asc, assets.imported_at asc, assets.id asc
+                    """,
+                    (collection_id,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    select
+                        id,
+                        source_id,
+                        filename,
+                        original_filename,
+                        mime_type,
+                        width,
+                        height,
+                        size_bytes,
+                        imported_from_path,
+                        imported_at,
+                        updated_at
+                    from assets
+                    where is_active = 1
+                    order by imported_at desc, id desc
+                    """
+                )
+            summaries = [
+                AssetListItem(
+                    id=str(row["id"]),
+                    source_id=str(row["source_id"]),
+                    filename=str(row["filename"]),
+                    original_filename=str(row["original_filename"]),
+                    mime_type=str(row["mime_type"]),
+                    width=int(row["width"]),
+                    height=int(row["height"]),
+                    size_bytes=int(row["size_bytes"]),
+                    imported_from_path=str(row["imported_from_path"]),
+                    imported_at=str(row["imported_at"]),
+                    updated_at=str(row["updated_at"]),
+                )
+                for row in rows_to_dicts(cursor, cursor.fetchall())
+            ]
+        return self._attach_collection_ids_to_summaries(summaries)
+
+    def list_playlist_assets(self, collection_id: str | None = None) -> list[PlaylistAsset]:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return []
+            if collection_id:
+                cursor = conn.execute(
+                    """
+                    select
+                        assets.id,
+                        assets.filename,
+                        assets.checksum_sha256,
+                        assets.mime_type,
+                        assets.width,
+                        assets.height,
+                        assets.imported_at,
+                        assets.updated_at,
+                        assets.metadata_json
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and assets.is_active = 1
+                    order by assets.imported_at desc, assets.id desc
+                    """,
+                    (collection_id,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    select
+                        id,
+                        filename,
+                        checksum_sha256,
+                        mime_type,
+                        width,
+                        height,
+                        imported_at,
+                        updated_at,
+                        metadata_json
+                    from assets
+                    where is_active = 1
+                    order by imported_at desc, id desc
+                    """
+                )
+            return [
+                PlaylistAsset(
+                    id=str(row["id"]),
+                    filename=str(row["filename"]),
+                    checksum_sha256=str(row["checksum_sha256"]),
+                    mime_type=str(row["mime_type"]),
+                    width=int(row["width"]),
+                    height=int(row["height"]),
+                    imported_at=str(row["imported_at"]),
+                    updated_at=str(row["updated_at"]),
+                    metadata_json=str(row["metadata_json"] or "{}"),
+                )
+                for row in rows_to_dicts(cursor, cursor.fetchall())
+            ]
+
+    def get_playlist_asset_stats(
+        self, collection_id: str | None = None
+    ) -> PlaylistAssetStats:
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return PlaylistAssetStats(asset_count=0, latest_updated_at=None)
+            if collection_id:
+                cursor = conn.execute(
+                    """
+                    select count(*) as asset_count, max(assets.updated_at) as latest_updated_at
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and assets.is_active = 1
+                    """,
+                    (collection_id,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    select count(*) as asset_count, max(updated_at) as latest_updated_at
+                    from assets
+                    where is_active = 1
+                    """
+                )
+            row = row_to_dict(cursor, cursor.fetchone())
+            if row is None:
+                return PlaylistAssetStats(asset_count=0, latest_updated_at=None)
+            latest_updated_at = row["latest_updated_at"]
+            return PlaylistAssetStats(
+                asset_count=int(row["asset_count"] or 0),
+                latest_updated_at=None
+                if latest_updated_at is None
+                else str(latest_updated_at),
+            )
+
     def list_assets(self, collection_id: str | None = None) -> list[Asset]:
         with get_connection() as conn:
             if is_null_connection(conn):
@@ -242,6 +404,34 @@ class AssetRepository:
             asset.variants = variants_map.get(asset.id, [])
             asset.collection_ids = collections_map.get(asset.id, [])
         return assets
+
+    def _attach_collection_ids_to_summaries(
+        self, assets: list[AssetListItem]
+    ) -> list[AssetListItem]:
+        if not assets:
+            return assets
+        collection_ids = self._collection_ids_for_asset_ids([asset.id for asset in assets])
+        for asset in assets:
+            asset.collection_ids = collection_ids.get(asset.id, [])
+        return assets
+
+    def _collection_ids_for_asset_ids(
+        self, asset_ids: list[str]
+    ) -> dict[str, list[str]]:
+        if not asset_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in asset_ids)
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return {}
+            cursor = conn.execute(
+                f"select collection_id, asset_id from collection_assets where asset_id in ({placeholders}) order by sort_order asc",
+                tuple(asset_ids),
+            )
+            collections_map: dict[str, list[str]] = defaultdict(list)
+            for collection_id, asset_id in cursor.fetchall():
+                collections_map[str(asset_id)].append(str(collection_id))
+        return collections_map
 
     @staticmethod
     def _to_model(row: dict[str, Any]) -> Asset:

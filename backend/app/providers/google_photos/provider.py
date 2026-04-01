@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import Iterator
+
 from app.core.config import settings
-from app.providers.base import ProviderScanResult
+from app.providers.base import DiscoveredImage, ProviderScanResult
 from app.providers.google_photos.errors import GooglePhotosError
 from app.providers.google_photos.metadata import PROVIDER_NAME
 
@@ -19,7 +21,15 @@ class GooglePhotosProvider:
             "import_path": str(settings.google_photos_import_dir),
         }
 
-    def scan_directory(self, import_path: str) -> ProviderScanResult:
+    def scan_directory(
+        self, import_path: str, *, sample_limit: int | None = None
+    ) -> ProviderScanResult:
+        del sample_limit
+        raise GooglePhotosError(
+            f"{settings.google_photos_provider_display_name} does not support local directory scanning for {import_path!r}."
+        )
+
+    def iter_directory(self, import_path: str) -> Iterator[DiscoveredImage]:
         raise GooglePhotosError(
             f"{settings.google_photos_provider_display_name} does not support local directory scanning for {import_path!r}."
         )

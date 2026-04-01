@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from app.core.memory import trim_process_heap
 from app.models.asset import AssetBackground
 
 LOGGER = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ def derive_background_meta(image_path: Path) -> AssetBackground:
         pixels: list[tuple[int, int, int]] = list(sample.get_flattened_data())  # type: ignore[arg-type]
         sample.close()
         rgb_img.close()
+    trim_process_heap()
 
     # Dominant colour — overall average
     dominant = _subdue_rgb(*_avg_rgb(pixels))

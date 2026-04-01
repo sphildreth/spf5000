@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.models.asset import Asset, AssetVariant
+from app.models.asset import Asset, AssetListItem, AssetVariant
 from app.models.asset_upload import AssetUploadSummary
 
 
@@ -26,6 +26,44 @@ class AssetVariantResponse(BaseModel):
             width=variant.width,
             height=variant.height,
             size_bytes=variant.size_bytes,
+        )
+
+
+class AssetListItemResponse(BaseModel):
+    id: str
+    source_id: str
+    filename: str
+    original_filename: str
+    mime_type: str
+    width: int
+    height: int
+    size_bytes: int
+    imported_from_path: str
+    original_url: str
+    thumbnail_url: str
+    display_url: str
+    collection_ids: list[str]
+    imported_at: str
+    updated_at: str
+
+    @classmethod
+    def from_domain(cls, asset: AssetListItem) -> "AssetListItemResponse":
+        return cls(
+            id=asset.id,
+            source_id=asset.source_id,
+            filename=asset.filename,
+            original_filename=asset.original_filename,
+            mime_type=asset.mime_type,
+            width=asset.width,
+            height=asset.height,
+            size_bytes=asset.size_bytes,
+            imported_from_path=asset.imported_from_path,
+            original_url=f"/api/assets/{asset.id}/variants/original",
+            thumbnail_url=f"/api/assets/{asset.id}/variants/thumbnail",
+            display_url=f"/api/assets/{asset.id}/variants/display",
+            collection_ids=asset.collection_ids,
+            imported_at=asset.imported_at,
+            updated_at=asset.updated_at,
         )
 
 

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+from dataclasses import asdict
 import hashlib
 import json
+import threading
 import structlog
-from pathlib import Path
 
 from app.models.asset import AssetBackground
 from app.models.display import DisplayPlaylist, DisplayProfile, PlaylistItem
-from app.models.settings import FrameSettings
+from app.models.sleep_schedule import SleepSchedule
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.collection_repository import CollectionRepository
 from app.repositories.display_repository import DisplayRepository
@@ -15,10 +17,12 @@ from app.repositories.settings_repository import SettingsRepository
 from app.services.background_service import (
     VALID_BACKGROUND_FILL_MODES,
     background_meta_from_dict,
-    derive_background_meta,
 )
 
 LOGGER = structlog.get_logger(__name__)
+_PLAYLIST_CACHE_MAX_ENTRIES = 4
+_PLAYLIST_CACHE: OrderedDict[tuple[str, str], DisplayPlaylist] = OrderedDict()
+_PLAYLIST_CACHE_LOCK = threading.Lock()
 
 
 class DisplayService:
@@ -125,15 +129,19 @@ class DisplayService:
             if resolved_collection_id
             else None
         )
-        assets = self.asset_repo.list_assets(collection_id=resolved_collection_id)
-        revision_input = "|".join(
-            [profile.updated_at, *(asset.updated_at for asset in assets)]
+        sleep_schedule = self.settings_repo.get_sleep_schedule()
+        playlist_revision = self._compute_playlist_revision(
+            profile=profile,
+            collection_id=resolved_collection_id,
+            collection=collection,
+            sleep_schedule=sleep_schedule,
         )
-        playlist_revision = (
-            hashlib.sha256(revision_input.encode("utf-8")).hexdigest()[:16]
-            if revision_input
-            else "empty"
-        )
+        cache_key = (resolved_collection_id or "", playlist_revision)
+        cached = self._get_cached_playlist(cache_key)
+        if cached is not None:
+            return cached
+
+        assets = self.asset_repo.list_playlist_assets(collection_id=resolved_collection_id)
 
         if profile.shuffle_enabled:
             assets = sorted(
@@ -152,7 +160,7 @@ class DisplayService:
 
         items = []
         for asset in assets:
-            background = self._resolve_background(asset)
+            background = self._background_from_metadata(asset.metadata_json)
             items.append(
                 PlaylistItem(
                     asset_id=asset.id,
@@ -166,67 +174,85 @@ class DisplayService:
                     background=background,
                 )
             )
-        return DisplayPlaylist(
+        playlist = DisplayPlaylist(
             profile=profile,
             collection_id=resolved_collection_id,
             collection_name=None if collection is None else collection.name,
             shuffle_enabled=profile.shuffle_enabled,
             playlist_revision=playlist_revision,
             background_fill_mode=profile.background_fill_mode,
-            sleep_schedule=self.settings_repo.get_sleep_schedule(),
+            sleep_schedule=sleep_schedule,
             items=items,
         )
+        self._store_cached_playlist(cache_key, playlist)
+        return playlist
 
-    def _resolve_background(self, asset: object) -> AssetBackground | None:
-        """Return the background metadata for *asset*, deriving and caching it lazily.
+    def _compute_playlist_revision(
+        self,
+        *,
+        profile: DisplayProfile,
+        collection_id: str | None,
+        collection: object | None,
+        sleep_schedule: SleepSchedule,
+    ) -> str:
+        stats = self.asset_repo.get_playlist_asset_stats(collection_id=collection_id)
+        revision_input = "|".join(
+            [
+                profile.id,
+                profile.name,
+                profile.selected_collection_id or "",
+                profile.updated_at,
+                str(profile.slideshow_interval_seconds),
+                profile.transition_mode,
+                str(profile.transition_duration_ms),
+                profile.fit_mode,
+                str(profile.shuffle_enabled),
+                str(profile.shuffle_bag_enabled),
+                profile.idle_message,
+                str(profile.refresh_interval_seconds),
+                profile.background_fill_mode,
+                "" if collection is None else str(getattr(collection, "id", "")),
+                "" if collection is None else str(getattr(collection, "name", "")),
+                "" if collection is None else str(getattr(collection, "updated_at", "")),
+                str(stats.asset_count),
+                stats.latest_updated_at or "",
+                json.dumps(asdict(sleep_schedule), sort_keys=True),
+            ]
+        )
+        return (
+            hashlib.sha256(revision_input.encode("utf-8")).hexdigest()[:16]
+            if revision_input
+            else "empty"
+        )
 
-        Returns ``None`` on any failure so playlist assembly is never blocked.
-        """
+    @staticmethod
+    def _get_cached_playlist(
+        cache_key: tuple[str, str]
+    ) -> DisplayPlaylist | None:
+        with _PLAYLIST_CACHE_LOCK:
+            playlist = _PLAYLIST_CACHE.get(cache_key)
+            if playlist is None:
+                return None
+            _PLAYLIST_CACHE.move_to_end(cache_key)
+            return playlist
+
+    @staticmethod
+    def _store_cached_playlist(
+        cache_key: tuple[str, str], playlist: DisplayPlaylist
+    ) -> None:
+        with _PLAYLIST_CACHE_LOCK:
+            _PLAYLIST_CACHE[cache_key] = playlist
+            _PLAYLIST_CACHE.move_to_end(cache_key)
+            while len(_PLAYLIST_CACHE) > _PLAYLIST_CACHE_MAX_ENTRIES:
+                _PLAYLIST_CACHE.popitem(last=False)
+
+    def _background_from_metadata(self, metadata_json: str) -> AssetBackground | None:
         try:
-            meta: dict[str, object] = json.loads(
-                getattr(asset, "metadata_json", "{}") or "{}"
-            )
+            meta: dict[str, object] = json.loads(metadata_json or "{}")
         except (json.JSONDecodeError, TypeError):
-            meta = {}
+            return None
 
         stored_background = meta.get("background")
         if isinstance(stored_background, dict):
             return background_meta_from_dict(stored_background)
-
-        # Lazy derivation — find the display variant path and compute colours.
-        try:
-            display_variant = next(
-                (
-                    variant
-                    for variant in getattr(asset, "variants", [])
-                    if getattr(variant, "kind", "") == "display"
-                ),
-                None,
-            )
-            if display_variant is None:
-                display_variant = self.asset_repo.get_variant(asset.id, "display")  # type: ignore[union-attr]
-            if display_variant is None:
-                return None
-            variant_path = Path(display_variant.local_path)
-            if not variant_path.is_file():
-                return None
-
-            bg = derive_background_meta(variant_path)
-
-            # Persist so subsequent requests skip derivation.
-            meta["background"] = {
-                "dominant_color": bg.dominant_color,
-                "gradient_colors": bg.gradient_colors,
-            }
-            self.asset_repo.update_metadata_json(
-                asset.id, json.dumps(meta, sort_keys=True)
-            )  # type: ignore[union-attr]
-
-            return bg
-        except Exception:
-            LOGGER.warning(
-                "background_derivation_failed",
-                asset_id=getattr(asset, "id", None),
-                exc_info=True,
-            )
-            return None
+        return None

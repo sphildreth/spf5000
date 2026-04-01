@@ -99,6 +99,26 @@ def test_local_files_scan_with_file_count_limit(
     assert len(result.discovered) == 3
 
 
+def test_local_files_scan_sample_limit_keeps_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """scan_directory limits retained samples without changing total counts."""
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+
+    scan_root = tmp_path / "sources" / "scan"
+    scan_root.mkdir(parents=True, exist_ok=True)
+
+    for i in range(4):
+        _write_jpeg(scan_root / f"image{i}.jpg", (10, 10, 10))
+
+    provider = LocalFilesProvider()
+    result = provider.scan_directory(str(scan_root), sample_limit=2)
+
+    assert result.discovered_count == 4
+    assert len(result.discovered) == 2
+    assert [item.filename for item in result.discovered] == ["image0.jpg", "image1.jpg"]
+
+
 def test_backup_archive_empty_rejected(tmp_path: Path) -> None:
     """Empty ZIP archive is rejected."""
     from app.services.backup_service import BackupService

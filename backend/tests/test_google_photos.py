@@ -254,3 +254,44 @@ def test_google_photos_sync_route_queues_manual_sync(test_client, monkeypatch) -
     assert body["queued"] is True
     assert body["already_queued"] is False
     assert coordinator.requests == ["manual"]
+
+
+def test_google_photos_sync_merges_duplicate_media_sources(
+    test_client, monkeypatch
+) -> None:
+    fake_client = FakeGooglePhotosClient()
+    fake_client.poll_attempts = 1
+    fake_client.device["mediaSourcesSet"] = True
+    fake_client.device["mediaSources"] = [
+        {"id": "album-1", "displayName": "Vacation"},
+        {"id": "album-2", "displayName": "Favorites"},
+    ]
+    duplicate_item = GooglePhotosRemoteMediaItem(
+        id="remote-1",
+        create_time="2026-03-15T00:00:00Z",
+        base_url="https://photos.google.test/media/remote-1",
+        mime_type="image/jpeg",
+        width=1200,
+        height=800,
+    )
+    fake_client.media_items_by_source = {
+        "album-1": [duplicate_item],
+        "album-2": [duplicate_item],
+    }
+    _configure_google_settings(monkeypatch)
+    _install_fake_client(monkeypatch, fake_client)
+
+    service = GooglePhotosService()
+    service.start_connect(device_display_name="SPF5000 Test Frame")
+    _expire_active_flow()
+    service.poll_connect()
+
+    sync_run = service.run_sync(trigger="manual")
+    assert sync_run.status == "completed"
+    assert sync_run.discovered_count == 1
+    assert sync_run.imported_count == 1
+    assert sync_run.duplicate_count == 0
+
+    provider_asset = GooglePhotosRepository().get_provider_asset("remote-1")
+    assert provider_asset is not None
+    assert provider_asset.media_source_ids == ["album-1", "album-2"]

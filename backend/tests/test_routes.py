@@ -37,6 +37,26 @@ def test_get_single_asset_by_id(test_client: TestClient) -> None:
     assert response.json()["id"] == asset["id"]
 
 
+def test_asset_list_returns_lightweight_summary(test_client: TestClient) -> None:
+    """GET /api/assets omits heavy detail fields from the list payload."""
+    upload_response = test_client.post(
+        "/api/assets/upload",
+        data={"collection_id": "default-collection"},
+        files=[("files", _image_upload("test.jpg", (64, 128, 255)))],
+    )
+    assert upload_response.status_code == 201
+
+    assets = test_client.get("/api/assets").json()
+    assert len(assets) >= 1
+    asset = assets[0]
+
+    assert "display_url" in asset
+    assert "thumbnail_url" in asset
+    assert "metadata" not in asset
+    assert "variants" not in asset
+    assert "checksum_sha256" not in asset
+
+
 def test_get_asset_by_id_not_found(test_client: TestClient) -> None:
     """GET /api/assets/{asset_id} returns 404 for unknown asset."""
     response = test_client.get("/api/assets/nonexistent-asset-id")

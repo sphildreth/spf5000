@@ -18,7 +18,7 @@ def scan_local_imports(request: LocalImportScanRequest) -> LocalImportScanRespon
         import_path=scan_result.import_path,
         discovered_count=scan_result.discovered_count,
         ignored_count=scan_result.ignored_count,
-        sample_filenames=[item.filename for item in scan_result.discovered[: request.max_samples]],
+        sample_filenames=[item.filename for item in scan_result.discovered],
     )
 
 

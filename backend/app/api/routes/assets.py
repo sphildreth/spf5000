@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import require_admin
 from app.schemas.asset import (
+    AssetListItemResponse,
     AssetResponse,
     AssetUploadResponse,
     BulkRemoveFailure,
@@ -31,14 +32,14 @@ def get_asset_service() -> AssetService:
     return AssetService()
 
 
-@router.get("", response_model=list[AssetResponse], dependencies=_admin_dep)
+@router.get("", response_model=list[AssetListItemResponse], dependencies=_admin_dep)
 def list_assets(
     collection_id: str | None = None,
     svc: AssetService = Depends(get_asset_service),
-) -> list[AssetResponse]:
+) -> list[AssetListItemResponse]:
     return [
-        AssetResponse.from_domain(asset)
-        for asset in svc.list_assets(collection_id=collection_id)
+        AssetListItemResponse.from_domain(asset)
+        for asset in svc.list_asset_summaries(collection_id=collection_id)
     ]
 
 

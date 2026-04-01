@@ -33,6 +33,41 @@ class AssetVariant:
 
 
 @dataclass(slots=True)
+class AssetListItem:
+    id: str
+    source_id: str
+    filename: str
+    original_filename: str
+    mime_type: str
+    width: int
+    height: int
+    size_bytes: int
+    imported_from_path: str
+    imported_at: str
+    updated_at: str
+    collection_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class PlaylistAsset:
+    id: str
+    filename: str
+    checksum_sha256: str
+    mime_type: str
+    width: int
+    height: int
+    imported_at: str
+    updated_at: str
+    metadata_json: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlaylistAssetStats:
+    asset_count: int
+    latest_updated_at: str | None
+
+
+@dataclass(slots=True)
 class Asset:
     id: str
     source_id: str

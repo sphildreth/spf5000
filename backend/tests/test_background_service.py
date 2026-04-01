@@ -96,6 +96,22 @@ class TestDeriveBackgroundMeta:
         with pytest.raises(Exception):
             derive_background_meta(tmp_path / "nonexistent.jpg")
 
+    def test_requests_heap_trim_after_image_decode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        img_path = tmp_path / "trim.jpg"
+        _write_solid_jpeg(img_path, (120, 130, 140))
+        trim_calls: list[bool] = []
+        monkeypatch.setattr(
+            "app.services.background_service.trim_process_heap",
+            lambda: trim_calls.append(True) or True,
+        )
+
+        bg = derive_background_meta(img_path)
+
+        assert bg.ready is True
+        assert trim_calls == [True]
+
 
 class TestBackgroundMetaFromDict:
     def test_round_trip(self) -> None:

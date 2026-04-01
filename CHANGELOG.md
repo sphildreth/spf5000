@@ -5,11 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 1.1.0 - [Unreleased]
 
 ### Changed
 
 - Updated SPF5000's documented DecentDB baseline to `v2.0.1+` for the latest features and improvements, while keeping the Pi installer on the default `DECENTDB_RELEASE_TAG=latest` behavior.
+- Reduced backend RSS spikes on Linux/Pi deployments by trimming retained glibc heap after image-heavy ingest and background-color derivation work.
+- Lowered DecentDB Python driver cache pressure on constrained devices by making the statement-cache size explicit and configurable in SPF5000.
+- Reworked local-files scanning and import to stream directory traversal instead of materializing the full tree in memory, while keeping bounded sample results for the UI.
+- Slimmed `/api/assets` list responses and the display playlist path so admin and display polling avoid hydrating heavyweight asset metadata and variant structures on every request.
+- Reworked Google Photos sync to process remote items incrementally and merge per-source membership without holding the full selected library in memory.
 
 ## [1.0.0] - 2026-03-16
 

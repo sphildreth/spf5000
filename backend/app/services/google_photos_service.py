@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import mimetypes
-from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 from app.core.config import settings
+from app.core.memory import trim_process_heap
 from app.db.bootstrap import GOOGLE_PHOTOS_COLLECTION_ID, GOOGLE_PHOTOS_SOURCE_ID
 from app.providers.google_photos.client import GooglePhotosClient
 from app.providers.google_photos.errors import (
@@ -416,6 +416,8 @@ class GooglePhotosService:
             account.updated_at = sync_run.completed_at or account.updated_at
             self.repo.upsert_account(account)
             return sync_run
+        finally:
+            trim_process_heap()
 
     def _sync_selected_media_sources(
         self,
@@ -424,8 +426,7 @@ class GooglePhotosService:
     ) -> GooglePhotosSyncStats:
         client = self.client_factory()
         stats = GooglePhotosSyncStats()
-        remote_items: dict[str, GooglePhotosRemoteMediaItem] = {}
-        remote_sources: dict[str, set[str]] = defaultdict(set)
+        seen_remote_ids: set[str] = set()
 
         for media_source in media_sources:
             if not media_source.is_selected:
@@ -445,102 +446,155 @@ class GooglePhotosService:
                     page_size=100,
                 )
                 for item in items:
-                    remote_items[item.id] = item
-                    remote_sources[item.id].add(media_source.media_source_id)
+                    if item.id in seen_remote_ids:
+                        self._merge_provider_asset_source(
+                            item.id, media_source.media_source_id
+                        )
+                        continue
+                    seen_remote_ids.add(item.id)
+                    stats.discovered_count += 1
+                    self._sync_remote_media_item(
+                        account=account,
+                        client=client,
+                        media_source_id=media_source.media_source_id,
+                        remote_item=item,
+                        stats=stats,
+                    )
+                trim_process_heap()
                 if not next_page_token or next_page_token == page_token:
                     break
                 page_token = next_page_token
 
-        stats.discovered_count = len(remote_items)
-        for remote_media_id, remote_item in remote_items.items():
-            if not remote_item.mime_type.startswith("image/"):
-                stats.skipped_count += 1
-                stats.warnings.append(
-                    f"Skipped unsupported Google media item {remote_media_id} ({remote_item.mime_type})."
-                )
-                continue
-            staging_suffix = self._guess_extension(remote_item.mime_type)
-            staging_path = (
-                settings.google_photos_download_staging_dir
-                / f"{remote_media_id}{staging_suffix}"
-            )
-            try:
-                staging_path.parent.mkdir(parents=True, exist_ok=True)
-                if hasattr(client, "download_media_to_file"):
-                    client.download_media_to_file(
-                        access_token=account.access_token or "",
-                        base_url=remote_item.base_url,
-                        dest_path=staging_path,
-                    )
-                else:
-                    media_bytes = client.download_media(
-                        access_token=account.access_token or "",
-                        base_url=remote_item.base_url,
-                    )
-                    staging_path.write_bytes(media_bytes)
-
-                result = self.asset_ingestion.ingest_file(
-                    source_id=GOOGLE_PHOTOS_SOURCE_ID,
-                    collection_ids=[GOOGLE_PHOTOS_COLLECTION_ID],
-                    source_path=staging_path,
-                    imported_from_path=f"google-photos://mediaItems/{remote_media_id}",
-                    original_filename=f"{remote_media_id}{staging_suffix}",
-                    metadata={
-                        "provider": PROVIDER_NAME,
-                        "google_media_id": remote_media_id,
-                        "google_create_time": remote_item.create_time,
-                        "google_media_sources": sorted(remote_sources[remote_media_id]),
-                    },
-                )
-                if result.created:
-                    stats.imported_count += 1
-                else:
-                    stats.duplicate_count += 1
-                existing_mapping = self.repo.get_provider_asset(remote_media_id)
-                first_synced_at = (
-                    existing_mapping.first_synced_at if existing_mapping else utc_now()
-                )
-                seen_at = utc_now()
-                self.repo.upsert_provider_asset(
-                    GooglePhotosProviderAsset(
-                        id=existing_mapping.id
-                        if existing_mapping
-                        else f"provider-asset-{uuid4().hex[:12]}",
-                        provider_name=PROVIDER_NAME,
-                        remote_media_id=remote_media_id,
-                        local_asset_id=result.asset.id,
-                        mime_type=remote_item.mime_type,
-                        width=remote_item.width,
-                        height=remote_item.height,
-                        create_time=remote_item.create_time,
-                        imported_from_path=f"google-photos://mediaItems/{remote_media_id}",
-                        remote_base_url=remote_item.base_url,
-                        cached_original_path=result.asset.local_original_path,
-                        checksum_sha256=result.checksum_sha256,
-                        metadata_json=json_dumps(
-                            {
-                                "provider": PROVIDER_NAME,
-                                "google_media_id": remote_media_id,
-                                "media_source_ids": sorted(
-                                    remote_sources[remote_media_id]
-                                ),
-                            }
-                        ),
-                        first_synced_at=first_synced_at,
-                        last_synced_at=seen_at,
-                        last_seen_at=seen_at,
-                        is_active=True,
-                        media_source_ids=sorted(remote_sources[remote_media_id]),
-                    )
-                )
-            except Exception as exc:
-                stats.error_count += 1
-                stats.warnings.append(
-                    f"Failed to sync Google media item {remote_media_id}: {exc}"
-                )
-            finally:
-                staging_path.unlink(missing_ok=True)
         return stats
+
+    def _sync_remote_media_item(
+        self,
+        *,
+        account: GooglePhotosAccount,
+        client: object,
+        media_source_id: str,
+        remote_item: GooglePhotosRemoteMediaItem,
+        stats: GooglePhotosSyncStats,
+    ) -> None:
+        remote_media_id = remote_item.id
+        if not remote_item.mime_type.startswith("image/"):
+            stats.skipped_count += 1
+            stats.warnings.append(
+                f"Skipped unsupported Google media item {remote_media_id} ({remote_item.mime_type})."
+            )
+            return
+
+        existing_mapping = self.repo.get_provider_asset(remote_media_id)
+        media_source_ids = sorted(
+            {
+                media_source_id,
+                *([] if existing_mapping is None else existing_mapping.media_source_ids),
+            }
+        )
+        staging_suffix = self._guess_extension(remote_item.mime_type)
+        staging_path = (
+            settings.google_photos_download_staging_dir
+            / f"{remote_media_id}{staging_suffix}"
+        )
+        try:
+            staging_path.parent.mkdir(parents=True, exist_ok=True)
+            if hasattr(client, "download_media_to_file"):
+                client.download_media_to_file(
+                    access_token=account.access_token or "",
+                    base_url=remote_item.base_url,
+                    dest_path=staging_path,
+                )
+            else:
+                media_bytes = client.download_media(
+                    access_token=account.access_token or "",
+                    base_url=remote_item.base_url,
+                )
+                staging_path.write_bytes(media_bytes)
+
+            result = self.asset_ingestion.ingest_file(
+                source_id=GOOGLE_PHOTOS_SOURCE_ID,
+                collection_ids=[GOOGLE_PHOTOS_COLLECTION_ID],
+                source_path=staging_path,
+                imported_from_path=f"google-photos://mediaItems/{remote_media_id}",
+                original_filename=f"{remote_media_id}{staging_suffix}",
+                metadata={
+                    "provider": PROVIDER_NAME,
+                    "google_media_id": remote_media_id,
+                    "google_create_time": remote_item.create_time,
+                    "google_media_sources": media_source_ids,
+                },
+            )
+            if result.created:
+                stats.imported_count += 1
+            else:
+                stats.duplicate_count += 1
+            first_synced_at = (
+                existing_mapping.first_synced_at if existing_mapping else utc_now()
+            )
+            seen_at = utc_now()
+            self.repo.upsert_provider_asset(
+                GooglePhotosProviderAsset(
+                    id=existing_mapping.id
+                    if existing_mapping
+                    else f"provider-asset-{uuid4().hex[:12]}",
+                    provider_name=PROVIDER_NAME,
+                    remote_media_id=remote_media_id,
+                    local_asset_id=result.asset.id,
+                    mime_type=remote_item.mime_type,
+                    width=remote_item.width,
+                    height=remote_item.height,
+                    create_time=remote_item.create_time,
+                    imported_from_path=f"google-photos://mediaItems/{remote_media_id}",
+                    remote_base_url=remote_item.base_url,
+                    cached_original_path=result.asset.local_original_path,
+                    checksum_sha256=result.checksum_sha256,
+                    metadata_json=self._provider_asset_metadata_json(
+                        remote_media_id, media_source_ids
+                    ),
+                    first_synced_at=first_synced_at,
+                    last_synced_at=seen_at,
+                    last_seen_at=seen_at,
+                    is_active=True,
+                    media_source_ids=media_source_ids,
+                )
+            )
+        except Exception as exc:
+            stats.error_count += 1
+            stats.warnings.append(
+                f"Failed to sync Google media item {remote_media_id}: {exc}"
+            )
+        finally:
+            staging_path.unlink(missing_ok=True)
+            trim_process_heap()
+
+    def _merge_provider_asset_source(
+        self, remote_media_id: str, media_source_id: str
+    ) -> None:
+        existing_mapping = self.repo.get_provider_asset(remote_media_id)
+        if existing_mapping is None or media_source_id in existing_mapping.media_source_ids:
+            return
+
+        merged_sources = sorted({*existing_mapping.media_source_ids, media_source_id})
+        seen_at = utc_now()
+        existing_mapping.media_source_ids = merged_sources
+        existing_mapping.metadata_json = self._provider_asset_metadata_json(
+            remote_media_id, merged_sources
+        )
+        existing_mapping.last_seen_at = seen_at
+        existing_mapping.last_synced_at = seen_at
+        self.repo.upsert_provider_asset(existing_mapping)
+
+    @staticmethod
+    def _provider_asset_metadata_json(
+        remote_media_id: str, media_source_ids: list[str]
+    ) -> str:
+        return json_dumps(
+            {
+                "provider": PROVIDER_NAME,
+                "google_media_id": remote_media_id,
+                "media_source_ids": media_source_ids,
+            }
+        )
 
     def _refresh_device_state(
         self, account: GooglePhotosAccount, *, force: bool

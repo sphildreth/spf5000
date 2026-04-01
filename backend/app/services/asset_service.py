@@ -13,7 +13,7 @@ from PIL import UnidentifiedImageError
 
 from app.core.config import settings
 from app.db.bootstrap import DEFAULT_COLLECTION_ID, DEFAULT_SOURCE_ID
-from app.models.asset import Asset, AssetVariant
+from app.models.asset import Asset, AssetListItem, AssetVariant
 from app.models.asset_upload import AssetUploadSummary
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.base import utc_now
@@ -46,6 +46,11 @@ class AssetService:
 
     def list_assets(self, collection_id: str | None = None) -> list[Asset]:
         return self.repo.list_assets(collection_id=collection_id)
+
+    def list_asset_summaries(
+        self, collection_id: str | None = None
+    ) -> list[AssetListItem]:
+        return self.repo.list_asset_summaries(collection_id=collection_id)
 
     def get_asset(self, asset_id: str) -> Asset | None:
         return self.repo.get_asset(asset_id)

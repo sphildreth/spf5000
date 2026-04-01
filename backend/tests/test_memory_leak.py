@@ -1,5 +1,7 @@
 import gc
-import os
+import io
+import resource
+import sys
 import tracemalloc
 from pathlib import Path
 
@@ -7,7 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.models.asset import Asset
 from app.repositories.asset_repository import AssetRepository
 from app.services.asset_ingest_service import AssetIngestService
 
@@ -16,6 +17,23 @@ def generate_test_image(path: Path, color: str = "blue"):
     """Generate a simple test image."""
     img = Image.new("RGB", (1920, 1080), color=color)
     img.save(path)
+
+
+def _peak_rss_kb() -> int:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return int(value / 1024)
+    return int(value)
+
+
+def _image_upload(
+    name: str, color: tuple[int, int, int], size: tuple[int, int] = (1920, 1080)
+) -> tuple[str, io.BytesIO, str]:
+    buffer = io.BytesIO()
+    image = Image.new("RGB", size, color=color)
+    image.save(buffer, format="JPEG")
+    buffer.seek(0)
+    return (name, buffer, "image/jpeg")
 
 
 def test_no_memory_leaks_db_and_image(fresh_client: TestClient, tmp_path: Path):
@@ -132,4 +150,79 @@ def test_api_memory_leak(fresh_client: TestClient, tmp_path: Path):
     # Real leaks would be multi-megabytes.
     assert total_diff < 500 * 1024, (
         f"Memory leak detected in API processing: {total_diff / 1024:.2f} KB leaked."
+    )
+
+
+def test_ingest_file_requests_heap_trim(
+    fresh_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    del fresh_client
+    trim_calls: list[bool] = []
+    monkeypatch.setattr(
+        "app.services.asset_ingest_service.trim_process_heap",
+        lambda: trim_calls.append(True) or True,
+    )
+
+    test_img = tmp_path / "trim-check.jpg"
+    generate_test_image(test_img)
+
+    asset_repo = AssetRepository()
+    from app.repositories.settings_repository import SettingsRepository
+
+    service = AssetIngestService(asset_repo, SettingsRepository())
+    result = service.ingest_file(
+        source_id="test",
+        collection_ids=[],
+        source_path=test_img,
+        imported_from_path=str(test_img),
+    )
+
+    assert result.created is True
+    assert trim_calls == [True]
+
+
+def test_playlist_requests_keep_rss_growth_bounded(test_client: TestClient) -> None:
+    colors = [
+        (255, 0, 0),
+        (0, 255, 0),
+        (0, 0, 255),
+        (255, 255, 0),
+        (255, 0, 255),
+        (0, 255, 255),
+    ]
+    uploads = [
+        ("files", _image_upload(f"rss-{index}.jpg", color))
+        for index, color in enumerate(colors, start=1)
+    ]
+
+    try:
+        upload_response = test_client.post(
+            "/api/assets/upload",
+            data={"collection_id": "default-collection"},
+            files=uploads,
+        )
+    finally:
+        for _, (_, handle, _) in uploads:
+            handle.close()
+
+    assert upload_response.status_code == 201
+
+    for _ in range(5):
+        playlist_response = test_client.get("/api/display/playlist")
+        assert playlist_response.status_code == 200
+        assert len(playlist_response.json()["items"]) == len(colors)
+
+    gc.collect()
+    baseline_rss_kb = _peak_rss_kb()
+
+    for _ in range(100):
+        playlist_response = test_client.get("/api/display/playlist")
+        assert playlist_response.status_code == 200
+        assert len(playlist_response.json()["items"]) == len(colors)
+
+    gc.collect()
+    rss_growth_kb = _peak_rss_kb() - baseline_rss_kb
+    assert rss_growth_kb < 20 * 1024, (
+        f"RSS growth exceeded budget after repeated playlist requests: "
+        f"{rss_growth_kb / 1024:.2f} MB"
     )

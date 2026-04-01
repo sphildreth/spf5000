@@ -11,6 +11,7 @@ import decentdb  # type: ignore[attr-defined, no-redef]
 from PIL import Image, ImageOps
 
 from app.core.config import settings
+from app.core.memory import trim_process_heap
 from app.models.asset import Asset, AssetVariant
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.base import json_dumps, utc_now
@@ -144,6 +145,7 @@ class AssetIngestService:
                 normalized.close()
             if original_image is not None:
                 original_image.close()
+            trim_process_heap()
 
         now = utc_now()
         original_name = Path(filename).name
