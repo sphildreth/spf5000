@@ -22,6 +22,11 @@ data_dir = "./backend/data"
 cache_dir = "./backend/cache"
 database_path = "./backend/data/spf5000.ddb"
 
+[database]
+# Lower statement-cache memory on small devices. Increase only if profiling
+# shows the database is re-preparing a stable query set too often.
+stmt_cache_size = 32
+
 [providers.google_photos]
 # Google Photos Ambient API OAuth client for TVs and limited-input devices.
 # client_id = "replace-with-google-oauth-client-id"

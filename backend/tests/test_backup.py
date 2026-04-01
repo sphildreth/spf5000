@@ -12,9 +12,32 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.repositories.asset_repository import AssetRepository
+from app.services.backup_service import BackupService
 
 _ADMIN_PASSWORD = "test-password-1"
 _ADMIN_USERNAME = "admin"
+
+
+class _FakeBackupConn:
+    def __init__(self, *, stmt_cache_size: int) -> None:
+        self.stmt_cache_size = stmt_cache_size
+        self.closed = False
+
+    def list_tables(self) -> list[str]:
+        return ["settings", "admin_users", "collections"]
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeBackupDecentDb:
+    def __init__(self) -> None:
+        self.connections: list[_FakeBackupConn] = []
+
+    def connect(self, path: str, *, stmt_cache_size: int = 128) -> _FakeBackupConn:
+        conn = _FakeBackupConn(stmt_cache_size=stmt_cache_size)
+        self.connections.append(conn)
+        return conn
 
 
 def _image_upload(
@@ -113,6 +136,26 @@ def test_database_import_rejects_invalid_archives(test_client: TestClient) -> No
         )
         assert response.status_code == 400
         assert response.json()["detail"] == expected_detail
+
+
+def test_validate_candidate_database_uses_configured_stmt_cache_size(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    fake_decentdb = _FakeBackupDecentDb()
+    candidate_path = tmp_path / "candidate.ddb"
+    candidate_path.write_bytes(b"placeholder")
+
+    monkeypatch.setattr(settings, "database_stmt_cache_size", 12)
+    from app.services import backup_service
+
+    monkeypatch.setattr(backup_service, "decentdb", fake_decentdb)
+
+    BackupService._validate_candidate_database(candidate_path)
+
+    assert len(fake_decentdb.connections) == 1
+    assert fake_decentdb.connections[0].stmt_cache_size == 12
+    assert fake_decentdb.connections[0].closed is True
 
 
 def test_database_import_restores_database_and_clears_session(

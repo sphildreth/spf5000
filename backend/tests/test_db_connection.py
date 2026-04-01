@@ -20,14 +20,16 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "cache_dir", cache_dir)
     monkeypatch.setattr(settings, "log_dir", log_dir)
     monkeypatch.setattr(settings, "database_path", data_dir / "spf5000.ddb")
+    monkeypatch.setattr(settings, "database_stmt_cache_size", 16)
     monkeypatch.setattr(settings, "frontend_dist_dir", tmp_path / "frontend-dist")
     monkeypatch.setattr(settings, "legacy_frontend_dist_dir", tmp_path / "frontend-dist-legacy")
     monkeypatch.setattr(settings, "session_secret", _TEST_SESSION_SECRET)
 
 
 class _FakeConnection:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, *, stmt_cache_size: int) -> None:
         self.path = path
+        self.stmt_cache_size = stmt_cache_size
         self.closed = False
         self.commit_calls = 0
         self.rollback_calls = 0
@@ -46,8 +48,8 @@ class _FakeDecentDb:
     def __init__(self) -> None:
         self.connections: list[_FakeConnection] = []
 
-    def connect(self, path: str) -> _FakeConnection:
-        conn = _FakeConnection(path)
+    def connect(self, path: str, *, stmt_cache_size: int = 128) -> _FakeConnection:
+        conn = _FakeConnection(path, stmt_cache_size=stmt_cache_size)
         self.connections.append(conn)
         return conn
 
@@ -67,6 +69,7 @@ def test_runtime_connections_reuse_cached_connection_until_reset(
 
     assert fake_decentdb.connections[0].commit_calls == 1
     assert fake_decentdb.connections[0].closed is False
+    assert fake_decentdb.connections[0].stmt_cache_size == 16
 
     with connection.get_connection() as second:
         assert second._inner is fake_decentdb.connections[0]
@@ -126,6 +129,7 @@ def test_runtime_connections_do_not_accumulate_per_worker_thread(
     assert seen_connections["t1"].closed is True
     assert seen_connections["t2"].closed is False
     assert seen_connections["t3"].closed is False
+    assert all(conn.stmt_cache_size == 16 for conn in fake_decentdb.connections)
 
     release_threads.set()
     first.join()

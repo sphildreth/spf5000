@@ -241,12 +241,13 @@ def _recover_database_open_failure(exc: Exception) -> bool:
 
 
 def _connect_with_recovery(db_path: str) -> Any:
+    stmt_cache_size = max(0, int(settings.database_stmt_cache_size))
     try:
-        return decentdb.connect(db_path)
+        return decentdb.connect(db_path, stmt_cache_size=stmt_cache_size)
     except Exception as exc:
         if not _recover_database_open_failure(exc):
             raise
-        return decentdb.connect(db_path)
+        return decentdb.connect(db_path, stmt_cache_size=stmt_cache_size)
 
 
 def _get_thread_connection(db_path: str) -> Any:

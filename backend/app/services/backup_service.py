@@ -320,7 +320,10 @@ class BackupService:
             raise RuntimeError("Database restore is unavailable because DecentDB is not installed.")
 
         try:
-            conn = decentdb.connect(str(candidate_path))
+            conn = decentdb.connect(
+                str(candidate_path),
+                stmt_cache_size=max(0, int(settings.database_stmt_cache_size)),
+            )
             try:
                 tables = set(conn.list_tables())
             finally:

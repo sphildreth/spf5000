@@ -51,6 +51,7 @@ _server = _toml.get("server", {})
 _paths = _toml.get("paths", {})
 _logging = _toml.get("logging", {})
 _security = _toml.get("security", {})
+_database = _toml.get("database", {})
 _providers = _toml.get("providers", {})
 _google_photos = _providers.get("google_photos", {})
 _data_dir_default = _resolve_path(_paths.get("data_dir"), BACKEND_DIR / "data")
@@ -91,6 +92,7 @@ class Settings(BaseSettings):
     cache_dir: Path = _cache_dir_default
     log_dir: Path = _log_dir_default
     database_path: Path = _database_path_default
+    database_stmt_cache_size: int = int(_database.get("stmt_cache_size", 32))
     frontend_dist_dir: Path = REPO_ROOT / "frontend" / "dist"
     legacy_frontend_dist_dir: Path = REPO_ROOT / "frontend_dist"
 
