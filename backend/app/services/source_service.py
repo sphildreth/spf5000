@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.models.source import Source
-from app.providers.google_photos import GooglePhotosProvider
 from app.providers.local_files import LocalFilesProvider
 from app.repositories.source_repository import SourceRepository
 
@@ -13,7 +12,6 @@ class SourceService:
         self.repo = repo or SourceRepository()
         self.providers = {
             "local_files": LocalFilesProvider(),
-            "google_photos": GooglePhotosProvider(),
         }
 
     def list_sources(self) -> list[Source]:

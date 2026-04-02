@@ -33,12 +33,12 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0009-use-runtime-config-and-single-admin-bootstrap-auth.md` - runtime config, bootstrap flow, and admin auth boundary
 - `0010-use-pi-specific-appliance-installer-toolchain.md` - Pi deployment automation strategy
 - `0011-use-app-managed-sleep-schedule-for-display-quiet-hours.md` - app-managed display quiet-hours behavior
-- `0012-use-google-photos-ambient-api-for-offline-first-local-sync.md` - Google Photos Ambient API integration with offline-first local sync
 - `0013-use-provider-abstraction-and-cached-state-for-weather-and-alerts.md` - weather provider abstraction plus offline-first cached weather state
 - `0014-use-national-weather-service-as-the-initial-weather-provider.md` - first weather provider choice
 - `0015-use-alert-escalation-and-visible-takeover-behavior-on-the-display.md` - alert escalation and display takeover policy
 - `0018-use-app-selected-display-timezone-for-sleep-schedule-evaluation.md` - sleep schedule evaluation uses an app-selected display timezone with Pi-local fallback
 - `0021-use-doctor-page-as-a-first-class-admin-health-feature.md` - doctor page as a first-class admin health/troubleshooting surface
+- `0022-remove-google-photos-integration.md` - removal of non-functional Google Photos integration
 
 ## Proposed ADRs
 
@@ -55,7 +55,7 @@ The current V1 implementation is expected to conform to ADRs `0001` through `001
 - React + TypeScript + Vite remain the frontend stack
 - DecentDB remains the metadata/settings store
 - the filesystem remains responsible for originals and generated image variants
-- providers remain behind a protocol boundary, with `LocalFilesProvider` implemented first
+- providers remain behind a protocol boundary, with `LocalFilesProvider` as the only implemented provider
 - the Pi runtime model remains browser-kiosk based
 - Pi deployment automation remains intentionally Pi-specific, Bash-based, and centered on `systemd`, Chromium autostart, and runtime health checks
 - `/display` remains a dedicated dual-layer slideshow route that avoids an intentional black frame between transitions

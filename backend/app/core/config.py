@@ -52,8 +52,6 @@ _paths = _toml.get("paths", {})
 _logging = _toml.get("logging", {})
 _security = _toml.get("security", {})
 _database = _toml.get("database", {})
-_providers = _toml.get("providers", {})
-_google_photos = _providers.get("google_photos", {})
 _data_dir_default = _resolve_path(_paths.get("data_dir"), BACKEND_DIR / "data")
 _cache_dir_default = _resolve_path(_paths.get("cache_dir"), BACKEND_DIR / "cache")
 _log_dir_default = _resolve_path(_paths.get("log_dir"), BACKEND_DIR / "logs")
@@ -79,14 +77,6 @@ class Settings(BaseSettings):
     session_secret: str | None = _security.get("session_secret", None)
     session_https_only: bool = bool(_security.get("session_https_only", False))
     rate_limit_enabled: bool = _security.get("rate_limit_enabled", True)
-    google_photos_client_id: str | None = _google_photos.get("client_id")
-    google_photos_client_secret: str | None = _google_photos.get("client_secret")
-    google_photos_provider_display_name: str = str(
-        _google_photos.get("provider_display_name", "Google Photos")
-    )
-    google_photos_sync_cadence_seconds: int = int(
-        _google_photos.get("sync_cadence_seconds", 3600)
-    )
 
     data_dir: Path = _data_dir_default
     cache_dir: Path = _cache_dir_default
@@ -149,28 +139,8 @@ class Settings(BaseSettings):
         return self.sources_root_dir / "local-files" / "import"
 
     @property
-    def google_photos_source_dir(self) -> Path:
-        return self.sources_root_dir / "google-photos"
-
-    @property
-    def google_photos_import_dir(self) -> Path:
-        return self.google_photos_source_dir / "import"
-
-    @property
-    def google_photos_download_staging_dir(self) -> Path:
-        return self.staging_dir / "google-photos"
-
-    @property
     def fallback_assets_dir(self) -> Path:
         return self.data_dir / "fallback"
-
-    @property
-    def google_photos_enabled(self) -> bool:
-        return True
-
-    @property
-    def google_photos_configured(self) -> bool:
-        return bool(self.google_photos_client_id and self.google_photos_client_secret)
 
 
 settings = Settings()

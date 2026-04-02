@@ -4,7 +4,7 @@
 - Date: 2026-03-16
 
 ## Context
-SPF5000 is intentionally offline-first at display time. Accepted ADRs already keep structured state in DecentDB (`0003`), keep external integrations behind provider boundaries (`0005`), and keep `/display` dedicated to locally controlled presentation behavior (`0008`, `0011`, `0012`).
+SPF5000 is intentionally offline-first at display time. Accepted ADRs already keep structured state in DecentDB (`0003`), keep external integrations behind provider boundaries (`0005`), and keep `/display` dedicated to locally controlled presentation behavior (`0008`, `0011`).
 
 Adding weather and severe-weather alerts introduces a new category of external data that changes both the admin UI and the public display surface. The implementation needs to support future providers, keep the display route independent from live remote calls, and preserve useful cached state when the network or upstream provider is unavailable.
 

@@ -8,7 +8,6 @@ from app.api.routes import (
     collections,
     display,
     doctor,
-    google_photos,
     health,
     imports,
     logs,
@@ -42,12 +41,6 @@ api_router.include_router(
 )
 api_router.include_router(
     imports.router, prefix="/import", tags=["import"], dependencies=_admin_dep
-)
-api_router.include_router(
-    google_photos.router,
-    prefix="/google-photos",
-    tags=["google-photos"],
-    dependencies=_admin_dep,
 )
 api_router.include_router(
     weather.router, prefix="/weather", tags=["weather"], dependencies=_admin_dep

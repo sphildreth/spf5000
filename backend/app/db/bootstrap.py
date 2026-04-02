@@ -24,8 +24,6 @@ LOGGER = structlog.get_logger(__name__)
 
 DEFAULT_SOURCE_ID = "default-local-files"
 DEFAULT_COLLECTION_ID = "default-collection"
-GOOGLE_PHOTOS_SOURCE_ID = "google-photos-source"
-GOOGLE_PHOTOS_COLLECTION_ID = "google-photos-collection"
 DEFAULT_DISPLAY_PROFILE_ID = "default-display-profile"
 DEFAULT_SETTINGS = {
     "frame_name": "SPF5000",
@@ -247,68 +245,6 @@ TABLE_STATEMENTS = {
             updated_at text not null
         )
     """,
-    "provider_media_sources": """
-        create table provider_media_sources (
-            id text primary key,
-            provider_name text not null,
-            media_source_id text not null,
-            display_name text not null,
-            is_selected integer not null default 1,
-            last_seen_at text not null,
-            created_at text not null,
-            updated_at text not null,
-            unique(provider_name, media_source_id)
-        )
-    """,
-    "provider_sync_runs": """
-        create table provider_sync_runs (
-            id text primary key,
-            provider_name text not null,
-            trigger text not null,
-            status text not null,
-            message text not null default '',
-            error_message text not null default '',
-            warning_messages_json text not null default '[]',
-            discovered_count integer not null default 0,
-            imported_count integer not null default 0,
-            duplicate_count integer not null default 0,
-            skipped_count integer not null default 0,
-            error_count integer not null default 0,
-            removed_count integer not null default 0,
-            started_at text not null,
-            completed_at text
-        )
-    """,
-    "provider_assets": """
-        create table provider_assets (
-            id text primary key,
-            provider_name text not null,
-            remote_media_id text not null,
-            local_asset_id text,
-            mime_type text not null,
-            width integer not null default 0,
-            height integer not null default 0,
-            create_time text,
-            imported_from_path text not null,
-            remote_base_url text not null default '',
-            cached_original_path text,
-            checksum_sha256 text,
-            metadata_json text not null default '{}',
-            first_synced_at text not null,
-            last_synced_at text not null,
-            last_seen_at text not null,
-            is_active integer not null default 1,
-            unique(provider_name, remote_media_id)
-        )
-    """,
-    "provider_asset_media_sources": """
-        create table provider_asset_media_sources (
-            provider_asset_id text not null,
-            media_source_id text not null,
-            added_at text not null,
-            primary key (provider_asset_id, media_source_id)
-        )
-    """,
     "weather_provider_state": """
         create table weather_provider_state (
             provider_name text primary key,
@@ -396,9 +332,6 @@ INDEX_STATEMENTS = {
     "idx_asset_variants_asset_kind": "create index idx_asset_variants_asset_kind on asset_variants (asset_id, kind)",
     "idx_import_jobs_source_id": "create index idx_import_jobs_source_id on import_jobs (source_id)",
     "idx_provider_auth_flows_provider_status": "create index idx_provider_auth_flows_provider_status on provider_auth_flows (provider_name, status)",
-    "idx_provider_media_sources_provider": "create index idx_provider_media_sources_provider on provider_media_sources (provider_name)",
-    "idx_provider_sync_runs_provider_started": "create index idx_provider_sync_runs_provider_started on provider_sync_runs (provider_name, started_at)",
-    "idx_provider_assets_provider_media_id": "create index idx_provider_assets_provider_media_id on provider_assets (provider_name, remote_media_id)",
     "idx_weather_alerts_provider_location": "create index idx_weather_alerts_provider_location on weather_alerts (provider_name, location_key, display_priority)",
     "idx_weather_refresh_runs_provider_started": "create index idx_weather_refresh_runs_provider_started on weather_refresh_runs (provider_name, started_at)",
 }
@@ -433,9 +366,6 @@ def initialize_storage() -> None:
         settings.import_staging_dir,
         settings.sources_root_dir,
         settings.local_import_dir,
-        settings.google_photos_source_dir,
-        settings.google_photos_import_dir,
-        settings.google_photos_download_staging_dir,
         settings.fallback_assets_dir,
     ]
     for directory in directories:
@@ -485,14 +415,6 @@ def bootstrap_database() -> None:
         _ensure_column(conn, "provider_auth_flows", "next_poll_at", "text")
         _ensure_column(conn, "provider_accounts", "last_sync_requested_at", "text")
         _ensure_column(conn, "provider_accounts", "last_completed_sync_at", "text")
-        _ensure_column(conn, "provider_assets", "cached_original_path", "text")
-        _ensure_column(conn, "provider_assets", "checksum_sha256", "text")
-        _ensure_column(
-            conn, "provider_sync_runs", "duplicate_count", "integer not null default 0"
-        )
-        _ensure_column(
-            conn, "provider_sync_runs", "removed_count", "integer not null default 0"
-        )
 
         now = utc_now()
         for key, value in DEFAULT_SETTINGS.items():
@@ -546,56 +468,6 @@ def bootstrap_database() -> None:
                     "Default collection for locally managed photos.",
                     DEFAULT_SOURCE_ID,
                     1,
-                    1,
-                    now,
-                    now,
-                ),
-            )
-
-        if (
-            conn.execute(
-                "select id from sources where id = ?", (GOOGLE_PHOTOS_SOURCE_ID,)
-            ).fetchone()
-            is None
-        ):
-            conn.execute(
-                """
-                insert into sources (
-                    id, name, provider_type, import_path, enabled, created_at, updated_at, last_scan_at, last_import_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    GOOGLE_PHOTOS_SOURCE_ID,
-                    settings.google_photos_provider_display_name,
-                    "google_photos",
-                    str(settings.google_photos_import_dir),
-                    1,
-                    now,
-                    now,
-                    None,
-                    None,
-                ),
-            )
-
-        if (
-            conn.execute(
-                "select id from collections where id = ?",
-                (GOOGLE_PHOTOS_COLLECTION_ID,),
-            ).fetchone()
-            is None
-        ):
-            conn.execute(
-                """
-                insert into collections (
-                    id, name, description, source_id, is_default, is_active, created_at, updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    GOOGLE_PHOTOS_COLLECTION_ID,
-                    settings.google_photos_provider_display_name,
-                    "Offline-cached media synced from Google Photos Ambient selections.",
-                    GOOGLE_PHOTOS_SOURCE_ID,
-                    0,
                     1,
                     now,
                     now,

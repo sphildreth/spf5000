@@ -620,11 +620,6 @@ class ProviderDoctorChecks:
 
                 provider = LocalFilesProvider()
                 health = provider.health_check(source.import_path or "")
-            elif provider_type == "google_photos":
-                from app.providers.google_photos import GooglePhotosProvider
-
-                provider = GooglePhotosProvider()
-                health = provider.health_check(source.import_path or "")
 
             is_healthy = health.get("ok", health.get("available", False))
             is_configured = health.get("configured", True)
@@ -635,15 +630,6 @@ class ProviderDoctorChecks:
                     title=f"Source: {source.name}",
                     severity=HealthSeverity.INFO,
                     summary=f"Source is disabled.",
-                )
-
-            if not is_configured and provider_type == "google_photos":
-                return HealthCheck(
-                    id=f"source_{source.id}",
-                    title=f"Source: {source.name}",
-                    severity=HealthSeverity.WARNING,
-                    summary="Google Photos source configured but not connected.",
-                    remediation="Reconnect Google Photos from the Sources page.",
                 )
 
             if not is_healthy:
@@ -1004,60 +990,7 @@ class DoctorService:
             "process": self._collect_process_snapshot(pid, app),
             "database": self._collect_database_snapshot(),
             "logs": self._collect_logs_snapshot(),
-            "providers": self._collect_provider_snapshots(),
         }
-
-    def _collect_provider_snapshots(self) -> dict[str, Any]:
-        """Collect diagnostic information for configured providers."""
-        result: dict[str, Any] = {}
-
-        # Google Photos diagnostics
-        if settings.google_photos_enabled:
-            try:
-                from app.services.google_photos_service import GooglePhotosService
-
-                service = GooglePhotosService()
-                status = service.get_status()
-
-                # Safely extract nested data from status dict
-                latest_sync = status.get("latest_sync_run")
-                device = status.get("device")
-                linked_account = status.get("linked_account")
-                diagnostics = status.get("diagnostics")
-                warnings = status.get("warnings", [])
-                current_error = status.get("current_error")
-
-                result["google_photos"] = {
-                    "enabled": settings.google_photos_enabled,
-                    "configured": settings.google_photos_configured,
-                    "client_id_configured": bool(settings.google_photos_client_id),
-                    "client_secret_configured": bool(settings.google_photos_client_secret),
-                    "sync_cadence_seconds": settings.google_photos_sync_cadence_seconds,
-                    "connection_state": status.get("connection_state"),
-                    "cached_asset_count": status.get("cached_asset_count"),
-                    "has_linked_account": linked_account is not None,
-                    "has_device": device is not None,
-                    "media_sources_set": device.get("media_sources_set") if device else None,
-                    "selected_media_sources_count": len(status.get("selected_media_sources", [])),
-                    "latest_sync_run": {
-                        "status": latest_sync.status if latest_sync else None,
-                        "trigger": latest_sync.trigger if latest_sync else None,
-                        "imported_count": latest_sync.imported_count if latest_sync else None,
-                        "removed_count": latest_sync.removed_count if latest_sync else None,
-                        "error_count": latest_sync.error_count if latest_sync else None,
-                        "completed_at": latest_sync.completed_at if latest_sync else None,
-                    } if latest_sync else None,
-                    "diagnostics": diagnostics,
-                    "warnings": warnings if isinstance(warnings, list) else [],
-                    "current_error": current_error,
-                }
-            except Exception as exc:
-                result["google_photos"] = {
-                    "enabled": True,
-                    "error_collecting_status": str(exc),
-                }
-
-        return result
 
     def _collect_application_snapshot(self, pid: int) -> dict[str, Any]:
         return {
@@ -1114,12 +1047,6 @@ class DoctorService:
         from app.db.connection import get_connection_stats
         db_conn_stats = get_connection_stats()
 
-        # Get coordinator status if app is provided
-        coordinator_status = None
-        if app is not None:
-            from app.runtime_coordinators import get_coordinator_status
-            coordinator_status = get_coordinator_status(app)
-
         return {
             "pid": pid,
             "cmdline": self._read_cmdline(proc_root / "cmdline"),
@@ -1139,7 +1066,6 @@ class DoctorService:
                 "count": thread_count,
             },
             "database_connections": db_conn_stats,
-            "coordinators": coordinator_status,
         }
 
     def _collect_database_snapshot(self) -> dict[str, Any]:

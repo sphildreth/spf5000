@@ -11,7 +11,6 @@
 - 0009 Use runtime config and single-admin bootstrap auth
 - 0010 Use Pi-specific appliance installer toolchain
 - 0011 Use app-managed sleep schedule for display quiet hours
-- 0012 Use Google Photos Ambient API for offline-first local asset sync
 - 0013 Use provider abstraction and cached state for weather and alerts
 - 0014 Use National Weather Service as the initial weather provider
 - 0015 Use alert escalation and visible takeover behavior on the display
@@ -19,3 +18,6 @@
 - 0017 Refine display background fill modes, cached-vs-render-time treatments, and adaptive policy
 - 0018 Use app-selected display timezone for sleep schedule evaluation
 - 0019 Use token-based theme system for admin and display
+- 0020 Use admin-protected ZIP backup, restore, and media export
+- 0021 Use Doctor page as a first-class admin health feature
+- 0022 Remove Google Photos integration

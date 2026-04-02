@@ -52,10 +52,6 @@ def deep_health() -> dict[str, object]:
         },
         "disk_space": disk_usage,
         "cache_size_bytes": _dir_size(settings.cache_dir),
-        "sync_status": {
-            "google_photos": _get_sync_status(),
-            "weather": _get_weather_status(),
-        },
         "asset_count": _get_asset_count(),
     }
 
@@ -74,15 +70,6 @@ def _get_asset_count() -> int:
         return AssetRepository().count_assets()
     except Exception:
         return -1
-
-
-def _get_sync_status() -> dict[str, object]:
-    try:
-        status = system_service.get_status()
-        counts = status.get("counts")
-        return dict(counts) if isinstance(counts, dict) else {}  # type: ignore[arg-type,return-value]
-    except Exception:
-        return {}
 
 
 def _get_weather_status() -> dict[str, object]:
