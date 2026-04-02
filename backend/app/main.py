@@ -15,10 +15,12 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.bootstrap import initialize_runtime
+from app.providers.google_photos.client import close_shared_client as close_google_photos_client
 from app.runtime_coordinators import (
     start_background_coordinators,
     stop_background_coordinators,
 )
+from app.weather.providers.nws import close_shared_client as close_weather_client
 
 _LOG = logging.getLogger(__name__)
 
@@ -62,6 +64,8 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         stop_background_coordinators(app)
+        close_weather_client()
+        close_google_photos_client()
 
 
 def create_app() -> FastAPI:

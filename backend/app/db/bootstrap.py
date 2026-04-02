@@ -274,6 +274,7 @@ TABLE_STATEMENTS = {
             duplicate_count integer not null default 0,
             skipped_count integer not null default 0,
             error_count integer not null default 0,
+            removed_count integer not null default 0,
             started_at text not null,
             completed_at text
         )
@@ -488,6 +489,9 @@ def bootstrap_database() -> None:
         _ensure_column(conn, "provider_assets", "checksum_sha256", "text")
         _ensure_column(
             conn, "provider_sync_runs", "duplicate_count", "integer not null default 0"
+        )
+        _ensure_column(
+            conn, "provider_sync_runs", "removed_count", "integer not null default 0"
         )
 
         now = utc_now()

@@ -27,6 +27,20 @@ Instead, the flow is:
 
 That means the frame can keep showing already-synced photos even if your WAN connection or Google Photos is temporarily unavailable.
 
+### Sync behavior
+
+Each sync run:
+
+- **Downloads new photos** from the selected Google Photos album(s) at full resolution
+- **Skips duplicates** that were already synced in previous runs
+- **Removes photos from the slideshow** if they were deleted from the Google album
+
+Important notes about deletion sync:
+
+- When you remove a photo from the Google Photos album, the next sync will remove it from the SPF5000 slideshow
+- The photo file remains on disk but is deactivated (won't appear in playback)
+- This keeps your frame in sync with your Google album without manual cleanup
+
 ## Before you start
 
 Make sure you have:
@@ -131,9 +145,9 @@ Once the backend restarts:
 SPF5000 will show:
 
 - a Google verification URL
-- a user code
-- the time the code expires
-- the polling interval guidance
+- a user code (e.g., `ABCD-1234`)
+- the time the code expires (typically ~30 minutes)
+- the polling interval (used only during connection setup)
 
 From another device, such as your phone or laptop:
 
@@ -145,6 +159,8 @@ Then return to SPF5000 and click:
 
 - **Check approval**, or
 - **Refresh approval status**
+
+The backend polls Google every few seconds **only during the connection flow**. This temporary polling lasts until you approve (or the code expires), then stops completely.
 
 When the connection succeeds, the Sources page should show:
 
@@ -183,7 +199,13 @@ Useful status fields:
 
 - **Cached assets**: how many synced Google items currently exist in the local cache
 - **Last successful sync**: last completed successful provider sync
-- **Imported / Updated / Removed / Skipped / Errors**: latest sync counters
+- **Sync counters** in the latest sync run:
+  - **Discovered**: total items found in the Google album during enumeration
+  - **Imported**: new photos downloaded and added to the slideshow
+  - **Updated**: duplicate items that already existed (no re-download needed)
+  - **Removed**: photos deleted from the slideshow because they no longer exist in the Google album
+  - **Skipped**: unsupported media types (e.g., videos) or items that couldn't be processed
+  - **Errors**: items that failed to download or import
 
 If the sync says no media sources are selected yet, go back to the Google settings page, finish the selection there, and run sync again.
 
@@ -241,9 +263,11 @@ It uses the same local playlist and local cached files as every other SPF5000 as
 
 SPF5000 supports:
 
-- manual sync from the Sources page
-- automatic periodic sync based on `sync_cadence_seconds`
+- manual sync from the Sources page (**Sync now** button)
+- automatic periodic sync based on `sync_cadence_seconds` (default: 3600 seconds = 1 hour)
 - startup/background sync coordination
+
+Sync runs automatically in the background. You don't need to keep the admin UI open for automatic syncs to work.
 
 ### Disconnect behavior
 
@@ -302,6 +326,17 @@ After changing the selection in Google's settings page:
 3. wait for the latest sync to finish
 
 Previously cached files can remain on disk, but active collection membership follows the latest synced provider state.
+
+### I deleted a photo from my Google album but it still appears on the frame
+
+Deletion sync happens during the next automatic or manual sync:
+
+1. Delete the photo from your Google Photos album
+2. Wait for the next automatic sync (up to 1 hour), or click **Sync now**
+3. Check the sync run stats — you should see **Removed: 1** (or more)
+4. The photo will no longer appear in the slideshow
+
+Note: The photo file remains on disk but is deactivated. If you re-add the same photo to the Google album later, it will be re-imported.
 
 ### Where should I look for logs?
 

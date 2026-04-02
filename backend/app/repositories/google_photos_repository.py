@@ -490,6 +490,74 @@ class GooglePhotosRepository:
             )
             return int(cursor.fetchone()[0])
 
+    def list_provider_assets_by_media_source(
+        self, media_source_id: str
+    ) -> list[GooglePhotosProviderAsset]:
+        """List all active provider assets for a specific media source (album)."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return []
+            cursor = conn.execute(
+                """
+                select pa.* from provider_assets pa
+                join provider_asset_media_sources pams on pa.id = pams.provider_asset_id
+                where pa.provider_name = ? and pa.is_active = 1 and pams.media_source_id = ?
+                order by pa.last_seen_at desc
+                """,
+                (PROVIDER_NAME, media_source_id),
+            )
+            return [
+                self._attach_asset_media_sources(self._provider_asset_from_row(row))
+                for row in cursor.fetchall()
+            ]
+
+    def delete_provider_asset(self, remote_media_id: str) -> bool:
+        """
+        Delete a provider asset and remove from collection.
+        Returns True if asset was found and deleted, False if not found.
+        """
+        provider_asset = self.get_provider_asset(remote_media_id)
+        if provider_asset is None:
+            return False
+
+        local_asset_id = provider_asset.local_asset_id
+        if not local_asset_id:
+            return False
+
+        # Remove from Google Photos collection
+        from app.db.bootstrap import GOOGLE_PHOTOS_COLLECTION_ID
+
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return False
+
+            # Remove from collection
+            conn.execute(
+                "delete from collection_assets where asset_id = ? and collection_id = ?",
+                (local_asset_id, GOOGLE_PHOTOS_COLLECTION_ID),
+            )
+
+            # Deactivate if not in any other collection
+            cursor = conn.execute(
+                "select count(*) from collection_assets where asset_id = ?",
+                (local_asset_id,),
+            )
+            remaining_count = int(cursor.fetchone()[0])
+
+            if remaining_count == 0:
+                conn.execute(
+                    "update assets set is_active = 0 where id = ?",
+                    (local_asset_id,),
+                )
+
+            # Mark provider asset as inactive
+            conn.execute(
+                "update provider_assets set is_active = 0, updated_at = datetime('now') where remote_media_id = ?",
+                (remote_media_id,),
+            )
+
+        return True
+
     def _attach_asset_media_sources(
         self, provider_asset: GooglePhotosProviderAsset
     ) -> GooglePhotosProviderAsset:
@@ -622,6 +690,7 @@ class GooglePhotosRepository:
             duplicate_count=int(row["duplicate_count"]),
             skipped_count=int(row["skipped_count"]),
             error_count=int(row["error_count"]),
+            removed_count=int(row["removed_count"]),
             started_at=str(row["started_at"]),
             completed_at=None
             if row["completed_at"] is None

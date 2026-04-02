@@ -80,6 +80,7 @@ class GooglePhotosSyncRun:
     duplicate_count: int
     skipped_count: int
     error_count: int
+    removed_count: int
     started_at: str
     completed_at: str | None = None
 

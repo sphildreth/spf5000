@@ -991,7 +991,7 @@ class DoctorService:
 
         return DoctorResponse.from_groups(groups)
 
-    def build_support_snapshot(self) -> dict[str, Any]:
+    def build_support_snapshot(self, app: FastAPI | None = None) -> dict[str, Any]:
         exported_at = datetime.now(UTC).isoformat()
         report = self.run_all_checks()
         pid = os.getpid()
@@ -1001,7 +1001,7 @@ class DoctorService:
             "report": report.model_dump(mode="json"),
             "application": self._collect_application_snapshot(pid),
             "system": self._collect_system_snapshot(),
-            "process": self._collect_process_snapshot(pid),
+            "process": self._collect_process_snapshot(pid, app),
             "database": self._collect_database_snapshot(),
             "logs": self._collect_logs_snapshot(),
         }
@@ -1047,9 +1047,25 @@ class DoctorService:
             },
         }
 
-    def _collect_process_snapshot(self, pid: int) -> dict[str, Any]:
+    def _collect_process_snapshot(self, pid: int, app: FastAPI | None = None) -> dict[str, Any]:
         proc_root = Path("/proc") / str(pid)
         status = self._read_key_value_file(proc_root / "status")
+        
+        # Extract key memory metrics from status
+        vm_rss_kb = int(status.get("VmRSS:", "0").split()[0]) if status else 0
+        rss_anon_kb = int(status.get("RssAnon:", "0").split()[0]) if status else 0
+        thread_count = int(status.get("Threads:", "0").split()[0]) if status else 0
+        
+        # Get DB connection stats
+        from app.db.connection import get_connection_stats
+        db_conn_stats = get_connection_stats()
+        
+        # Get coordinator status if app is provided
+        coordinator_status = None
+        if app is not None:
+            from app.runtime_coordinators import get_coordinator_status
+            coordinator_status = get_coordinator_status(app)
+        
         return {
             "pid": pid,
             "cmdline": self._read_cmdline(proc_root / "cmdline"),
@@ -1058,6 +1074,18 @@ class DoctorService:
             "smaps_rollup": self._read_key_value_file(proc_root / "smaps_rollup"),
             "top_processes_by_rss": self._collect_top_processes(limit=12),
             "pmap": self._collect_pmap_snapshot(pid),
+            # Enhanced metrics
+            "memory": {
+                "vm_rss_kb": vm_rss_kb,
+                "vm_rss_mb": round(vm_rss_kb / 1024, 2),
+                "rss_anon_kb": rss_anon_kb,
+                "rss_anon_mb": round(rss_anon_kb / 1024, 2),
+            },
+            "threads": {
+                "count": thread_count,
+            },
+            "database_connections": db_conn_stats,
+            "coordinators": coordinator_status,
         }
 
     def _collect_database_snapshot(self) -> dict[str, Any]:

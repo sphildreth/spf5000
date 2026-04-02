@@ -115,7 +115,7 @@ class GooglePhotosSyncRunResponse(BaseModel):
     ) -> "GooglePhotosSyncRunResponse":
         payload = asdict(sync_run)
         payload["updated_count"] = sync_run.duplicate_count
-        payload["removed_count"] = 0
+        payload["removed_count"] = sync_run.removed_count
         return cls(**payload)
 
 

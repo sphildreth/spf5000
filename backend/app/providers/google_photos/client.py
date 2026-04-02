@@ -42,6 +42,15 @@ def _get_shared_client() -> httpx.Client:
         return _shared_client
 
 
+def close_shared_client() -> None:
+    """Close the shared httpx client and reset state. Call during application shutdown."""
+    global _shared_client
+    with _client_lock:
+        if _shared_client is not None:
+            _shared_client.close()
+            _shared_client = None
+
+
 class GooglePhotosClient:
     def __init__(self, timeout_seconds: float = 30.0) -> None:
         self.timeout_seconds = timeout_seconds

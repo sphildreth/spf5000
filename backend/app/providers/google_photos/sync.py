@@ -10,4 +10,5 @@ class GooglePhotosSyncStats:
     duplicate_count: int = 0
     skipped_count: int = 0
     error_count: int = 0
+    removed_count: int = 0
     warnings: list[str] = field(default_factory=list)

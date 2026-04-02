@@ -307,3 +307,24 @@ def get_connection() -> Iterator[Any]:
         finally:
             if succeeded:
                 _release_thread_connection()
+
+
+def get_connection_stats() -> dict[str, Any]:
+    """Return statistics about active thread-local database connections."""
+    with _connection_lock:
+        active_connections = []
+        for thread_id, conn_info in _thread_conn_info.items():
+            thread = conn_info.get("thread")
+            active_connections.append({
+                "thread_id": thread_id,
+                "thread_name": thread.name if thread else None,
+                "depth": conn_info.get("depth", 0),
+                "path": conn_info.get("path"),
+                "generation": conn_info.get("gen"),
+            })
+        return {
+            "active_connection_count": len(active_connections),
+            "max_cached_connections": _MAX_CACHED_THREAD_CONNECTIONS,
+            "connection_generation": _connection_generation,
+            "active_connections": active_connections,
+        }

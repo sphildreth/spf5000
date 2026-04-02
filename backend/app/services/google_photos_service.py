@@ -342,6 +342,7 @@ class GooglePhotosService:
             duplicate_count=0,
             skipped_count=0,
             error_count=0,
+            removed_count=0,
             started_at=started_at,
         )
         self.repo.create_sync_run(sync_run)
@@ -385,13 +386,14 @@ class GooglePhotosService:
             sync_run.duplicate_count = stats.duplicate_count
             sync_run.skipped_count = stats.skipped_count
             sync_run.error_count = stats.error_count
+            sync_run.removed_count = stats.removed_count
             sync_run.warning_messages = stats.warnings
             sync_run.status = (
                 "completed_with_errors" if stats.error_count else "completed"
             )
             sync_run.message = (
-                f"Synced {stats.imported_count} new assets, {stats.duplicate_count} duplicates, "
-                f"{stats.skipped_count} skipped, {stats.error_count} errors"
+                f"Synced {stats.imported_count} new, {stats.duplicate_count} duplicates, "
+                f"{stats.removed_count} removed, {stats.skipped_count} skipped, {stats.error_count} errors"
             )
             sync_run.completed_at = utc_now()
             self.repo.update_sync_run(sync_run)
@@ -436,6 +438,16 @@ class GooglePhotosService:
                     "Google Photos 'Highlights' is selected, but the Ambient API does not allow per-source enumeration for it."
                 )
                 continue
+
+            # Get all currently synced assets for this media source (for deletion detection)
+            existing_assets = self.repo.list_provider_assets_by_media_source(
+                media_source.media_source_id
+            )
+            existing_remote_ids = {
+                asset.remote_media_id for asset in existing_assets
+            }
+
+            # Enumerate current album contents
             page_token: str | None = None
             while True:
                 items, next_page_token = client.list_media_items(
@@ -452,6 +464,10 @@ class GooglePhotosService:
                         )
                         continue
                     seen_remote_ids.add(item.id)
+
+                    # Mark as seen (remove from existing set)
+                    existing_remote_ids.discard(item.id)
+
                     stats.discovered_count += 1
                     self._sync_remote_media_item(
                         account=account,
@@ -464,6 +480,14 @@ class GooglePhotosService:
                 if not next_page_token or next_page_token == page_token:
                     break
                 page_token = next_page_token
+
+            # Delete assets that are no longer in the album
+            for remote_id in existing_remote_ids:
+                if self.repo.delete_provider_asset(remote_id):
+                    stats.removed_count += 1
+                    stats.warnings.append(
+                        f"Removed {remote_id} from Google Photos collection (no longer in album)."
+                    )
 
         return stats
 

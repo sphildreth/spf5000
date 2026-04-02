@@ -24,6 +24,10 @@ class WeatherSyncCoordinator:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._consecutive_failures = 0
+        self._last_run_at: float | None = None
+        self._last_run_trigger: str | None = None
+        self._total_runs = 0
+        self._total_failures = 0
 
     def start(self) -> None:
         if self._thread is not None:
@@ -39,14 +43,32 @@ class WeatherSyncCoordinator:
             self._thread.join(timeout=5)
         self._thread = None
 
+    def get_status(self) -> dict:
+        """Return coordinator status for diagnostics."""
+        return {
+            "thread_name": self._thread.name if self._thread else None,
+            "is_running": self._thread is not None and self._thread.is_alive(),
+            "last_run_at": self._last_run_at,
+            "last_run_trigger": self._last_run_trigger,
+            "total_runs": self._total_runs,
+            "total_failures": self._total_failures,
+            "consecutive_failures": self._consecutive_failures,
+            "poll_interval_seconds": self._poll_seconds,
+        }
+
     def _run(self) -> None:
+        import time
         consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
                 self._service_factory().refresh_due(trigger="scheduled")
+                self._last_run_at = time.monotonic()
+                self._last_run_trigger = "scheduled"
+                self._total_runs += 1
                 consecutive_failures = 0
                 interval = self._poll_seconds
             except Exception:
+                self._total_failures += 1
                 consecutive_failures += 1
                 interval = min(
                     self._poll_seconds * (2**consecutive_failures),
