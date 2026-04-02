@@ -26,7 +26,7 @@ The target household wants a frame that behaves like an appliance, not a service
 4. Prioritize offline-first behavior and cached playback.
 5. Make the system resilient to power loss and temporary network failure.
 6. Allow local image management directly on the device.
-7. Support user-selected Google Photos ambient sources through a first-class provider flow.
+7. Support local-files provider for importing images from a configured directory.
 8. Present transitions that feel polished and continuous, without a visible black flash between images.
 9. Provide calm ambient weather plus serious weather-alert behavior without breaking the frame's appliance feel.
 10. Present portrait and mixed-aspect images with tasteful background treatment that keeps the photo as the focal point.
@@ -65,7 +65,6 @@ Technical household member who installs, configures, and maintains the device.
 - As an administrator, I want to choose the display timezone in the admin UI and see both Pi-local and configured display time so quiet hours are easy to reason about.
 - As an administrator, I want to upload, remove, and organize pictures stored on the frame.
 - As an administrator, I want to see sync and device health information.
-- As an administrator, I want to connect Google Photos, finish the device approval flow, and choose what the frame should show.
 - As an administrator, I want a one-time first-run setup flow that creates the local admin account for the frame.
 - As an administrator, I want the admin UI to require a local sign-in without affecting the public slideshow display.
 - As an administrator, I want to configure weather, alert escalation, and refresh behavior from the same LAN admin UI.
@@ -126,7 +125,6 @@ Technical household member who installs, configures, and maintains the device.
 - Sync status persistence
 - Cached local copies of remote images
 - Graceful degradation when provider unavailable
-- Google Photos support via the Ambient API device flow and Google-managed source-selection UI
 
 ### Weather and Alerts
 - Abstract provider model for weather integrations
@@ -167,7 +165,6 @@ Technical household member who installs, configures, and maintains the device.
 - Design artifacts should live under `design/` while future end-user documentation can live under `design/`.
 
 ## Risks
-- Google Photos integration constraints may change or require specific APIs.
 - Browser-based display rendering on low-power hardware may require tuning.
 - Poorly bounded cache growth may consume disk unexpectedly.
 - Some portable monitors may have undesirable wake, sleep, or power-loss behavior.
@@ -179,7 +176,6 @@ Technical household member who installs, configures, and maintains the device.
 - Fresh installs guide the administrator through first-run setup before normal login.
 - Admin routes require local authentication while `/display` remains usable without sign-in.
 - Cached playback continues if remote source is unavailable.
-- Admin can connect Google Photos, select ambient media sources, and see sync status without affecting cached playback.
 - Household member no longer depends on subscriptions or vendor mobile apps to display family photos.
 - Transitions feel smooth and continuous, with no obvious black flash between images.
 - Admin can choose a display background mode, including `adaptive_auto`, and portrait or mixed-aspect images render with the expected treatment without breaking slideshow smoothness.

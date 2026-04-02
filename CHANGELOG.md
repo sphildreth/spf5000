@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lowered DecentDB Python driver cache pressure on constrained devices by making the statement-cache size explicit and configurable in SPF5000.
 - Reworked local-files scanning and import to stream directory traversal instead of materializing the full tree in memory, while keeping bounded sample results for the UI.
 - Slimmed `/api/assets` list responses and the display playlist path so admin and display polling avoid hydrating heavyweight asset metadata and variant structures on every request.
-- Reworked Google Photos sync to process remote items incrementally and merge per-source membership without holding the full selected library in memory.
+- Reworked sync to process remote items incrementally and merge per-source membership without holding the full selected library in memory.
 
 ## [1.0.0] - 2026-03-16
 

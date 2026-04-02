@@ -56,7 +56,6 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🎨 **Expanded Background Presentation** — Portrait and mixed-aspect slides support `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto`; cached display-variant metadata drives color-based modes while image-based treatments can reuse the display variant at render time.
 - 📱 **LAN-Managed Admin** — Setup, login, settings, import, and diagnostics are seamlessly available from a browser on your local network.
 - 🧳 **Backup & Export Ready** — Download ZIP backups of the DecentDB state, restore validated database backups, and export original collection media without dropping to SSH.
-- ☁️ **Google Photos Integration** — First-class Google Photos provider using the Ambient API for offline-cached local playback.
 - 🌦️ **Weather & Alerts** — Built-in National Weather Service integration for real-time widget overlays and fullscreen alerts.
 - 🛠️ **Modern Stack** — Built with a snappy **FastAPI backend** and a polished **React 19 + TypeScript + Vite frontend**.
 - 🔒 **Secure & Private** — Single-admin session auth, clear storage boundaries with **DecentDB**, and locally managed files with SHA-256 duplicate detection.
@@ -78,23 +77,24 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 ### Runtime flow
 
 ```text
-Local import folder      Google Photos Ambient API
-        │                         │
-        ▼                         ▼
-LocalFilesProvider      GooglePhotosProvider
-        │                         │
-        └──────────────► import / sync services
-                                  │
-                ┌─────────────────┴─────────────────┐
-                ▼                                   ▼
-      DecentDB metadata/settings/bootstrap   Filesystem originals +
-                state                        display/thumbnail variants
-                                                        │
-                                                        ▼
-                                              /api/display/playlist
-                                                        │
-                                                        ▼
-                                          Chromium kiosk at /display
+Local import folder
+        │
+        ▼
+LocalFilesProvider
+        │
+        ▼
+      import service
+        │
+        ┌─────────────────┴─────────────────┐
+        ▼                                   ▼
+  DecentDB metadata/settings/bootstrap   Filesystem originals +
+            state                        display/thumbnail variants
+                                                │
+                                                ▼
+                                      /api/display/playlist
+                                                │
+                                                ▼
+                                  Chromium kiosk at /display
 ```
 
 ### Display behavior
@@ -191,18 +191,6 @@ level = "INFO"
 
 [security]
 # session_secret = "replace-with-a-long-random-string"
-
-[paths]
-data_dir = "./backend/data"
-cache_dir = "./backend/cache"
-database_path = "./backend/data/spf5000.ddb"
-
-[providers.google_photos]
-# Google Photos Ambient API OAuth client for TVs and limited-input devices.
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
-provider_display_name = "Google Photos"
-sync_cadence_seconds = 3600
 ```
 
 Important notes:
@@ -211,8 +199,6 @@ Important notes:
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
 - Sleep scheduling and the optional display timezone are managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
-- Google Photos credentials live in `spf5000.toml`, while linked-account state, selected media sources, sync runs, and provider asset mappings live in DecentDB.
-- Google Photos playback stays offline-first: the frame syncs media into managed local storage and `/display` plays from the local cache.
 - Weather settings, cached conditions, active alerts, and refresh history live in DecentDB-backed application state rather than the runtime config file.
 
 ### Default managed storage layout
@@ -222,9 +208,7 @@ By default, the backend manages these paths:
 - `backend/data/spf5000.ddb`
 - `backend/data/fallback/empty-display.jpg`
 - `backend/data/sources/local-files/import/`
-- `backend/data/sources/google-photos/import/`
 - `backend/data/staging/imports/`
-- `backend/data/staging/google-photos/`
 - `backend/data/storage/originals/`
 - `backend/data/storage/variants/display/`
 - `backend/data/storage/variants/thumbnails/`
@@ -361,7 +345,7 @@ http://127.0.0.1:8000/api/docs
 backend/    FastAPI app, services, repositories, providers, tests
 frontend/   React + TypeScript + Vite admin and display UI
 design/     PRD, SPEC, ADR index, accepted architecture decisions
-docs/       Raspberry Pi setup, backup/export, Google Photos, and installer guides
+docs/       Raspberry Pi setup, backup/export, and installer guides
 deploy/     systemd, autostart, and config templates
 graphics/   project artwork and logos
 scripts/    development and Pi appliance helper scripts
@@ -378,14 +362,12 @@ Design and operational docs live in-repo:
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes following Keep a Changelog
 - [`docs/PI_SETUP_GUIDE.md`](docs/PI_SETUP_GUIDE.md) — end-to-end Pi setup
 - [`docs/BACKUP_AND_EXPORT_GUIDE.md`](docs/BACKUP_AND_EXPORT_GUIDE.md) — database backup/restore and collection media export workflows
-- [`docs/GOOGLE_PHOTOS_GUIDE.md`](docs/GOOGLE_PHOTOS_GUIDE.md) — Google Photos credential setup, connection flow, and sync behavior
 - [`docs/INSTALLER.md`](docs/INSTALLER.md) — installer, doctor, and uninstall details
 
 ## Current limits
 
 SPF5000 `1.0.0` is intentionally focused:
 
-- Google Photos selection happens through Google's Ambient settings UI instead of an in-app full-library browser
 - weather currently supports one configured location and the U.S. National Weather Service provider
 - browser uploads support batch image ingestion into local collections
 - database backup and restore cover DecentDB state only; original media still requires collection export or other filesystem migration

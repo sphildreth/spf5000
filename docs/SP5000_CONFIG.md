@@ -20,11 +20,6 @@ debug = false
 
 [security]
 session_secret = "replace-with-a-64-char-random-hex-string"
-
-[providers.google_photos]
-client_id = "your-client-id.apps.googleusercontent.com"
-client_secret = "your-client-secret"
-sync_cadence_seconds = 3600
 ```
 
 ---
@@ -70,17 +65,6 @@ All paths support both absolute paths and relative paths (relative to the `spf50
 
 ---
 
-## Section: `[providers.google_photos]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `client_id` | string | *(none)* | OAuth 2.0 client ID from Google Cloud Console. Required for Google Photos sync. |
-| `client_secret` | string | *(none)* | OAuth 2.0 client secret from Google Cloud Console. |
-| `provider_display_name` | string | `"Google Photos"` | Human-readable name shown in the admin UI for this provider. |
-| `sync_cadence_seconds` | integer | `3600` | Minimum interval between automatic Google Photos sync runs (in seconds). Actual runs may be less frequent if sync completes quickly. |
-
----
-
 ## Environment Variables
 
 Environment variables take precedence over `spf5000.toml` settings for most values.
@@ -94,7 +78,5 @@ Environment variables take precedence over `spf5000.toml` settings for most valu
 | `SPF5000_LOG_DIR` | Override `[paths].log_dir` |
 | `SPF5000_LOG_LEVEL` | Override `[logging].level` |
 | `SPF5000_RATE_LIMIT` | Override `[security].rate_limit_enabled` (`true` / `false`) |
-| `GOOGLE_OAUTH_CLIENT_ID` | Override `[providers.google_photos].client_id` |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Override `[providers.google_photos].client_secret` |
 | `NWS_API_KEY` | API key for the National Weather Service API (improves rate limits) |
 | `SESSION_SECRET` | Override `[security].session_secret` |

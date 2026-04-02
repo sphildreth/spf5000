@@ -280,7 +280,7 @@ Do not:
 
 This feature should work cleanly with:
 - local files
-- Google Photos synced assets
+- locally imported assets
 - future providers
 
 ---

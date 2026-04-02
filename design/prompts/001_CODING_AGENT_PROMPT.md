@@ -130,7 +130,7 @@ This provider should support:
 
 Keep provider abstraction clean so future providers can include:
 
-- Google Photos Ambient/API-based provider
+- local-files provider
 - NAS folder providers
 - SMB/NFS-backed sources
 - upload provider
@@ -486,7 +486,7 @@ But do implement as much working end-to-end functionality as possible.
 
 Do not spend major time on:
 
-- Google Photos integration
+- local import
 - cloud sync
 - authentication/authorization complexity
 - video support

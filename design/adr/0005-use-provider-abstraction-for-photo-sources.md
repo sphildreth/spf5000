@@ -4,7 +4,7 @@
 - Date: 2026-03-15
 
 ## Context
-The project must support multiple image origins over time, including local files and remote services such as Google Photos.
+The project must support multiple image origins over time, including local files and future remote services.
 
 ## Decision
 Introduce a provider abstraction layer for photo sources.

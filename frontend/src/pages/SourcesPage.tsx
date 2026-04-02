@@ -110,7 +110,6 @@ export function SourcesPage() {
   }
 
   const localSources = data?.sources ?? []
-  const emptyGooglePhotosStatus = null
 
   return (
     <div className="page-stack">

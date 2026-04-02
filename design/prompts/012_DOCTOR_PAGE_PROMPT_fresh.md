@@ -119,7 +119,7 @@ For each configured provider:
 
 This should include current source types such as:
 - local files
-- Google Photos if implemented
+- local import status
 - future providers automatically if architecture allows
 
 ### Weather / Alerts
@@ -278,7 +278,7 @@ The doctor page should help an admin quickly answer:
 
 - Why isn’t anything showing?
 - Why is weather missing?
-- Why didn’t Google Photos sync?
+- Why didn't the local import scan complete?
 - Why do alerts not appear?
 - Why is the slideshow empty?
 - Why can’t backups/export run?
@@ -301,7 +301,7 @@ Where practical, each warning/error should include a short remediation hint.
 
 Examples:
 - “No active playable images found. Add or sync images to at least one active collection.”
-- “Google Photos provider is configured but not connected. Reconnect the provider from Sources.”
+- "Local import path is not configured. Set a valid path from the Sources page."
 - “Weather provider has not refreshed in 45 minutes. Check internet connectivity or provider credentials.”
 
 This will make the page much more valuable.
