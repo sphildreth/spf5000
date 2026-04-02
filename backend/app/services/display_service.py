@@ -143,20 +143,25 @@ class DisplayService:
 
         assets = self.asset_repo.list_playlist_assets(collection_id=resolved_collection_id)
 
+        # Assets are already ordered by imported_at desc (newest first)
+        # When shuffle is enabled, we still want new assets to appear sooner
+        # Strategy: Put assets imported in the last 24 hours at the front, then shuffle the rest
         if profile.shuffle_enabled:
-            assets = sorted(
-                assets,
-                key=lambda asset: hashlib.sha256(
-                    f"{profile.id}:{playlist_revision}:{asset.id}:{asset.checksum_sha256}".encode(
-                        "utf-8"
-                    )
-                ).hexdigest(),
-            )
+            from datetime import datetime, timezone, timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            new_assets = [a for a in assets if a.imported_at > cutoff]
+            older_assets = [a for a in assets if a.imported_at <= cutoff]
+            
+            # Shuffle older assets
+            import random
+            random.shuffle(older_assets)
+            
+            # New assets first (also shuffled among themselves), then older shuffled assets
+            random.shuffle(new_assets)
+            assets = new_assets + older_assets
         else:
-            assets = sorted(
-                assets,
-                key=lambda asset: (asset.filename.lower(), asset.imported_at, asset.id),
-            )
+            # Non-shuffle: newest first (already sorted by imported_at desc)
+            pass
 
         items = []
         for asset in assets:
@@ -248,11 +253,24 @@ class DisplayService:
 
     def _background_from_metadata(self, metadata_json: str) -> AssetBackground | None:
         try:
-            meta: dict[str, object] = json.loads(metadata_json or "{}")
+            metadata = json.loads(metadata_json)
         except (json.JSONDecodeError, TypeError):
             return None
-
-        stored_background = meta.get("background")
+        
+        # Check for stored background metadata first
+        stored_background = metadata.get("background")
         if isinstance(stored_background, dict):
             return background_meta_from_dict(stored_background)
-        return None
+        
+        # Fallback to palette-based background
+        palette = metadata.get("palette")
+        if not isinstance(palette, list) or not palette:
+            return None
+        return AssetBackground(
+            dominant_color=str(palette[0]),
+            palette=[str(c) for c in palette[:5]],
+        )
+
+    def count_new_assets_since(self, since_timestamp: str, collection_id: str | None = None) -> int:
+        """Count assets imported since a given timestamp."""
+        return self.asset_repo.count_new_assets_since(since_timestamp, collection_id)

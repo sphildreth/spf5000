@@ -61,6 +61,11 @@ DEFAULT_SETTINGS = {
     "weather_alert_repeat_enabled": "1",
     "weather_alert_repeat_interval_minutes": "5",
     "weather_alert_repeat_display_seconds": "20",
+    # Auto-scan defaults — disabled by default; cron schedule empty means no scheduled scans.
+    "auto_scan_enabled": "0",
+    "auto_scan_cron_schedule": "",
+    "auto_watch_enabled": "0",
+    "auto_watch_debounce_seconds": "5",
 }
 
 TABLE_STATEMENTS = {

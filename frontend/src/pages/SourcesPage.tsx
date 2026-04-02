@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { getAutoScanStatus, configureAutoScan, type AutoScanStatus } from '../api/autoScan'
 import { getCollections } from '../api/collections'
 import { runLocalImport, scanLocalSource } from '../api/import'
 import { getSources, updateSource } from '../api/sources'
@@ -20,6 +21,7 @@ import { formatDateTime, formatNumber, toTitleCase } from '../utils/format'
 interface SourcesData {
   sources: Awaited<ReturnType<typeof getSources>>
   collections: Awaited<ReturnType<typeof getCollections>>
+  autoScan: AutoScanStatus
 }
 
 type DraftMap = Record<string, Required<Pick<SourceUpdateRequest, 'name' | 'import_path' | 'enabled'>>>
@@ -39,8 +41,12 @@ const emptyRunRequest: LocalImportRunRequest = {
 export function SourcesPage() {
   const { data, loading, error, reload, setData } = useAsyncData<SourcesData>(
     async () => {
-      const [sources, collections] = await Promise.all([getSources(), getCollections()])
-      return { sources, collections }
+      const [sources, collections, autoScan] = await Promise.all([
+        getSources(),
+        getCollections(),
+        getAutoScanStatus(),
+      ])
+      return { sources, collections, autoScan }
     },
     [],
   )
@@ -52,6 +58,8 @@ export function SourcesPage() {
   const [scanResult, setScanResult] = useState<LocalImportScanResult | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [autoScanConfig, setAutoScanConfig] = useState<AutoScanStatus | null>(null)
+  const [autoScanBusy, setAutoScanBusy] = useState(false)
 
   async function handleSaveSource(source: SourceSummary) {
     const draft = drafts[source.id]
@@ -219,6 +227,127 @@ export function SourcesPage() {
           detail="Add or restore the local-files source before running an import."
         />
       )}
+
+      {/* Auto-Scan Configuration Card */}
+      <Card title="Automatic Scanning" eyebrow="Import automation">
+        <p className="card-muted">
+          Configure automatic scanning and importing of new photos. Photos can be scanned on a schedule
+          or automatically when files are added to the import folder.
+        </p>
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={data?.autoScan.auto_scan_enabled ?? false}
+              onChange={async (e) => {
+                setAutoScanBusy(true)
+                try {
+                  const updated = await configureAutoScan({ auto_scan_enabled: e.target.checked })
+                  setData((current) => current ? { ...current, autoScan: updated } : current)
+                  setFeedback(e.target.checked ? 'Scheduled scanning enabled' : 'Scheduled scanning disabled')
+                } catch (err) {
+                  setActionError(err instanceof Error ? err.message : 'Failed to update settings')
+                } finally {
+                  setAutoScanBusy(false)
+                }
+              }}
+              disabled={autoScanBusy}
+            />
+            <span><strong>Enable scheduled scanning</strong></span>
+          </label>
+          <p style={{ marginLeft: '1.5rem', fontSize: '0.9rem', color: '#666' }}>
+            Automatically scan and import new photos on a schedule.
+          </p>
+        </div>
+
+        {data?.autoScan.auto_scan_enabled && (
+          <div style={{ marginBottom: '1.5rem', marginLeft: '1.5rem' }}>
+            <label>
+              <span>Cron schedule</span>
+              <input
+                type="text"
+                value={data.autoScan.auto_scan_cron_schedule}
+                placeholder="0 */4 * * *"
+                onChange={async (e) => {
+                  setAutoScanBusy(true)
+                  try {
+                    const updated = await configureAutoScan({ auto_scan_cron_schedule: e.target.value })
+                    setData((current) => current ? { ...current, autoScan: updated } : current)
+                    setFeedback('Schedule updated')
+                  } catch (err) {
+                    setActionError(err instanceof Error ? err.message : 'Invalid cron expression')
+                  } finally {
+                    setAutoScanBusy(false)
+                  }
+                }}
+                disabled={autoScanBusy}
+                style={{ width: '100%', maxWidth: '300px', marginTop: '0.25rem' }}
+              />
+            </label>
+            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+              Examples: <code>0 */4 * * *</code> (every 4 hours), <code>0 3 * * *</code> (daily at 3 AM), <code>0 * * * *</code> (every hour)
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={data?.autoScan.auto_watch_enabled ?? false}
+              onChange={async (e) => {
+                setAutoScanBusy(true)
+                try {
+                  const updated = await configureAutoScan({ auto_watch_enabled: e.target.checked })
+                  setData((current) => current ? { ...current, autoScan: updated } : current)
+                  setFeedback(e.target.checked ? 'Auto-watch enabled' : 'Auto-watch disabled')
+                } catch (err) {
+                  setActionError(err instanceof Error ? err.message : 'Failed to update settings')
+                } finally {
+                  setAutoScanBusy(false)
+                }
+              }}
+              disabled={autoScanBusy}
+            />
+            <span><strong>Enable auto-watch</strong></span>
+          </label>
+          <p style={{ marginLeft: '1.5rem', fontSize: '0.9rem', color: '#666' }}>
+            Automatically scan and import when new files are detected in the import folder.
+          </p>
+        </div>
+
+        {data?.autoScan.auto_watch_enabled && (
+          <div style={{ marginBottom: '1.5rem', marginLeft: '1.5rem' }}>
+            <label>
+              <span>Debounce delay (seconds)</span>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={data.autoScan.auto_watch_debounce_seconds}
+                onChange={async (e) => {
+                  setAutoScanBusy(true)
+                  try {
+                    const updated = await configureAutoScan({ auto_watch_debounce_seconds: parseInt(e.target.value, 10) })
+                    setData((current) => current ? { ...current, autoScan: updated } : current)
+                    setFeedback('Debounce delay updated')
+                  } catch (err) {
+                    setActionError(err instanceof Error ? err.message : 'Failed to update settings')
+                  } finally {
+                    setAutoScanBusy(false)
+                  }
+                }}
+                disabled={autoScanBusy}
+                style={{ width: '80px', marginLeft: '0.5rem' }}
+              />
+            </label>
+            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+              Wait this many seconds after the last file change before scanning (prevents multiple scans during large transfers).
+            </p>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

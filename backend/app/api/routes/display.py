@@ -51,6 +51,17 @@ def get_display_playlist(
     )
 
 
+@router.get("/new-assets/count")
+def get_new_assets_count(
+    since: str,
+    collection_id: str | None = None,
+    svc: DisplayService = Depends(get_display_service),
+) -> dict:
+    """Check if there are new assets imported since the given timestamp."""
+    count = svc.count_new_assets_since(since, collection_id)
+    return {"new_assets_count": count, "since": since}
+
+
 @router.get("/weather", response_model=DisplayWeatherResponse)  # intentionally public
 def get_display_weather(
     svc: WeatherService = Depends(get_weather_service),

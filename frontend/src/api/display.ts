@@ -62,6 +62,14 @@ export async function getDisplayPlaylist(): Promise<DisplayPlaylist> {
   }
 }
 
+export async function getNewAssetsCount(since: string, collectionId?: string | null): Promise<{ new_assets_count: number; since: string }> {
+  const params = new URLSearchParams({ since })
+  if (collectionId) {
+    params.set('collection_id', collectionId)
+  }
+  return apiGet(`/api/display/new-assets/count?${params.toString()}`)
+}
+
 export function getDefaultDisplayConfig(): DisplayConfig {
   return DEFAULT_DISPLAY_CONFIG
 }

@@ -145,3 +145,30 @@ class SettingsRepository:
                         (value, now, key),
                     )
         return normalized
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        """Get a single setting value by key."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return default
+            cursor = conn.execute("select value from settings where key = ?", (key,))
+            row = cursor.fetchone()
+            return str(row[0]) if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a single setting value by key."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return
+            now = utc_now()
+            existing = conn.execute("select key from settings where key = ?", (key,)).fetchone()
+            if existing is None:
+                conn.execute(
+                    "insert into settings (key, value, updated_at) values (?, ?, ?)",
+                    (key, value, now),
+                )
+            else:
+                conn.execute(
+                    "update settings set value = ?, updated_at = ? where key = ?",
+                    (value, now, key),
+                )

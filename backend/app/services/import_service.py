@@ -73,6 +73,27 @@ class ImportService:
         self.source_repo.touch_last_scan(source.id, now)
         return stored_job, scan_result
 
+    def scan_directory(self, source_id: str, max_samples: int = 10) -> ProviderScanResult:
+        """
+        Scan a source directory and return discovered files.
+        
+        Used by auto-scan scheduler and watcher for automatic scanning.
+        Does not create a job record - just returns the scan result.
+        """
+        source = self.source_service.get_source(source_id)
+        if source is None:
+            raise ValueError(f"Unknown source: {source_id}")
+        if source.provider_type != "local_files":
+            raise ValueError(
+                f"Source {source_id} does not support local scan/import operations"
+            )
+        provider = self.source_service.get_provider(source.provider_type)
+        scan_result = provider.scan_directory(
+            source.import_path, sample_limit=max_samples
+        )
+        self.source_repo.touch_last_scan(source.id, utc_now())
+        return scan_result
+
     def import_local_source(
         self, source_id: str, collection_id: str, max_samples: int = 10
     ) -> ImportJob:

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import { getDefaultDisplayConfig, getDisplayPlaylist } from '../api/display'
+import { getDefaultDisplayConfig, getDisplayPlaylist, getNewAssetsCount } from '../api/display'
 import { getDisplayAlerts, getDisplayWeather } from '../api/weather'
 import type {
   BackgroundFillMode,
@@ -54,6 +54,7 @@ export function DisplayPage() {
   const [bootMessage, setBootMessage] = useState<BootScreenMessage>(INITIAL_BOOT_MESSAGE)
   const [viewportAspectRatio, setViewportAspectRatio] = useState(() => getViewportAspectRatio())
   const [isFullscreenAlertActive, setIsFullscreenAlertActive] = useState(false)
+  const [lastPlaylistRefresh, setLastPlaylistRefresh] = useState<string>(new Date().toISOString())
   const fullscreenAlertTimerRef = useRef<number | null>(null)
   const nextFullscreenRepeatAtRef = useRef<number | null>(null)
   const activeRepeatAlertIdRef = useRef<string | null>(null)
@@ -329,6 +330,28 @@ export function DisplayPage() {
       window.clearInterval(timer)
     }
   }, [config.refresh_interval_seconds, showBootDemo, syncDisplayData])
+
+  // Poll for new assets and refresh playlist when found
+  useEffect(() => {
+    if (showBootDemo) return
+
+    const checkNewAssets = async () => {
+      try {
+        const result = await getNewAssetsCount(lastPlaylistRefresh, playlist.collection_id)
+        if (result.new_assets_count > 0) {
+          // New assets found - refresh the playlist immediately
+          await syncDisplayData(false)
+          setLastPlaylistRefresh(new Date().toISOString())
+        }
+      } catch (err) {
+        // Silently ignore errors - playlist will refresh on next regular interval
+      }
+    }
+
+    // Check every 15 seconds for new assets (faster than full playlist refresh)
+    const timer = window.setInterval(checkNewAssets, 15_000)
+    return () => window.clearInterval(timer)
+  }, [showBootDemo, lastPlaylistRefresh, playlist.collection_id, syncDisplayData])
 
   useEffect(() => {
     if (showBootDemo) return

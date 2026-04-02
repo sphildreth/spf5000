@@ -146,6 +146,56 @@ class AssetRepository:
                 for row in rows_to_dicts(cursor, cursor.fetchall())
             ]
 
+    def get_latest_import_timestamp(self, collection_id: str | None = None) -> str | None:
+        """Get the most recent import timestamp for assets in a collection."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return None
+            if collection_id:
+                cursor = conn.execute(
+                    """
+                    select max(assets.imported_at)
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and assets.is_active = 1
+                    """,
+                    (collection_id,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    select max(imported_at) from assets where is_active = 1
+                    """
+                )
+            row = cursor.fetchone()
+            return str(row[0]) if row and row[0] else None
+
+    def count_new_assets_since(self, since_timestamp: str, collection_id: str | None = None) -> int:
+        """Count assets imported since a given timestamp."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return 0
+            if collection_id:
+                cursor = conn.execute(
+                    """
+                    select count(*)
+                    from assets
+                    join collection_assets on collection_assets.asset_id = assets.id
+                    where collection_assets.collection_id = ? and assets.is_active = 1
+                    and assets.imported_at > ?
+                    """,
+                    (collection_id, since_timestamp),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    select count(*) from assets where is_active = 1 and imported_at > ?
+                    """,
+                    (since_timestamp,),
+                )
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
+
     def get_playlist_asset_stats(
         self, collection_id: str | None = None
     ) -> PlaylistAssetStats:
