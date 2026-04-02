@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -250,11 +251,11 @@ export function SettingsPage() {
           </label>
 
           {/* Lightweight theme preview swatches */}
-          <div>
-            <span style={{ display: 'block', marginBottom: '0.6rem', fontSize: '0.85rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <div className="field-span-full">
+            <span className="field-caption">
               Preview
             </span>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <div className="theme-preview-grid">
               {themes.map((t) => {
                 const isActive = t.id === selectedThemeId
                 const preview = getThemePreview(t)
@@ -264,31 +265,16 @@ export function SettingsPage() {
                     type="button"
                     title={`${t.name} – ${t.description}`}
                     onClick={() => setSelectedThemeId(t.id)}
+                    className={`theme-preview-swatch${isActive ? ' theme-preview-swatch--active' : ''}`}
                     style={{
-                      width: '2.6rem',
-                      height: '2.6rem',
-                      borderRadius: '10px',
-                      background: preview.background,
-                      border: isActive
-                        ? `2px solid ${preview.accent}`
-                        : `2px solid ${preview.border}`,
-                      cursor: 'pointer',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                    }}
+                      '--theme-preview-background': preview.background,
+                      '--theme-preview-border': isActive ? preview.accent : preview.border,
+                      '--theme-preview-accent': preview.accent,
+                    } as CSSProperties}
                   >
-                    {/* Mini accent stripe */}
                     <span
-                      style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        height: '6px',
-                        background: preview.accent,
-                        opacity: 0.9,
-                      }}
+                      className="theme-preview-swatch__accent"
+                      aria-hidden="true"
                     />
                   </button>
                 )
@@ -297,8 +283,8 @@ export function SettingsPage() {
             {(() => {
               const active = themes.find((t) => t.id === selectedThemeId)
               return active ? (
-                <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
-                  <strong style={{ color: 'var(--text)' }}>{active.name}</strong> — {active.description}
+                <p className="theme-preview-description">
+                  <strong>{active.name}</strong> — {active.description}
                 </p>
               ) : null
             })()}
