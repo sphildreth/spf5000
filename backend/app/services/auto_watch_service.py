@@ -170,7 +170,7 @@ class AutoWatchService:
         self._observer.schedule(
             self._handler,
             str(self._watch_path),
-            recursive=False,
+            recursive=True,
         )
         self._observer.start()
         
