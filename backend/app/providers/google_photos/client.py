@@ -28,27 +28,13 @@ PROFILE_SCOPES = "openid email profile"
 DEFAULT_SCOPE = f"{PROFILE_SCOPES} {MEDIA_ITEMS_SCOPE}"
 
 _default_timeout = httpx.Timeout(30.0, connect=10.0)
-_client_lock = threading.Lock()
-_shared_client: httpx.Client | None = None
 
 
-def _get_shared_client() -> httpx.Client:
-    global _shared_client
-    with _client_lock:
-        if _shared_client is None:
-            _shared_client = httpx.Client(
-                timeout=_default_timeout, follow_redirects=True
-            )
-        return _shared_client
-
-
-def close_shared_client() -> None:
-    """Close the shared httpx client and reset state. Call during application shutdown."""
-    global _shared_client
-    with _client_lock:
-        if _shared_client is not None:
-            _shared_client.close()
-            _shared_client = None
+def _create_client() -> httpx.Client:
+    """Create a new httpx client for Google Photos API requests."""
+    return httpx.Client(
+        timeout=_default_timeout, follow_redirects=True
+    )
 
 
 class GooglePhotosClient:
@@ -211,51 +197,69 @@ class GooglePhotosClient:
         self, *, access_token: str, base_url: str, dest_path: Any
     ) -> None:
         url = f"{base_url}=d"
-        client = _get_shared_client()
-        with client.stream(
-            "GET", url, headers=self._auth_headers(access_token)
-        ) as response:
+        client = _create_client()
+        try:
+            with client.stream(
+                "GET", url, headers=self._auth_headers(access_token)
+            ) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise GooglePhotosApiError(
+                        f"Google Photos media download failed with status {response.status_code}",
+                        status_code=response.status_code,
+                        payload=self._decode_payload(response),
+                    )
+                with open(dest_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192 * 8):
+                        f.write(chunk)
+        finally:
+            client.close()
+
+    def download_media(self, *, access_token: str, base_url: str) -> bytes:
+        url = f"{base_url}=d"
+        client = _create_client()
+        try:
+            response = client.get(url, headers=self._auth_headers(access_token))
             if response.status_code >= 400:
-                response.read()
                 raise GooglePhotosApiError(
                     f"Google Photos media download failed with status {response.status_code}",
                     status_code=response.status_code,
                     payload=self._decode_payload(response),
                 )
-            with open(dest_path, "wb") as f:
-                for chunk in response.iter_bytes(chunk_size=8192 * 8):
-                    f.write(chunk)
-
-    def download_media(self, *, access_token: str, base_url: str) -> bytes:
-        url = f"{base_url}=d"
-        client = _get_shared_client()
-        response = client.get(url, headers=self._auth_headers(access_token))
-        if response.status_code >= 400:
-            raise GooglePhotosApiError(
-                f"Google Photos media download failed with status {response.status_code}",
-                status_code=response.status_code,
-                payload=self._decode_payload(response),
-            )
-        return response.content
+            return response.content
+        finally:
+            client.close()
 
     def _post_form(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._post_with_retry(
-            lambda: _get_shared_client().post(url, data=payload)
-        )
+        client = _create_client()
+        try:
+            return self._post_with_retry(
+                lambda: client.post(url, data=payload)
+            )
+        finally:
+            client.close()
 
     def _post_json(
         self, url: str, payload: dict[str, Any], *, headers: dict[str, str]
     ) -> dict[str, Any]:
-        return self._post_with_retry(
-            lambda: _get_shared_client().post(url, json=payload, headers=headers)
-        )
+        client = _create_client()
+        try:
+            return self._post_with_retry(
+                lambda: client.post(url, json=payload, headers=headers)
+            )
+        finally:
+            client.close()
 
     def _get_json(
         self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        return self._get_with_retry(
-            lambda: _get_shared_client().get(url, headers=headers, params=params)
-        )
+        client = _create_client()
+        try:
+            return self._get_with_retry(
+                lambda: client.get(url, headers=headers, params=params)
+            )
+        finally:
+            client.close()
 
     def _retryable_status(self, status_code: int) -> bool:
         return status_code in {429, 500, 502, 503, 504}
@@ -286,14 +290,17 @@ class GooglePhotosClient:
         return self._get_with_retry(call)
 
     def _delete(self, url: str, *, headers: dict[str, str]) -> None:
-        client = _get_shared_client()
-        response = client.delete(url, headers=headers)
-        if response.status_code >= 400:
-            raise GooglePhotosApiError(
-                f"Google Photos delete failed with status {response.status_code}",
-                status_code=response.status_code,
-                payload=self._decode_payload(response),
-            )
+        client = _create_client()
+        try:
+            response = client.delete(url, headers=headers)
+            if response.status_code >= 400:
+                raise GooglePhotosApiError(
+                    f"Google Photos delete failed with status {response.status_code}",
+                    status_code=response.status_code,
+                    payload=self._decode_payload(response),
+                )
+        finally:
+            client.close()
 
     def _decode_json_response(self, response: httpx.Response) -> dict[str, Any]:
         if response.status_code >= 400:

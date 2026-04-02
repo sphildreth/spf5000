@@ -23,29 +23,15 @@ POINTS_URL = "https://api.weather.gov/points/{latitude},{longitude}"
 ALERTS_URL = "https://api.weather.gov/alerts/active"
 
 _default_timeout = httpx.Timeout(20.0, connect=10.0)
-_client_lock = threading.Lock()
-_shared_client: httpx.Client | None = None
 
 
-def _get_shared_client() -> httpx.Client:
-    global _shared_client
-    with _client_lock:
-        if _shared_client is None:
-            _shared_client = httpx.Client(
-                timeout=_default_timeout,
-                follow_redirects=True,
-                limits=httpx.Limits(max_keepalive_connections=2, max_connections=4),
-            )
-        return _shared_client
-
-
-def close_shared_client() -> None:
-    """Close the shared httpx client and reset state. Call during application shutdown."""
-    global _shared_client
-    with _client_lock:
-        if _shared_client is not None:
-            _shared_client.close()
-            _shared_client = None
+def _create_client() -> httpx.Client:
+    """Create a new httpx client for weather API requests."""
+    return httpx.Client(
+        timeout=_default_timeout,
+        follow_redirects=True,
+        limits=httpx.Limits(max_keepalive_connections=2, max_connections=4),
+    )
 
 
 class NWSWeatherProvider:
@@ -263,29 +249,27 @@ class NWSWeatherProvider:
         }
         last_exc: Exception | None = None
         last_response: httpx.Response | None = None
-        for attempt in range(4):
-            try:
-                client = _get_shared_client()
-                last_response = client.get(url, params=params, headers=headers)
+        # Create a fresh client for this request cycle to prevent memory accumulation
+        client = _create_client()
+        try:
+            for attempt in range(4):
                 try:
+                    last_response = client.get(url, params=params, headers=headers)
                     if last_response.status_code not in {429, 500, 502, 503, 504}:
                         break
                     last_exc = WeatherProviderError(
                         f"NWS request failed with status {last_response.status_code} for {url}"
                     )
-                finally:
-                    if last_response.status_code in {429, 500, 502, 503, 504}:
-                        last_response.close()
-            except (httpx.ConnectError, httpx.TimeoutException) as exc:
-                last_exc = exc
-            if attempt < 3:
-                import time
+                    last_response.close()
+                except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                    last_exc = exc
+                if attempt < 3:
+                    import time
 
-                time.sleep(2.0**attempt)
-        else:
-            raise last_exc or WeatherProviderError(f"NWS request failed for {url}")
-        
-        try:
+                    time.sleep(2.0**attempt)
+            else:
+                raise last_exc or WeatherProviderError(f"NWS request failed for {url}")
+
             if last_response.status_code >= 400:
                 raise WeatherProviderError(
                     f"NWS request failed with status {last_response.status_code} for {url}"
@@ -299,6 +283,7 @@ class NWSWeatherProvider:
             return payload
         finally:
             last_response.close()
+            client.close()
 
     def _first_station_id(self, url: str) -> str | None:
         payload = self._get_json(url)

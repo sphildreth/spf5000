@@ -1050,22 +1050,23 @@ class DoctorService:
     def _collect_process_snapshot(self, pid: int, app: FastAPI | None = None) -> dict[str, Any]:
         proc_root = Path("/proc") / str(pid)
         status = self._read_key_value_file(proc_root / "status")
-        
+
         # Extract key memory metrics from status
-        vm_rss_kb = int(status.get("VmRSS:", "0").split()[0]) if status else 0
-        rss_anon_kb = int(status.get("RssAnon:", "0").split()[0]) if status else 0
-        thread_count = int(status.get("Threads:", "0").split()[0]) if status else 0
-        
+        # _read_key_value_file strips the colon, so keys are "VmRSS" not "VmRSS:"
+        vm_rss_kb = int(status.get("VmRSS", "0").split()[0]) if status else 0
+        rss_anon_kb = int(status.get("RssAnon", "0").split()[0]) if status else 0
+        thread_count = int(status.get("Threads", "0").split()[0]) if status else 0
+
         # Get DB connection stats
         from app.db.connection import get_connection_stats
         db_conn_stats = get_connection_stats()
-        
+
         # Get coordinator status if app is provided
         coordinator_status = None
         if app is not None:
             from app.runtime_coordinators import get_coordinator_status
             coordinator_status = get_coordinator_status(app)
-        
+
         return {
             "pid": pid,
             "cmdline": self._read_cmdline(proc_root / "cmdline"),
