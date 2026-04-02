@@ -56,6 +56,7 @@ function normalizeGooglePhotosStatus(value: unknown): GooglePhotosProviderStatus
   const deviceMediaSources =
     getValue(deviceRecord, 'selected_media_sources', 'selectedMediaSources', 'media_sources', 'mediaSources') ??
     getValue(statusRecord, 'selected_media_sources', 'selectedMediaSources')
+  const diagnosticsRecord = asRecord(getValue(statusRecord, 'diagnostics'))
 
   return {
     provider_available: asBoolean(
@@ -87,6 +88,16 @@ function normalizeGooglePhotosStatus(value: unknown): GooglePhotosProviderStatus
     error:
       asOptionalString(getValue(statusRecord, 'error', 'sync_error', 'syncError', 'current_error', 'currentError')) ??
       null,
+    diagnostics: diagnosticsRecord
+      ? {
+          configured: asBoolean(getValue(diagnosticsRecord, 'configured'), false),
+          client_id_valid: asBoolean(getValue(diagnosticsRecord, 'client_id_valid', 'clientIdValid'), false),
+          api_enabled: asBoolean(getValue(diagnosticsRecord, 'api_enabled', 'apiEnabled'), false),
+          consent_screen_status: asString(getValue(diagnosticsRecord, 'consent_screen_status', 'consentScreenStatus'), 'unknown'),
+          issues: asArray(getValue(diagnosticsRecord, 'issues'), (item) => asString(item, '')),
+          recommendations: asArray(getValue(diagnosticsRecord, 'recommendations'), (item) => asString(item, '')),
+        }
+      : null,
   }
 }
 

@@ -428,6 +428,49 @@ export function SourcesPage() {
                 </Card>
               ) : null}
 
+              {googlePhotos.diagnostics && (googlePhotos.diagnostics.issues?.length > 0 || googlePhotos.diagnostics.recommendations?.length > 0) ? (
+                <Card title="Troubleshooting" eyebrow="Diagnostics">
+                  <dl className="detail-list">
+                    {googlePhotos.diagnostics.client_id_valid !== undefined && (
+                      <div>
+                        <dt>OAuth Client ID</dt>
+                        <dd>
+                          <span className={`pill ${googlePhotos.diagnostics.client_id_valid ? 'pill--success' : 'pill--error'}`}>
+                            {googlePhotos.diagnostics.client_id_valid ? 'Valid' : 'Invalid'}
+                          </span>
+                        </dd>
+                      </div>
+                    )}
+                    {googlePhotos.diagnostics.consent_screen_status && (
+                      <div>
+                        <dt>Consent Screen</dt>
+                        <dd>{toTitleCase(googlePhotos.diagnostics.consent_screen_status)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {googlePhotos.diagnostics.issues?.length > 0 ? (
+                    <div style={{ marginTop: '1rem' }}>
+                      <strong>Issues found:</strong>
+                      <ul style={{ marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                        {googlePhotos.diagnostics.issues.map((issue: string, i: number) => (
+                          <li key={i}>{issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {googlePhotos.diagnostics.recommendations?.length > 0 ? (
+                    <div style={{ marginTop: '1rem' }}>
+                      <strong>Recommended actions:</strong>
+                      <ol style={{ marginTop: '0.5rem', marginBottom: '0' }}>
+                        {googlePhotos.diagnostics.recommendations.map((rec: string, i: number) => (
+                          <li key={i}>{rec}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+                </Card>
+              ) : null}
+
               {googlePhotos.warning ? (
                 <div className="inline-list">
                   <span className="pill pill--warning">Warning</span>
@@ -763,6 +806,7 @@ const emptyGooglePhotosStatus: GooglePhotosProviderStatus = {
   last_successful_sync_at: null,
   warning: null,
   error: null,
+  diagnostics: null,
 }
 
 function googleConnectionStateClassName(status: GooglePhotosProviderStatus): string {

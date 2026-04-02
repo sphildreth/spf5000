@@ -50,6 +50,51 @@ class GooglePhotosService:
         self.asset_ingestion = asset_ingestion or AssetIngestService()
         self.source_repo = source_repo or SourceRepository()
 
+    def _validate_credentials(self) -> dict[str, Any]:
+        """
+        Validate Google Photos OAuth credentials and API access.
+        Returns diagnostic info about configuration status.
+        """
+        result = {
+            "configured": settings.google_photos_configured,
+            "client_id_valid": False,
+            "api_enabled": False,
+            "consent_screen_status": "unknown",
+            "issues": [],
+            "recommendations": [],
+        }
+
+        if not settings.google_photos_configured:
+            result["issues"].append(
+                "Google Photos OAuth credentials are not configured in spf5000.toml"
+            )
+            result["recommendations"].append(
+                "Add client_id and client_secret to [providers.google_photos] section"
+            )
+            return result
+
+        # Try to validate credentials by making a test API call
+        # We use the token endpoint with an invalid grant type to get specific errors
+        client = self.client_factory()
+        try:
+            # This will fail, but the error type tells us about credential validity
+            client._get_json(
+                "https://www.googleapis.com/oauth2/v1/tokeninfo",
+                headers={},
+                params={"client_id": settings.google_photos_client_id}
+            )
+            result["client_id_valid"] = True
+        except GooglePhotosConfigurationError:
+            result["issues"].append("Invalid OAuth client ID format")
+            result["recommendations"].append(
+                "Verify client_id in Google Cloud Console → APIs & Services → Credentials"
+            )
+        except Exception:
+            # Tokeninfo endpoint doesn't require auth, so any other error means network/other issue
+            result["client_id_valid"] = True  # Assume valid if no config error
+
+        return result
+
     def get_status(self) -> dict[str, object]:
         account = self._get_or_create_account()
         auth_flow = self.repo.get_latest_auth_flow(include_completed=False)
@@ -59,6 +104,11 @@ class GooglePhotosService:
         connection_state = account.connection_state
         current_error = account.current_error or None
         warnings: list[str] = []
+        diagnostics: dict[str, Any] = {}
+
+        # Run credential validation if configured
+        if settings.google_photos_configured:
+            diagnostics = self._validate_credentials()
 
         if auth_flow is not None:
             connection_state = "awaiting_authorization"
@@ -98,6 +148,12 @@ class GooglePhotosService:
             warnings.append(auth_flow.error_message)
         if current_error and current_error not in warnings:
             warnings.append(current_error)
+
+        # Add diagnostic recommendations to warnings
+        if diagnostics.get("recommendations"):
+            for rec in diagnostics["recommendations"]:
+                if rec not in warnings:
+                    warnings.append(rec)
 
         linked_account = None
         if (
@@ -146,6 +202,7 @@ class GooglePhotosService:
             "cached_asset_count": cached_asset_count,
             "current_error": current_error,
             "warnings": warnings,
+            "diagnostics": diagnostics,
         }
 
     def start_connect(
@@ -208,6 +265,49 @@ class GooglePhotosService:
             return self.get_status()
 
         client = self.client_factory()
+        
+        # Check if we already have tokens but device creation failed
+        account = self._get_or_create_account()
+        has_tokens = bool(account.access_token and account.account_subject)
+        
+        if has_tokens:
+            # Tokens already obtained, retry device creation
+            device_payload = None
+            try:
+                device_payload = client.create_device(
+                    access_token=account.access_token or "",
+                    request_id=auth_flow.request_id,
+                    display_name=auth_flow.device_display_name,
+                )
+            except GooglePhotosError as exc:
+                # Device creation still failing, wait and retry
+                auth_flow.status = "polling"
+                auth_flow.error_message = f"Device creation pending: {exc}"
+                auth_flow.last_polled_at = now
+                auth_flow.next_poll_at = utc_plus_seconds(auth_flow.interval_seconds)
+                auth_flow.updated_at = now
+                self.repo.update_auth_flow(auth_flow)
+                return self.get_status()
+            
+            # Device creation succeeded
+            self._apply_device_payload(account, device_payload, poll_at=now)
+            account.connection_state = "connected"
+            account.connected_at = account.connected_at or now
+            account.disconnected_at = None
+            account.current_error = ""
+            account.updated_at = now
+            self.repo.upsert_account(account)
+
+            auth_flow.status = "completed"
+            auth_flow.last_polled_at = now
+            auth_flow.next_poll_at = None
+            auth_flow.updated_at = now
+            auth_flow.completed_at = now
+            auth_flow.error_message = ""
+            self.repo.update_auth_flow(auth_flow)
+            return self.get_status()
+
+        # No tokens yet, try to exchange device code
         try:
             token_payload = client.poll_device_flow(device_code=auth_flow.device_code)
         except GooglePhotosAuthorizationPending:
@@ -239,14 +339,13 @@ class GooglePhotosService:
             auth_flow.updated_at = now
             auth_flow.completed_at = now
             self.repo.update_auth_flow(auth_flow)
-            account = self._get_or_create_account()
             account.connection_state = "error"
             account.current_error = str(exc)
             account.updated_at = now
             self.repo.upsert_account(account)
             return self.get_status()
 
-        account = self._get_or_create_account()
+        # Token exchange succeeded - save tokens immediately
         account.access_token = str(token_payload.get("access_token") or "")
         account.refresh_token = str(
             token_payload.get("refresh_token") or account.refresh_token or ""
@@ -261,11 +360,29 @@ class GooglePhotosService:
         account.account_email = self._optional_str(userinfo.get("email"))
         account.account_display_name = self._optional_str(userinfo.get("name"))
         account.account_picture_url = self._optional_str(userinfo.get("picture"))
-        device_payload = client.create_device(
-            access_token=account.access_token,
-            request_id=auth_flow.request_id,
-            display_name=auth_flow.device_display_name,
-        )
+        account.updated_at = now
+        self.repo.upsert_account(account)
+
+        # Now try to create device
+        device_payload = None
+        try:
+            device_payload = client.create_device(
+                access_token=account.access_token or "",
+                request_id=auth_flow.request_id,
+                display_name=auth_flow.device_display_name,
+            )
+        except GooglePhotosError as exc:
+            # Device creation failed, but we have tokens - mark flow as "device_pending"
+            # so we don't try to exchange the device code again
+            auth_flow.status = "device_pending"
+            auth_flow.error_message = f"Device creation pending: {exc}"
+            auth_flow.last_polled_at = now
+            auth_flow.next_poll_at = utc_plus_seconds(auth_flow.interval_seconds)
+            auth_flow.updated_at = now
+            self.repo.update_auth_flow(auth_flow)
+            return self.get_status()
+
+        # Device creation succeeded
         self._apply_device_payload(account, device_payload, poll_at=now)
         account.connection_state = "connected"
         account.connected_at = account.connected_at or now

@@ -309,6 +309,15 @@ export interface GooglePhotosSyncRunSummary {
   message: string | null
 }
 
+export interface GooglePhotosDiagnostics {
+  configured: boolean
+  client_id_valid: boolean
+  api_enabled: boolean
+  consent_screen_status: string
+  issues: string[]
+  recommendations: string[]
+}
+
 export interface GooglePhotosProviderStatus {
   provider_available: boolean
   provider_configured: boolean
@@ -321,6 +330,7 @@ export interface GooglePhotosProviderStatus {
   last_successful_sync_at: string | null
   warning: string | null
   error: string | null
+  diagnostics: GooglePhotosDiagnostics | null
 }
 
 export interface LocalImportScanRequest {

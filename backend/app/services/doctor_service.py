@@ -1004,7 +1004,52 @@ class DoctorService:
             "process": self._collect_process_snapshot(pid, app),
             "database": self._collect_database_snapshot(),
             "logs": self._collect_logs_snapshot(),
+            "providers": self._collect_provider_snapshots(),
         }
+
+    def _collect_provider_snapshots(self) -> dict[str, Any]:
+        """Collect diagnostic information for configured providers."""
+        result: dict[str, Any] = {}
+
+        # Google Photos diagnostics
+        if settings.google_photos_enabled:
+            try:
+                from app.services.google_photos_service import GooglePhotosService
+
+                service = GooglePhotosService()
+                status = service.get_status()
+
+                result["google_photos"] = {
+                    "enabled": settings.google_photos_enabled,
+                    "configured": settings.google_photos_configured,
+                    "client_id_configured": bool(settings.google_photos_client_id),
+                    "client_secret_configured": bool(settings.google_photos_client_secret),
+                    "sync_cadence_seconds": settings.google_photos_sync_cadence_seconds,
+                    "connection_state": status.get("connection_state"),
+                    "cached_asset_count": status.get("cached_asset_count"),
+                    "has_linked_account": status.get("linked_account") is not None,
+                    "has_device": status.get("device") is not None,
+                    "media_sources_set": status.get("device", {}).get("media_sources_set") if status.get("device") else None,
+                    "selected_media_sources_count": len(status.get("selected_media_sources", [])),
+                    "latest_sync_run": {
+                        "status": status.get("latest_sync_run", {}).get("status") if status.get("latest_sync_run") else None,
+                        "trigger": status.get("latest_sync_run", {}).get("trigger") if status.get("latest_sync_run") else None,
+                        "imported_count": status.get("latest_sync_run", {}).get("imported_count") if status.get("latest_sync_run") else None,
+                        "removed_count": status.get("latest_sync_run", {}).get("removed_count") if status.get("latest_sync_run") else None,
+                        "error_count": status.get("latest_sync_run", {}).get("error_count") if status.get("latest_sync_run") else None,
+                        "completed_at": status.get("latest_sync_run", {}).get("completed_at") if status.get("latest_sync_run") else None,
+                    } if status.get("latest_sync_run") else None,
+                    "diagnostics": status.get("diagnostics"),
+                    "warnings": status.get("warnings", []),
+                    "current_error": status.get("current_error"),
+                }
+            except Exception as exc:
+                result["google_photos"] = {
+                    "enabled": True,
+                    "error_collecting_status": str(exc),
+                }
+
+        return result
 
     def _collect_application_snapshot(self, pid: int) -> dict[str, Any]:
         return {
