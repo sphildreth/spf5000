@@ -1019,6 +1019,14 @@ class DoctorService:
                 service = GooglePhotosService()
                 status = service.get_status()
 
+                # Safely extract nested data from status dict
+                latest_sync = status.get("latest_sync_run")
+                device = status.get("device")
+                linked_account = status.get("linked_account")
+                diagnostics = status.get("diagnostics")
+                warnings = status.get("warnings", [])
+                current_error = status.get("current_error")
+
                 result["google_photos"] = {
                     "enabled": settings.google_photos_enabled,
                     "configured": settings.google_photos_configured,
@@ -1027,21 +1035,21 @@ class DoctorService:
                     "sync_cadence_seconds": settings.google_photos_sync_cadence_seconds,
                     "connection_state": status.get("connection_state"),
                     "cached_asset_count": status.get("cached_asset_count"),
-                    "has_linked_account": status.get("linked_account") is not None,
-                    "has_device": status.get("device") is not None,
-                    "media_sources_set": status.get("device", {}).get("media_sources_set") if status.get("device") else None,
+                    "has_linked_account": linked_account is not None,
+                    "has_device": device is not None,
+                    "media_sources_set": device.get("media_sources_set") if device else None,
                     "selected_media_sources_count": len(status.get("selected_media_sources", [])),
                     "latest_sync_run": {
-                        "status": status.get("latest_sync_run", {}).get("status") if status.get("latest_sync_run") else None,
-                        "trigger": status.get("latest_sync_run", {}).get("trigger") if status.get("latest_sync_run") else None,
-                        "imported_count": status.get("latest_sync_run", {}).get("imported_count") if status.get("latest_sync_run") else None,
-                        "removed_count": status.get("latest_sync_run", {}).get("removed_count") if status.get("latest_sync_run") else None,
-                        "error_count": status.get("latest_sync_run", {}).get("error_count") if status.get("latest_sync_run") else None,
-                        "completed_at": status.get("latest_sync_run", {}).get("completed_at") if status.get("latest_sync_run") else None,
-                    } if status.get("latest_sync_run") else None,
-                    "diagnostics": status.get("diagnostics"),
-                    "warnings": status.get("warnings", []),
-                    "current_error": status.get("current_error"),
+                        "status": latest_sync.status if latest_sync else None,
+                        "trigger": latest_sync.trigger if latest_sync else None,
+                        "imported_count": latest_sync.imported_count if latest_sync else None,
+                        "removed_count": latest_sync.removed_count if latest_sync else None,
+                        "error_count": latest_sync.error_count if latest_sync else None,
+                        "completed_at": latest_sync.completed_at if latest_sync else None,
+                    } if latest_sync else None,
+                    "diagnostics": diagnostics,
+                    "warnings": warnings if isinstance(warnings, list) else [],
+                    "current_error": current_error,
                 }
             except Exception as exc:
                 result["google_photos"] = {
