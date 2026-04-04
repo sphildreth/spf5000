@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { DisplayWeather } from '../api/types'
 
 interface WeatherWidgetProps {
@@ -34,8 +35,15 @@ export function WeatherWidget({ weather }: WeatherWidgetProps) {
     return null
   }
 
+  const isVerticalLayout = weather.position === 'left' || weather.position === 'right'
+  const scale = weather.scale >= 1 ? weather.scale : 1
+
   return (
-    <section className={`display-weather-widget display-weather-widget--${weather.position}`} aria-label="Current weather">
+    <section
+      className={`display-weather-widget display-weather-widget--${weather.position}${isVerticalLayout ? ' display-weather-widget--vertical' : ''}`}
+      aria-label="Current weather"
+      style={{ '--weather-widget-scale': String(scale) } as CSSProperties}
+    >
       <div className="display-weather-widget__icon" role="img" aria-label={ICON_LABELS[current.icon_token] ?? 'Weather'}>
         {ICONS[current.icon_token] ?? '☁'}
       </div>

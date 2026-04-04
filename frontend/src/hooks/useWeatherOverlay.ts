@@ -5,6 +5,7 @@ import type { DisplayAlerts, DisplayWeather } from '../api/types'
 const EMPTY_DISPLAY_WEATHER: DisplayWeather = {
   enabled: false,
   position: 'top-right',
+  scale: 1,
   units: 'f',
   show_precipitation: true,
   show_humidity: true,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { buildBackgroundStyle, getDefaultDisplayConfig } from '../api/display'
 import type {
   BackgroundFillMode,
@@ -85,15 +85,69 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
   const finalizeTimerRef = useRef<number | null>(null)
   const shuffleBagRef = useRef<string[]>([])
   const recentShuffleAssetIdsRef = useRef<string[]>([])
+  const priorityAssetIdsRef = useRef<string[]>([])
+  const priorityResumeAfterAssetIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    playlistRef.current = playlist
+  }, [playlist])
+
+  useEffect(() => {
+    layersRef.current = layers
+  }, [layers])
 
   const resetShuffleBagState = useCallback(() => {
     shuffleBagRef.current = []
     recentShuffleAssetIdsRef.current = []
   }, [])
 
+  const resetPriorityState = useCallback(() => {
+    priorityAssetIdsRef.current = []
+    priorityResumeAfterAssetIdRef.current = null
+  }, [])
+
   const rememberShownAsset = useCallback((assetId: string | null) => {
     if (!assetId) return
     recentShuffleAssetIdsRef.current = [...recentShuffleAssetIdsRef.current, assetId].slice(-SHUFFLE_BAG_RECENT_LIMIT)
+  }, [])
+
+  const queuePriorityAssetIds = useCallback((assetIds: string[], resumeAfterAssetId: string | null = null) => {
+    if (assetIds.length === 0) return
+
+    const queuedIds = new Set(priorityAssetIdsRef.current)
+    const newAssetIds = assetIds.filter((assetId) => !queuedIds.has(assetId))
+    if (newAssetIds.length === 0) return
+
+    priorityAssetIdsRef.current = [...priorityAssetIdsRef.current, ...newAssetIds]
+    if (resumeAfterAssetId) {
+      priorityResumeAfterAssetIdRef.current = resumeAfterAssetId
+    }
+  }, [])
+
+  const takeNextPriorityIndex = useCallback((items: PlaylistItem[]): number | null => {
+    if (priorityAssetIdsRef.current.length === 0) {
+      const resumeAfterAssetId = priorityResumeAfterAssetIdRef.current
+      if (resumeAfterAssetId) {
+        const resumeIndex = items.findIndex((item) => item.asset_id === resumeAfterAssetId)
+        if (resumeIndex >= 0) {
+          currentIndexRef.current = resumeIndex
+        }
+        priorityResumeAfterAssetIdRef.current = null
+      }
+      return null
+    }
+
+    const validIds = new Set(items.map((item) => item.asset_id))
+    const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id ?? null
+    priorityAssetIdsRef.current = priorityAssetIdsRef.current.filter(
+      (assetId) => validIds.has(assetId) && assetId !== currentItemId,
+    )
+
+    const nextId = priorityAssetIdsRef.current.shift()
+    if (!nextId) return null
+
+    const nextIndex = items.findIndex((item) => item.asset_id === nextId)
+    return nextIndex >= 0 ? nextIndex : null
   }, [])
 
   const clearTimers = useCallback(() => {
@@ -213,11 +267,14 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
       scheduleAdvance(configRef.current.slideshow_interval_seconds * 1000)
       return
     }
-    const nextIndex = usesShuffleBag(configRef.current)
-      ? takeNextShuffleBagIndex(items)
-      : selectNextIndex(currentIndexRef.current, items.length)
+    const priorityIndex = takeNextPriorityIndex(items)
+    const nextIndex = priorityIndex ?? (
+      usesShuffleBag(configRef.current)
+        ? takeNextShuffleBagIndex(items)
+        : selectNextIndex(currentIndexRef.current, items.length)
+    )
     await transitionToItem(nextIndex)
-  }, [scheduleAdvance, takeNextShuffleBagIndex, transitionToItem])
+  }, [scheduleAdvance, takeNextPriorityIndex, takeNextShuffleBagIndex, transitionToItem])
 
   const isSleepingRef = useRef(false)
   const isFullscreenAlertActiveRef = useRef(false)
@@ -228,7 +285,8 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         resetShuffleBagState()
       }
 
-      const firstIndex = usesShuffleBag(nextConfig) ? takeNextShuffleBagIndex(nextPlaylist.items) : 0
+      const priorityIndex = takeNextPriorityIndex(nextPlaylist.items)
+      const firstIndex = priorityIndex ?? (usesShuffleBag(nextConfig) ? takeNextShuffleBagIndex(nextPlaylist.items) : 0)
       const firstItem = nextPlaylist.items[firstIndex]
 
       if (!firstItem) {
@@ -236,6 +294,7 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         transitionRef.current = false
         clearTimers()
         resetShuffleBagState()
+        resetPriorityState()
         setLayers(INITIAL_LAYERS)
         setError(null)
         setLoading(false)
@@ -295,7 +354,7 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         })
       }
     },
-    [callbacks, clearTimers, rememberShownAsset, resetShuffleBagState, scheduleAdvance, takeNextShuffleBagIndex],
+    [callbacks, clearTimers, rememberShownAsset, resetPriorityState, resetShuffleBagState, scheduleAdvance, takeNextPriorityIndex, takeNextShuffleBagIndex],
   )
 
   return {
@@ -318,7 +377,9 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
     isSleepingRef,
     isFullscreenAlertActiveRef,
     clearTimers,
+    resetPriorityState,
     resetShuffleBagState,
+    queuePriorityAssetIds,
     scheduleAdvance,
     advanceToNext,
     bootPlaylist,

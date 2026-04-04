@@ -77,6 +77,7 @@ export async function getDisplayWeather(): Promise<DisplayWeather> {
   return {
     enabled: asBoolean(record?.enabled, false),
     position: normalizeWeatherPosition(record?.position),
+    scale: normalizeWeatherScale(record?.scale),
     units: normalizeWeatherUnits(record?.units),
     show_precipitation: asBoolean(record?.show_precipitation, true),
     show_humidity: asBoolean(record?.show_humidity, true),
@@ -107,6 +108,7 @@ function normalizeWeatherSettings(payload: unknown): WeatherSettings {
     weather_location: normalizeWeatherLocation(record?.weather_location),
     weather_units: normalizeWeatherUnits(record?.weather_units),
     weather_position: normalizeWeatherPosition(record?.weather_position),
+    weather_scale: normalizeWeatherScale(record?.weather_scale),
     weather_refresh_minutes: asNumber(record?.weather_refresh_minutes, 15),
     weather_show_precipitation: asBoolean(record?.weather_show_precipitation, true),
     weather_show_humidity: asBoolean(record?.weather_show_humidity, true),
@@ -231,10 +233,16 @@ function normalizeWeatherPosition(value: unknown): DisplayWeather['position'] {
     case 'top-right':
     case 'bottom-left':
     case 'bottom-right':
+    case 'left':
+    case 'right':
       return value
     default:
       return 'top-right'
   }
+}
+
+function normalizeWeatherScale(value: unknown): number {
+  return Math.min(Math.max(asNumber(value, 1), 1), 4)
 }
 
 function normalizeWeatherUnits(value: unknown): DisplayWeather['units'] {

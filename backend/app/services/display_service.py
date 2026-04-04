@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import asdict
+from datetime import datetime, timezone
 import hashlib
 import json
 import threading
@@ -22,6 +23,7 @@ from app.services.background_service import (
 LOGGER = structlog.get_logger(__name__)
 _PLAYLIST_CACHE_MAX_ENTRIES = 4
 _PLAYLIST_CACHE: OrderedDict[tuple[str, str], DisplayPlaylist] = OrderedDict()
+_PLAYLIST_CACHE_INVALIDATED_AT: datetime | None = None
 _PLAYLIST_CACHE_LOCK = threading.Lock()
 
 
@@ -64,6 +66,13 @@ class DisplayService:
         profile.background_fill_mode = background_fill_mode
         profile.shuffle_bag_enabled = shuffle_bag_enabled
         return profile
+
+    @staticmethod
+    def clear_runtime_cache() -> None:
+        global _PLAYLIST_CACHE_INVALIDATED_AT
+        with _PLAYLIST_CACHE_LOCK:
+            _PLAYLIST_CACHE.clear()
+            _PLAYLIST_CACHE_INVALIDATED_AT = None
 
     def update_config(self, updates: dict[str, object]) -> DisplayProfile:
         # Handle settings-backed display fields separately — persisted in settings, not display_profiles.
@@ -192,6 +201,18 @@ class DisplayService:
         self._store_cached_playlist(cache_key, playlist)
         return playlist
 
+    def refresh_playlist_cache(self) -> str:
+        global _PLAYLIST_CACHE_INVALIDATED_AT
+        invalidated_at = datetime.now(timezone.utc)
+        with _PLAYLIST_CACHE_LOCK:
+            _PLAYLIST_CACHE.clear()
+            _PLAYLIST_CACHE_INVALIDATED_AT = invalidated_at
+        LOGGER.info(
+            "display_playlist_cache_refreshed",
+            invalidated_at=invalidated_at.isoformat(),
+        )
+        return invalidated_at.isoformat()
+
     def _compute_playlist_revision(
         self,
         *,
@@ -273,4 +294,38 @@ class DisplayService:
 
     def count_new_assets_since(self, since_timestamp: str, collection_id: str | None = None) -> int:
         """Count assets imported since a given timestamp."""
-        return self.asset_repo.count_new_assets_since(since_timestamp, collection_id)
+        count = self.asset_repo.count_new_assets_since(since_timestamp, collection_id)
+        if self._was_cache_refreshed_since(since_timestamp):
+            return count + 1
+        return count
+
+    @staticmethod
+    def _was_cache_refreshed_since(since_timestamp: str) -> bool:
+        with _PLAYLIST_CACHE_LOCK:
+            invalidated_at = _PLAYLIST_CACHE_INVALIDATED_AT
+
+        if invalidated_at is None:
+            return False
+
+        parsed_since = DisplayService._parse_iso_timestamp(since_timestamp)
+        if parsed_since is None:
+            return False
+
+        return invalidated_at > parsed_since
+
+    @staticmethod
+    def _parse_iso_timestamp(value: str) -> datetime | None:
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if normalized.endswith("Z"):
+            normalized = f"{normalized[:-1]}+00:00"
+
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)

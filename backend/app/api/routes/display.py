@@ -5,6 +5,7 @@ from app.schemas.display import (
     DisplayConfigUpdateRequest,
     DisplayPlaylistResponse,
     DisplayProfileResponse,
+    DisplayRefreshResponse,
     PublicDisplayPlaylistResponse,
 )
 from app.schemas.weather import DisplayAlertsResponse, DisplayWeatherResponse
@@ -37,6 +38,14 @@ def update_display_config(
 ) -> DisplayProfileResponse:
     updated = svc.update_config(request.model_dump(exclude_unset=True))
     return DisplayProfileResponse.from_domain(updated)
+
+
+@router.post("/refresh", response_model=DisplayRefreshResponse, dependencies=_admin_dep)
+def refresh_display_cache(
+    svc: DisplayService = Depends(get_display_service),
+) -> DisplayRefreshResponse:
+    invalidated_at = svc.refresh_playlist_cache()
+    return DisplayRefreshResponse(refreshed=True, invalidated_at=invalidated_at)
 
 
 @router.get(

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
 AlertEscalationMode = Literal["ignore", "badge", "banner", "fullscreen", "fullscreen_repeat"]
 WeatherUnits = Literal["f", "c"]
-WeatherWidgetPosition = Literal["top-left", "top-right", "bottom-left", "bottom-right"]
+WeatherWidgetPosition = Literal["top-left", "top-right", "bottom-left", "bottom-right", "left", "right"]
 AlertSeverity = Literal["unknown", "minor", "moderate", "severe", "extreme"]
 
 _VALID_UNITS = {"f", "c"}
-_VALID_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right"}
+_VALID_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right", "left", "right"}
 _VALID_SEVERITIES = {"unknown", "minor", "moderate", "severe", "extreme"}
 
 
@@ -31,6 +32,7 @@ class WeatherSettings:
     weather_location: WeatherLocation = field(default_factory=WeatherLocation)
     weather_units: WeatherUnits = "f"
     weather_position: WeatherWidgetPosition = "top-right"
+    weather_scale: float = 1.0
     weather_refresh_minutes: int = 15
     weather_show_precipitation: bool = True
     weather_show_humidity: bool = True
@@ -154,6 +156,13 @@ def normalize_weather_position(value: str) -> WeatherWidgetPosition:
     return normalized  # type: ignore[return-value]
 
 
+def normalize_weather_scale(value: float | int | str) -> float:
+    scale = float(value)
+    if not math.isfinite(scale):
+        raise ValueError("weather_scale must be a finite number")
+    return max(1.0, min(scale, 4.0))
+
+
 def normalize_alert_severity(value: str) -> AlertSeverity:
     normalized = value.strip().lower() or "unknown"
     if normalized not in _VALID_SEVERITIES:
@@ -172,6 +181,7 @@ def normalize_weather_settings(settings: WeatherSettings) -> WeatherSettings:
         weather_location=location,
         weather_units=normalize_weather_units(settings.weather_units),
         weather_position=normalize_weather_position(settings.weather_position),
+        weather_scale=normalize_weather_scale(settings.weather_scale),
         weather_refresh_minutes=max(1, min(int(settings.weather_refresh_minutes), 180)),
         weather_show_precipitation=bool(settings.weather_show_precipitation),
         weather_show_humidity=bool(settings.weather_show_humidity),

@@ -51,6 +51,7 @@ DEFAULT_SETTINGS = {
     "weather_location": '{"label":"","latitude":null,"longitude":null}',
     "weather_units": "f",
     "weather_position": "top-right",
+    "weather_scale": "1.0",
     "weather_refresh_minutes": "15",
     "weather_show_precipitation": "1",
     "weather_show_humidity": "1",

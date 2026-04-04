@@ -248,6 +248,7 @@ def test_weather_get_settings_endpoint(test_client: TestClient) -> None:
     body = response.json()
     assert "weather_enabled" in body
     assert "weather_units" in body
+    assert "weather_scale" in body
 
 
 def test_weather_put_settings_endpoint(test_client: TestClient) -> None:
@@ -263,7 +264,8 @@ def test_weather_put_settings_endpoint(test_client: TestClient) -> None:
                 "longitude": -94.5786,
             },
             "weather_units": "f",
-            "weather_position": "top-right",
+            "weather_position": "left",
+            "weather_scale": 2,
             "weather_refresh_minutes": 15,
             "weather_show_precipitation": True,
             "weather_show_humidity": True,
@@ -277,4 +279,5 @@ def test_weather_put_settings_endpoint(test_client: TestClient) -> None:
         },
     )
     assert response.status_code == 200
-    assert response.json()["weather_position"] == "top-right"
+    assert response.json()["weather_position"] == "left"
+    assert response.json()["weather_scale"] == 2

@@ -75,9 +75,11 @@ export function DisplayPage() {
     currentIndexRef,
     startedRef,
     transitionRef,
+    advanceTimerRef,
     clearTimers,
     scheduleAdvance,
     bootPlaylist,
+    queuePriorityAssetIds,
   } = useSlideshowEngine(slideshowCallbacks)
   const {
     weather,
@@ -210,13 +212,22 @@ export function DisplayPage() {
         }
 
         const nextPlaylist = playlistResult.value
+        const previousPlaylist = playlistRef.current
+        const previousAssetIds = new Set(previousPlaylist.items.map((item) => item.asset_id))
         const nextWeather = weatherResult.status === 'fulfilled' ? weatherResult.value : EMPTY_DISPLAY_WEATHER
         const nextAlerts = alertsResult.status === 'fulfilled' ? alertsResult.value : EMPTY_DISPLAY_ALERTS
         const nextConfig = nextPlaylist.profile
+        const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id ?? null
+        const newAssetIds = startedRef.current
+          ? nextPlaylist.items
+              .map((item) => item.asset_id)
+              .filter((assetId) => !previousAssetIds.has(assetId))
+          : []
 
         configRef.current = nextConfig
         playlistRef.current = nextPlaylist
         setPlaylist(nextPlaylist)
+        queuePriorityAssetIds(newAssetIds, currentItemId)
         setConfig(nextConfig)
         setWeather(nextWeather)
         setAlerts(nextAlerts)
@@ -230,7 +241,6 @@ export function DisplayPage() {
         })
         updateSleepState(nextPlaylist.sleep_schedule)
 
-        const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id
         const currentIndex = currentItemId ? nextPlaylist.items.findIndex((item) => item.asset_id === currentItemId) : -1
 
         if (!startedRef.current || currentIndex === -1) {
@@ -241,7 +251,9 @@ export function DisplayPage() {
         currentIndexRef.current = currentIndex
         setError(null)
         setLoading(false)
-        scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
+        if (advanceTimerRef.current === null) {
+          scheduleAdvance(nextConfig.slideshow_interval_seconds * 1000)
+        }
       } catch (caught) {
         setLoading(false)
         if (!startedRef.current) {
@@ -261,11 +273,13 @@ export function DisplayPage() {
       EMPTY_DISPLAY_ALERTS,
       EMPTY_DISPLAY_WEATHER,
       activeLayerRef,
+      advanceTimerRef,
       bootPlaylist,
       configRef,
       currentIndexRef,
       layersRef,
       playlistRef,
+      queuePriorityAssetIds,
       scheduleAdvance,
       setAlerts,
       setError,

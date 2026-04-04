@@ -14,6 +14,18 @@ interface WeatherPageData {
   alerts: WeatherAlertsState
 }
 
+const WEATHER_POSITION_OPTIONS: ReadonlyArray<{
+  value: WeatherSettings['weather_position']
+  label: string
+}> = [
+  { value: 'top-left', label: 'Top left' },
+  { value: 'top-right', label: 'Top right' },
+  { value: 'bottom-left', label: 'Bottom left' },
+  { value: 'bottom-right', label: 'Bottom right' },
+  { value: 'left', label: 'Vertical left' },
+  { value: 'right', label: 'Vertical right' },
+]
+
 export function WeatherPage() {
   const { data, loading, error, reload, setData } = useAsyncData<WeatherPageData>(
     async () => {
@@ -203,11 +215,35 @@ export function WeatherPage() {
                       )
                     }
                   >
-                    <option value="top-left">Top left</option>
-                    <option value="top-right">Top right</option>
-                    <option value="bottom-left">Bottom left</option>
-                    <option value="bottom-right">Bottom right</option>
+                    {WEATHER_POSITION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
+                </label>
+
+                <label>
+                  <span>Widget scale (1× = current size)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={4}
+                    step={0.25}
+                    value={draft.weather_scale}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              weather_scale: event.target.value
+                                ? Math.min(Math.max(Number(event.target.value), 1), 4)
+                                : 1,
+                            }
+                          : current,
+                      )
+                    }
+                  />
                 </label>
 
                 <label>

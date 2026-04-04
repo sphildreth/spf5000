@@ -19,6 +19,7 @@ from app.runtime_coordinators import (
     start_background_coordinators,
     stop_background_coordinators,
 )
+from app.services.display_service import DisplayService
 
 _LOG = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def _resolve_session_secret() -> str:
 async def lifespan(app: FastAPI):
     configure_logging()
     initialize_runtime()
+    DisplayService.clear_runtime_cache()
     start_background_coordinators(app)
     try:
         yield

@@ -29,7 +29,8 @@ class WeatherSettingsResponse(BaseModel):
     weather_provider: str
     weather_location: WeatherLocationPayload
     weather_units: Literal["f", "c"]
-    weather_position: Literal["top-left", "top-right", "bottom-left", "bottom-right"]
+    weather_position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "left", "right"]
+    weather_scale: float = Field(ge=1, le=4)
     weather_refresh_minutes: int
     weather_show_precipitation: bool
     weather_show_humidity: bool
@@ -53,7 +54,8 @@ class WeatherSettingsUpdateRequest(BaseModel):
     weather_provider: str = Field(min_length=1, max_length=60)
     weather_location: WeatherLocationPayload
     weather_units: Literal["f", "c"]
-    weather_position: Literal["top-left", "top-right", "bottom-left", "bottom-right"]
+    weather_position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "left", "right"]
+    weather_scale: float = Field(ge=1, le=4)
     weather_refresh_minutes: int = Field(ge=1, le=180)
     weather_show_precipitation: bool
     weather_show_humidity: bool
@@ -82,6 +84,7 @@ class WeatherSettingsUpdateRequest(BaseModel):
             ),
             weather_units=self.weather_units,
             weather_position=self.weather_position,
+            weather_scale=self.weather_scale,
             weather_refresh_minutes=self.weather_refresh_minutes,
             weather_show_precipitation=self.weather_show_precipitation,
             weather_show_humidity=self.weather_show_humidity,
@@ -186,7 +189,8 @@ class WeatherAlertsResponse(BaseModel):
 
 class DisplayWeatherResponse(BaseModel):
     enabled: bool
-    position: Literal["top-left", "top-right", "bottom-left", "bottom-right"]
+    position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "left", "right"]
+    scale: float = Field(ge=1, le=4)
     units: Literal["f", "c"]
     show_precipitation: bool
     show_humidity: bool

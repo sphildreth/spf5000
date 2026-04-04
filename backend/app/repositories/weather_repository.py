@@ -29,6 +29,7 @@ _WEATHER_SETTING_KEYS = (
     "weather_location",
     "weather_units",
     "weather_position",
+    "weather_scale",
     "weather_refresh_minutes",
     "weather_show_precipitation",
     "weather_show_humidity",
@@ -54,8 +55,9 @@ class WeatherRepository:
         with get_connection() as conn:
             if is_null_connection(conn):
                 return _DEFAULT_SETTINGS
+            placeholders = ", ".join("?" for _ in _WEATHER_SETTING_KEYS)
             cursor = conn.execute(
-                "select key, value from settings where key in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"select key, value from settings where key in ({placeholders})",
                 _WEATHER_SETTING_KEYS,
             )
             values = {key: value for key, value in cursor.fetchall()}
@@ -73,6 +75,7 @@ class WeatherRepository:
                 ),
                 weather_units=str(values.get("weather_units", _DEFAULT_SETTINGS.weather_units)),
                 weather_position=str(values.get("weather_position", _DEFAULT_SETTINGS.weather_position)),
+                weather_scale=float(values.get("weather_scale", _DEFAULT_SETTINGS.weather_scale)),
                 weather_refresh_minutes=int(values.get("weather_refresh_minutes", _DEFAULT_SETTINGS.weather_refresh_minutes)),
                 weather_show_precipitation=bool(
                     int(values.get("weather_show_precipitation", 1 if _DEFAULT_SETTINGS.weather_show_precipitation else 0))
@@ -113,6 +116,7 @@ class WeatherRepository:
             ),
             "weather_units": normalized.weather_units,
             "weather_position": normalized.weather_position,
+            "weather_scale": str(normalized.weather_scale),
             "weather_refresh_minutes": str(normalized.weather_refresh_minutes),
             "weather_show_precipitation": "1" if normalized.weather_show_precipitation else "0",
             "weather_show_humidity": "1" if normalized.weather_show_humidity else "0",

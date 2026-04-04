@@ -66,8 +66,13 @@ class DisplayConfigUpdateRequest(BaseModel):
         if value not in VALID_BACKGROUND_FILL_MODES:
             raise ValueError(
                 f"background_fill_mode must be one of {sorted(VALID_BACKGROUND_FILL_MODES)!r}, got {value!r}"
-            )
+        )
         return value
+
+
+class DisplayRefreshResponse(BaseModel):
+    refreshed: bool
+    invalidated_at: str
 
 
 class PlaylistItemBackgroundResponse(BaseModel):

@@ -49,6 +49,7 @@ function displayWeather(): DisplayWeather {
   return {
     enabled: false,
     position: 'top-right',
+    scale: 1,
     units: 'f',
     show_precipitation: true,
     show_humidity: true,

@@ -26,6 +26,7 @@ function weather(overrides: Partial<DisplayWeather> = {}): DisplayWeather {
   return {
     enabled: true,
     position: 'top-right',
+    scale: 1,
     units: 'f',
     show_precipitation: false,
     show_humidity: false,
@@ -108,6 +109,36 @@ describe('WeatherWidget', () => {
 
   it('has region role for weather section', () => {
     render(<WeatherWidget weather={weather()} />)
-    expect(screen.getByRole('region', { hidden: true })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Current weather' })).toBeInTheDocument()
+  })
+
+  it('applies the configured scale while preserving corner layout classes', () => {
+    render(<WeatherWidget weather={weather({ position: 'bottom-left', scale: 1.75 })} />)
+
+    const widget = screen.getByRole('region', { name: 'Current weather' })
+    expect(widget).toHaveClass('display-weather-widget', 'display-weather-widget--bottom-left')
+    expect(widget).not.toHaveClass('display-weather-widget--vertical')
+    expect(widget).toHaveStyle({ '--weather-widget-scale': '1.75' })
+  })
+
+  it('renders the new left and right positions with the vertical layout class', () => {
+    const { rerender } = render(<WeatherWidget weather={weather({ position: 'left', scale: 2, show_wind: true })} />)
+
+    let widget = screen.getByRole('region', { name: 'Current weather' })
+    expect(widget).toHaveClass('display-weather-widget--left', 'display-weather-widget--vertical')
+    expect(widget).toHaveStyle({ '--weather-widget-scale': '2' })
+    expect(screen.getByText(/8 mph S/i)).toBeInTheDocument()
+
+    rerender(<WeatherWidget weather={weather({ position: 'right', scale: 2.5, show_humidity: true })} />)
+
+    widget = screen.getByRole('region', { name: 'Current weather' })
+    expect(widget).toHaveClass('display-weather-widget--right', 'display-weather-widget--vertical')
+    expect(widget).toHaveStyle({ '--weather-widget-scale': '2.5' })
+    expect(screen.getByText('Humidity')).toBeInTheDocument()
+  })
+
+  it('clamps scales below 1x back to the default size', () => {
+    render(<WeatherWidget weather={weather({ scale: 0.5 })} />)
+    expect(screen.getByRole('region', { name: 'Current weather' })).toHaveStyle({ '--weather-widget-scale': '1' })
   })
 })

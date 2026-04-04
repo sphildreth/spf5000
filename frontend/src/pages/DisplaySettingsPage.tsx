@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { getCollections } from '../api/collections'
-import { getDisplayConfig, updateDisplayConfig } from '../api/display'
+import { getDisplayConfig, refreshDisplayCache, updateDisplayConfig } from '../api/display'
 import { getSettingsTimeReference, getSleepSchedule, updateSleepSchedule } from '../api/settings'
 import {
   asBackgroundFillMode,
@@ -50,6 +50,9 @@ export function DisplaySettingsPage() {
   const [sleepDraft, setSleepDraft] = useState<SleepSchedule | null>(null)
   const [sleepSaveError, setSleepSaveError] = useState<string | null>(null)
   const [sleepSaved, setSleepSaved] = useState(false)
+  const [cacheRefreshError, setCacheRefreshError] = useState<string | null>(null)
+  const [cacheRefreshSuccess, setCacheRefreshSuccess] = useState(false)
+  const [cacheRefreshing, setCacheRefreshing] = useState(false)
   const [clockElapsedMs, setClockElapsedMs] = useState(0)
 
   useEffect(() => {
@@ -159,25 +162,40 @@ export function DisplaySettingsPage() {
     try {
       setSaveError(null)
       setSaved(false)
-        const request: DisplayConfigUpdateRequest = {
-          name: draft.name.trim(),
-          selected_collection_id: draft.selected_collection_id,
-          slideshow_interval_seconds: draft.slideshow_interval_seconds,
-          transition_mode: draft.transition_mode,
-          transition_duration_ms: draft.transition_duration_ms,
-          fit_mode: draft.fit_mode,
-          shuffle_enabled: draft.shuffle_enabled,
-          shuffle_bag_enabled: draft.shuffle_bag_enabled,
-          idle_message: draft.idle_message,
-          refresh_interval_seconds: draft.refresh_interval_seconds,
-          background_fill_mode: draft.background_fill_mode,
-        }
+      const request: DisplayConfigUpdateRequest = {
+        name: draft.name.trim(),
+        selected_collection_id: draft.selected_collection_id,
+        slideshow_interval_seconds: draft.slideshow_interval_seconds,
+        transition_mode: draft.transition_mode,
+        transition_duration_ms: draft.transition_duration_ms,
+        fit_mode: draft.fit_mode,
+        shuffle_enabled: draft.shuffle_enabled,
+        shuffle_bag_enabled: draft.shuffle_bag_enabled,
+        idle_message: draft.idle_message,
+        refresh_interval_seconds: draft.refresh_interval_seconds,
+        background_fill_mode: draft.background_fill_mode,
+      }
       const updated = await updateDisplayConfig(request)
       setData((current) => (current ? { ...current, config: updated } : current))
       setDraft(updated)
       setSaved(true)
     } catch (caught) {
       setSaveError(caught instanceof Error ? caught.message : 'Unable to save display config.')
+    }
+  }
+
+  async function handleCacheRefresh() {
+    try {
+      setCacheRefreshing(true)
+      setCacheRefreshError(null)
+      setCacheRefreshSuccess(false)
+      await refreshDisplayCache()
+      await reload()
+      setCacheRefreshSuccess(true)
+    } catch (caught) {
+      setCacheRefreshError(caught instanceof Error ? caught.message : 'Unable to refresh the display cache.')
+    } finally {
+      setCacheRefreshing(false)
     }
   }
 
@@ -204,6 +222,14 @@ export function DisplaySettingsPage() {
       {saved ? <StatusNotice variant="success" title="Display settings saved" /> : null}
       {sleepSaveError ? <StatusNotice variant="error" title="Could not save sleep schedule" detail={sleepSaveError} /> : null}
       {sleepSaved ? <StatusNotice variant="success" title="Sleep schedule saved" /> : null}
+      {cacheRefreshError ? <StatusNotice variant="error" title="Could not refresh display cache" detail={cacheRefreshError} /> : null}
+      {cacheRefreshSuccess ? (
+        <StatusNotice
+          variant="success"
+          title="Display cache refresh requested"
+          detail="The backend accepted the request. /display should rebuild its playlist cache on the next fetch."
+        />
+      ) : null}
 
       {draft ? (
         <div className="two-column-grid">
@@ -486,6 +512,35 @@ export function DisplaySettingsPage() {
             </dl>
             <p className="card-muted">
               The display renderer keeps two image layers mounted so the next frame is decoded before the slide begins.
+            </p>
+          </Card>
+
+          <Card
+            title="Playlist cache"
+            eyebrow="Manual refresh"
+            actions={
+              <button type="button" className="button" disabled={cacheRefreshing} onClick={() => void handleCacheRefresh()}>
+                {cacheRefreshing ? 'Refreshing…' : 'Reset cache'}
+              </button>
+            }
+          >
+            <dl className="detail-list detail-list--compact">
+              <div>
+                <dt>Display route</dt>
+                <dd>/display</dd>
+              </div>
+              <div>
+                <dt>Current collection</dt>
+                <dd>{selectedCollectionName}</dd>
+              </div>
+              <div>
+                <dt>Automatic refresh</dt>
+                <dd>Every {draft.refresh_interval_seconds} seconds</dd>
+              </div>
+            </dl>
+            <p className="card-muted">
+              Use this when the fullscreen display is still showing an older playlist after imports or collection changes.
+              The button asks the backend to clear the cached display playlist so the next /display fetch rebuilds it.
             </p>
           </Card>
 

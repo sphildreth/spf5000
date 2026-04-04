@@ -56,7 +56,7 @@ Technical household member who installs, configures, and maintains the device.
 - As a household member, I want images to slide smoothly from left to right without a full black frame appearing between photos.
 - As a household member, I want portrait and mixed-aspect photos to use a tasteful image-derived background instead of always showing hard black bars.
 - As a household member, I want the frame to go dark automatically during configured quiet hours in the intended display timezone and wake back up on its own.
-- As a household member, I want a compact weather widget so the frame is useful even when nothing needs urgent attention.
+- As a household member, I want a configurable weather widget size and side placement so weather stays readable without unnecessarily covering photos.
 - As a household member, I want severe weather alerts to become highly visible without looking like a broken slideshow.
 
 ### Administration
@@ -90,7 +90,7 @@ Technical household member who installs, configures, and maintains the device.
 - Treat `adaptive_auto` as a display-behavior policy that chooses among supported treatments based on aspect mismatch and available cached metadata.
 - Support a configurable sleep window evaluated in an app-selected display timezone, defaulting to the Pi-local timezone when no explicit display timezone is set, with an inclusive start time and exclusive end time.
 - During the sleep window, render a solid black fullscreen state, pause slideshow advancement, and resume automatically when the window ends.
-- Render an optional weather widget from cached backend weather state without blocking slideshow playback.
+- Render an optional weather widget from cached backend weather state without blocking slideshow playback, including configurable scale plus corner or vertical side placement.
 - Render badge, banner, fullscreen, and repeating-fullscreen weather alert behaviors based on deterministic escalation rules.
 - Keep sleep mode higher priority than weather and alert presentation by default.
 

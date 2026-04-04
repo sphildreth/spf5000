@@ -175,12 +175,12 @@ export function SettingsPage() {
               </div>
             </form>
 
-            {saveState === 'saved' ? (
-              <StatusNotice variant="success" title="Settings saved" detail="Future imports will use the updated derivative sizes." />
-            ) : null}
-            {saveState === 'error' ? (
-              <StatusNotice variant="error" title="Could not save settings" detail={saveError ?? undefined} />
-            ) : null}
+          {saveState === 'saved' ? (
+            <StatusNotice variant="success" title="Settings saved" detail="Future imports will use the updated derivative sizes." />
+          ) : null}
+          {saveState === 'error' ? (
+            <StatusNotice variant="error" title="Could not save settings" detail={saveError ?? undefined} />
+          ) : null}
           </Card>
 
           <Card title="Stored playback defaults" eyebrow="Also available on /display-settings">

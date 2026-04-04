@@ -154,6 +154,7 @@ class WeatherService:
         return {
             "enabled": settings.weather_enabled,
             "position": settings.weather_position,
+            "scale": settings.weather_scale,
             "units": settings.weather_units,
             "show_precipitation": settings.weather_show_precipitation,
             "show_humidity": settings.weather_show_humidity,

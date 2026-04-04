@@ -380,12 +380,15 @@ export interface WeatherLocation {
   longitude: number | null
 }
 
+export type WeatherWidgetPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'left' | 'right'
+
 export interface WeatherSettings {
   weather_enabled: boolean
   weather_provider: string
   weather_location: WeatherLocation
   weather_units: 'f' | 'c'
-  weather_position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  weather_position: WeatherWidgetPosition
+  weather_scale: number
   weather_refresh_minutes: number
   weather_show_precipitation: boolean
   weather_show_humidity: boolean
@@ -489,7 +492,8 @@ export interface WeatherAlertsState {
 
 export interface DisplayWeather {
   enabled: boolean
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  position: WeatherWidgetPosition
+  scale: number
   units: 'f' | 'c'
   show_precipitation: boolean
   show_humidity: boolean

@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from './http'
+import { apiGet, apiPostEmpty, apiPut } from './http'
 import {
   asArray,
   asBackgroundFillMode,
@@ -68,6 +68,10 @@ export async function getNewAssetsCount(since: string, collectionId?: string | n
     params.set('collection_id', collectionId)
   }
   return apiGet(`/api/display/new-assets/count?${params.toString()}`)
+}
+
+export async function refreshDisplayCache(): Promise<void> {
+  await apiPostEmpty<unknown>('/api/display/refresh')
 }
 
 export function getDefaultDisplayConfig(): DisplayConfig {

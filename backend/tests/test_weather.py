@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import decentdb
 
+from app.db.connection import get_connection
 from app.models.weather import (
     WeatherAlert,
     WeatherCurrentConditions,
@@ -9,6 +10,7 @@ from app.models.weather import (
     WeatherProviderState,
     WeatherRefreshRun,
     WeatherSettings,
+    WeatherWidgetPosition,
 )
 from app.repositories.base import utc_now
 from app.repositories.weather_repository import WeatherRepository
@@ -16,13 +18,19 @@ from app.services.weather_service import WeatherService
 from app.weather.policies import resolve_active_alerts, select_dominant_alert
 
 
-def _weather_settings(*, units: str = "f") -> WeatherSettings:
+def _weather_settings(
+    *,
+    units: str = "f",
+    position: WeatherWidgetPosition = "top-right",
+    scale: float = 1.0,
+) -> WeatherSettings:
     return WeatherSettings(
         weather_enabled=True,
         weather_provider="nws",
         weather_location=WeatherLocation(label="Overland Park, KS", latitude=38.9822, longitude=-94.6708),
         weather_units=units,  # type: ignore[arg-type]
-        weather_position="top-right",
+        weather_position=position,
+        weather_scale=scale,
         weather_refresh_minutes=15,
         weather_show_precipitation=True,
         weather_show_humidity=True,
@@ -92,8 +100,14 @@ def _alert(
     )
 
 
-def _seed_weather_cache(repo: WeatherRepository, *, units: str = "f") -> None:
-    repo.update_settings(_weather_settings(units=units))
+def _seed_weather_cache(
+    repo: WeatherRepository,
+    *,
+    units: str = "f",
+    position: WeatherWidgetPosition = "top-right",
+    scale: float = 1.0,
+) -> None:
+    repo.update_settings(_weather_settings(units=units, position=position, scale=scale))
     repo.upsert_provider_state(
         WeatherProviderState(
             provider_name="nws",
@@ -144,6 +158,7 @@ def test_weather_settings_endpoint_rejects_missing_coordinates(test_client) -> N
             "weather_location": {"label": "Missing coords", "latitude": None, "longitude": None},
             "weather_units": "f",
             "weather_position": "top-right",
+            "weather_scale": 1,
             "weather_refresh_minutes": 15,
             "weather_show_precipitation": True,
             "weather_show_humidity": True,
@@ -161,11 +176,13 @@ def test_weather_settings_endpoint_rejects_missing_coordinates(test_client) -> N
 
 def test_weather_repository_persists_settings_and_cached_alerts(test_client) -> None:
     repo = WeatherRepository()
-    _seed_weather_cache(repo)
+    _seed_weather_cache(repo, position="left", scale=2.0)
 
     settings = repo.get_settings()
     assert settings.weather_enabled is True
     assert settings.weather_location.label == "Overland Park, KS"
+    assert settings.weather_position == "left"
+    assert settings.weather_scale == 2.0
 
     current = repo.get_current_conditions("nws", "38.9822,-94.6708")
     assert current is not None
@@ -178,11 +195,13 @@ def test_weather_repository_persists_settings_and_cached_alerts(test_client) -> 
 
 def test_display_weather_endpoint_formats_units_from_cached_conditions(test_client) -> None:
     repo = WeatherRepository()
-    _seed_weather_cache(repo, units="c")
+    _seed_weather_cache(repo, units="c", position="right", scale=2.5)
 
     response_c = test_client.get("/api/display/weather")
     assert response_c.status_code == 200
     body_c = response_c.json()
+    assert body_c["position"] == "right"
+    assert body_c["scale"] == 2.5
     assert body_c["current_conditions"]["temperature"] == 20
     assert body_c["current_conditions"]["temperature_unit"] == "C"
     assert body_c["current_conditions"]["wind_speed"] == 19
@@ -196,6 +215,29 @@ def test_display_weather_endpoint_formats_units_from_cached_conditions(test_clie
     assert body_f["current_conditions"]["temperature_unit"] == "F"
     assert body_f["current_conditions"]["wind_speed"] == 12
     assert body_f["current_conditions"]["wind_unit"] == "mph"
+
+
+def test_weather_repository_defaults_missing_scale_and_position_settings(test_client) -> None:
+    repo = WeatherRepository()
+    repo.update_settings(_weather_settings(position="left", scale=2.25))
+
+    with get_connection() as conn:
+        conn.execute("delete from settings where key in (?, ?)", ("weather_position", "weather_scale"))
+
+    settings = repo.get_settings()
+    assert settings.weather_position == "top-right"
+    assert settings.weather_scale == 1.0
+
+
+def test_display_weather_endpoint_returns_vertical_position_and_scale(test_client) -> None:
+    repo = WeatherRepository()
+    _seed_weather_cache(repo, position="left", scale=2.0)
+
+    response = test_client.get("/api/display/weather")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["position"] == "left"
+    assert body["scale"] == 2.0
 
 
 def test_display_alerts_endpoint_returns_dominant_alert_and_repeat_metadata(test_client) -> None:

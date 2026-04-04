@@ -147,6 +147,7 @@ Key/value device settings, including:
 - `weather_location`
 - `weather_units`
 - `weather_position`
+- `weather_scale`
 - `weather_refresh_minutes`
 - `weather_show_precipitation`
 - `weather_show_humidity`
@@ -359,13 +360,13 @@ V1 supports these end-to-end settings:
 - display timezone selection with Pi-local fallback
 - sleep start and end times evaluated in the configured display timezone
 - weather widget enabled/disabled
-- weather widget position and units
+- weather widget position, scale, and units
 - weather detail toggles for precipitation, humidity, and wind
 - alert minimum severity, fullscreen allowance, and repeat cadence
 
 ### Weather and alert presentation
 
-- the weather widget is a persistent overlay separate from slideshow layers
+- the weather widget is a persistent overlay separate from slideshow layers, with configurable corner or vertical side placement and scale
 - banner and badge alerts stay outside the slideshow transition machinery
 - fullscreen alerts pause slideshow timers instead of changing the dual-layer renderer itself
 - `fullscreen_repeat` returns to a banner between repeated fullscreen takeovers
