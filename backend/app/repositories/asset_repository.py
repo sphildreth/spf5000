@@ -398,6 +398,40 @@ class AssetRepository:
                     (utc_now(), asset_id),
                 )
 
+    def delete_asset_fully(self, asset_id: str) -> list[str]:
+        """Delete an asset entirely from DB and return list of variant file paths to remove.
+
+        Returns the list of local file paths that should be deleted from disk.
+        This method removes all DB references (variants, collection memberships, asset record).
+        """
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return []
+
+            # Get variant paths before deleting them
+            variant_paths: list[str] = []
+            variants_cursor = conn.execute(
+                "select local_path from asset_variants where asset_id = ?",
+                (asset_id,),
+            )
+            for row in variants_cursor.fetchall():
+                variant_paths.append(str(row[0]))
+
+            # Also get the original file path
+            asset_row = conn.execute(
+                "select local_original_path from assets where id = ?",
+                (asset_id,),
+            ).fetchone()
+            if asset_row:
+                variant_paths.append(str(asset_row[0]))
+
+            # Delete in correct order: variants, collection_assets, then asset
+            conn.execute("delete from asset_variants where asset_id = ?", (asset_id,))
+            conn.execute("delete from collection_assets where asset_id = ?", (asset_id,))
+            conn.execute("delete from assets where id = ?", (asset_id,))
+
+            return variant_paths
+
     def get_variant(self, asset_id: str, kind: str) -> AssetVariant | None:
         with get_connection() as conn:
             if is_null_connection(conn):

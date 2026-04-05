@@ -172,3 +172,8 @@ class BulkRemoveResponse(BaseModel):
     removed_count: int
     deactivated_count: int
     errors: list[BulkRemoveFailure]
+
+
+class AssetDeleteResponse(BaseModel):
+    deleted_files: int
+    collections_removed: int

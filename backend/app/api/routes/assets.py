@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from app.api.deps import require_admin
 from app.schemas.asset import (
+    AssetDeleteResponse,
     AssetListItemResponse,
     AssetResponse,
     AssetUploadResponse,
@@ -93,6 +94,25 @@ def bulk_remove_assets(
         removed_count=summary.removed_count,
         deactivated_count=summary.deactivated_count,
         errors=[BulkRemoveFailure(**e) for e in summary.errors],
+    )
+
+
+@router.delete(
+    "/{asset_id}/delete",
+    response_model=AssetDeleteResponse,
+    dependencies=_admin_dep,
+)
+def delete_asset_fully(
+    asset_id: str,
+    svc: AssetService = Depends(get_asset_service),
+) -> AssetDeleteResponse:
+    try:
+        summary = svc.delete_asset(asset_id=asset_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AssetDeleteResponse(
+        deleted_files=summary["deleted_files"],
+        collections_removed=summary["collections_removed"],
     )
 
 

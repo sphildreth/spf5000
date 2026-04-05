@@ -1,4 +1,4 @@
-import { apiDeleteEmpty, apiGet, apiPost, apiPostFormData } from './http'
+import { apiDelete, apiDeleteEmpty, apiGet, apiPost, apiPostFormData } from './http'
 import {
   asArray,
   asOptionalNumber,
@@ -9,6 +9,7 @@ import {
   type AssetCollectionBulkDeleteFailure,
   type AssetCollectionBulkDeleteRequest,
   type AssetCollectionBulkDeleteSummary,
+  type AssetDeleteSummary,
   type AssetSummary,
   type AssetUploadSummary,
 } from './types'
@@ -55,6 +56,11 @@ export async function removeAssetsFromCollection(
   }
   const payload = await apiPost<AssetCollectionBulkDeleteRequest, unknown>('/api/assets/bulk-remove', request)
   return normalizeAssetCollectionBulkDeleteSummary(payload)
+}
+
+export async function deleteAsset(assetId: string): Promise<AssetDeleteSummary> {
+  const payload = await apiDelete<unknown>(`/api/assets/${encodeURIComponent(assetId)}/delete`)
+  return normalizeAssetDeleteSummary(payload)
 }
 
 function normalizeAsset(item: unknown, index: number): AssetSummary {
@@ -110,5 +116,14 @@ function normalizeAssetCollectionBulkDeleteFailure(item: unknown): AssetCollecti
   return {
     asset_id: asString(record?.asset_id, ''),
     reason: asString(record?.reason, 'Could not remove the photo from the collection.'),
+  }
+}
+
+function normalizeAssetDeleteSummary(item: unknown): AssetDeleteSummary {
+  const record = asRecord(item)
+
+  return {
+    deleted_files: asOptionalNumber(record?.deleted_files) ?? 0,
+    collections_removed: asOptionalNumber(record?.collections_removed) ?? 0,
   }
 }

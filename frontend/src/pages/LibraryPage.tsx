@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getAssets, removeAssetFromCollection, removeAssetsFromCollection, uploadAssets } from '../api/assets'
+import { getAssets, removeAssetFromCollection, removeAssetsFromCollection, uploadAssets, deleteAsset } from '../api/assets'
 import { getCollections } from '../api/collections'
-import type { AssetCollectionBulkDeleteSummary, AssetSummary, AssetUploadSummary, CollectionSummary } from '../api/types'
+import type {
+  AssetCollectionBulkDeleteSummary,
+  AssetDeleteSummary,
+  AssetSummary,
+  AssetUploadSummary,
+  CollectionSummary,
+} from '../api/types'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
 import { StatusNotice } from '../components/StatusNotice'
@@ -37,6 +43,8 @@ export function LibraryPage() {
   const [assetActionFeedback, setAssetActionFeedback] = useState<{ title: string; detail?: string } | null>(null)
   const [assetActionError, setAssetActionError] = useState<{ title: string; detail?: string } | null>(null)
   const [removingMembershipKey, setRemovingMembershipKey] = useState<string | null>(null)
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
+  const [pendingDeleteAsset, setPendingDeleteAsset] = useState<{ id: string; title: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const uploadableCollections = useMemo(
@@ -240,6 +248,56 @@ export function LibraryPage() {
       })
     } finally {
       setBulkDeleting(false)
+    }
+  }
+
+  function requestDeleteAsset(assetId: string, assetTitle: string) {
+    setPendingDeleteAsset({ id: assetId, title: assetTitle })
+  }
+
+  function cancelDeleteAsset() {
+    setPendingDeleteAsset(null)
+  }
+
+  async function confirmDeleteAsset() {
+    if (!pendingDeleteAsset) {
+      return
+    }
+
+    try {
+      setDeletingAssetId(pendingDeleteAsset.id)
+      setAssetActionError(null)
+      setAssetActionFeedback(null)
+      setUploadError(null)
+      setUploadFeedback(null)
+
+      const summary = await deleteAsset(pendingDeleteAsset.id)
+      const detailParts: string[] = []
+      if (summary.collections_removed > 0) {
+        detailParts.push(
+          `Removed from ${formatCount(summary.collections_removed, 'collection')}.`,
+        )
+      }
+      if (summary.deleted_files > 0) {
+        detailParts.push(`Deleted ${formatCount(summary.deleted_files, 'file')} from disk.`)
+      }
+
+      setAssetActionFeedback({
+        title: `Deleted "${pendingDeleteAsset.title}" permanently.`,
+        detail: detailParts.length > 0 ? detailParts.join(' ') : undefined,
+      })
+
+      setSelectedAssetIds((current) => current.filter((id) => id !== pendingDeleteAsset.id))
+      setPendingDeleteAsset(null)
+      await Promise.allSettled([reloadAssets(), reloadCollections()])
+    } catch (caught) {
+      setAssetActionError({
+        title: 'Could not delete photo',
+        detail: caught instanceof Error ? caught.message : 'Could not permanently delete the photo.',
+      })
+      setPendingDeleteAsset(null)
+    } finally {
+      setDeletingAssetId(null)
     }
   }
 
@@ -548,6 +606,15 @@ export function LibraryPage() {
                         </button>
                       )
                     })}
+                    <button
+                      type="button"
+                      className="button button--ghost asset-remove-button"
+                      style={{ color: '#dc2626' }}
+                      onClick={() => requestDeleteAsset(asset.id, asset.title)}
+                      disabled={deletingAssetId === asset.id || bulkDeleting}
+                    >
+                      {deletingAssetId === asset.id ? 'Deleting…' : 'Delete permanently'}
+                    </button>
                   </div>
                 </div>
               </article>
@@ -555,6 +622,32 @@ export function LibraryPage() {
           })}
         </div>
       </Card>
+
+      {pendingDeleteAsset ? (
+        <div className="modal-overlay" onClick={cancelDeleteAsset}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Confirm permanent deletion</h2>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete <strong>"{pendingDeleteAsset.title}"</strong> permanently?
+              </p>
+              <p className="modal-warning">
+                This will remove the photo from all collections and delete all associated files from disk. This action cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="button button--ghost" onClick={cancelDeleteAsset} disabled={!!deletingAssetId}>
+                Cancel
+              </button>
+              <button type="button" className="button button--danger" onClick={() => void confirmDeleteAsset()} disabled={!!deletingAssetId}>
+                {deletingAssetId ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

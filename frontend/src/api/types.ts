@@ -225,6 +225,11 @@ export interface AssetCollectionBulkDeleteSummary {
   errors: AssetCollectionBulkDeleteFailure[]
 }
 
+export interface AssetDeleteSummary {
+  deleted_files: number
+  collections_removed: number
+}
+
 export interface CollectionSummary {
   id: string
   name: string

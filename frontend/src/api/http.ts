@@ -112,6 +112,10 @@ export function apiDeleteEmpty(path: string): Promise<void> {
   return request<undefined>(path, { method: 'DELETE' }).then(() => undefined)
 }
 
+export function apiDelete<TResponse>(path: string): Promise<TResponse> {
+  return request<TResponse>(path, { method: 'DELETE' })
+}
+
 export function apiPostEmpty<TResponse>(path: string): Promise<TResponse> {
   return request<TResponse>(path, { method: 'POST' })
 }

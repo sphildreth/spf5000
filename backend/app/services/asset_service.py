@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import structlog
 import shutil
 from dataclasses import dataclass, field
@@ -142,6 +143,52 @@ class AssetService:
             deactivated_count=deactivated_count,
             errors=errors,
         )
+
+    def delete_asset(self, asset_id: str) -> dict[str, int]:
+        """Fully delete an asset from the database and remove all associated files.
+
+        Returns a summary dict with counts of deleted files and collections cleaned up.
+        """
+        asset_id = asset_id.strip()
+        asset = self.repo.get_asset(asset_id)
+        if asset is None:
+            raise LookupError("Asset not found.")
+
+        collections_removed = len(asset.collection_ids)
+
+        # Delete from DB and get file paths to remove
+        # (delete_asset_fully handles variants, collection_assets, and the asset record)
+        file_paths = self.repo.delete_asset_fully(asset_id)
+
+        # Delete files from disk and track parent directories
+        deleted_files = 0
+        parent_dirs: set[Path] = set()
+        for file_path in file_paths:
+            path = Path(file_path)
+            if path.exists():
+                try:
+                    parent_dirs.add(path.parent)
+                    path.unlink()
+                    deleted_files += 1
+                    LOGGER.info("asset_file_deleted", path=str(path), asset_id=asset_id)
+                except OSError as exc:
+                    LOGGER.warning("asset_file_delete_failed", path=str(path), error=str(exc), asset_id=asset_id)
+
+        # Clean up empty parent directories
+        for dir_path in sorted(parent_dirs, key=lambda p: len(p.parts), reverse=True):
+            try:
+                while dir_path.exists() and dir_path != dir_path.parent:
+                    if any(dir_path.iterdir()):
+                        break
+                    dir_path.rmdir()
+                    dir_path = dir_path.parent
+            except OSError:
+                pass  # Non-critical; skip directory cleanup if it fails
+
+        return {
+            "deleted_files": deleted_files,
+            "collections_removed": collections_removed,
+        }
 
     def upload_files(
         self, files: Sequence[UploadFile], collection_id: str | None = None
