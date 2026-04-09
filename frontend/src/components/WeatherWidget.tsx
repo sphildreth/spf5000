@@ -44,12 +44,14 @@ export function WeatherWidget({ weather }: WeatherWidgetProps) {
       aria-label="Current weather"
       style={{ '--weather-widget-scale': String(scale) } as CSSProperties}
     >
-      <div className="display-weather-widget__icon" role="img" aria-label={ICON_LABELS[current.icon_token] ?? 'Weather'}>
-        {ICONS[current.icon_token] ?? '☁'}
-      </div>
+      {!isVerticalLayout && (
+        <div className="display-weather-widget__icon" role="img" aria-label={ICON_LABELS[current.icon_token] ?? 'Weather'}>
+          {ICONS[current.icon_token] ?? '☁'}
+        </div>
+      )}
       <div className="display-weather-widget__summary">
-        <div className="display-weather-widget__temperature">
-          {current.temperature ?? '—'}°{current.temperature_unit}
+        <div className={`display-weather-widget__temperature${isVerticalLayout ? ' display-weather-widget__temperature--large' : ''}`}>
+          {current.temperature ?? '—'}{!isVerticalLayout && <>°{current.temperature_unit}</>}
         </div>
         <div className="display-weather-widget__condition">{current.condition}</div>
         <div className="display-weather-widget__location">{current.location_label}</div>

@@ -1114,8 +1114,7 @@ textarea {
 .display-weather-widget--right {
   --weather-widget-offset: 1.5rem;
   --weather-widget-min-width: min(calc(10.2rem * var(--weather-widget-scale)), calc(14.4vw + 1.8rem));
-  --weather-widget-icon-size: calc(3.84rem * var(--weather-widget-scale));
-  --weather-widget-temperature-size: calc(3.6rem * var(--weather-widget-scale));
+  --weather-widget-temperature-size: calc(5.6rem * var(--weather-widget-scale));
   --weather-widget-condition-size: calc(1.4rem * var(--weather-widget-scale));
   --weather-widget-meta-size: calc(1.1rem * var(--weather-widget-scale));
   --weather-widget-label-size: calc(0.91rem * var(--weather-widget-scale));
@@ -1136,6 +1135,19 @@ textarea {
   grid-template-columns: minmax(0, 1fr);
   gap: calc(0.8rem * var(--weather-widget-scale));
   justify-items: start;
+}
+
+.display-weather-widget--vertical .display-weather-widget__icon {
+  display: none;
+}
+
+.display-weather-widget--vertical .display-weather-widget__details {
+  --weather-widget-meta-size: calc(1.2rem * var(--weather-widget-scale));
+  --weather-widget-value-size: calc(1.43rem * var(--weather-widget-scale));
+}
+
+.display-weather-widget__temperature--large {
+  font-size: var(--weather-widget-temperature-size);
 }
 
 .display-weather-widget__icon {
