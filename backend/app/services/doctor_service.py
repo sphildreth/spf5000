@@ -1078,11 +1078,40 @@ class DoctorService:
             "decentdb_available": is_decentdb_available(),
             "files": [self._stat_path(path) for path in sidecar_paths],
             "connection_check": self._collect_database_connection_check(),
+            "engine_storage_state": self._collect_engine_storage_state(),
             "recent_recovery_directories": self._list_recent_directories(
                 settings.staging_dir / "database-recovery",
                 limit=5,
             ),
         }
+
+    def _collect_engine_storage_state(self) -> dict[str, Any] | None:
+        if decentdb is None:
+            return None
+        try:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return None
+                inspect = getattr(conn, "inspect_storage_state", None)
+                if not callable(inspect):
+                    return {
+                        "supported": False,
+                        "reason": "inspect_storage_state_not_exposed",
+                    }
+                payload = inspect()
+                if isinstance(payload, dict):
+                    payload.setdefault("supported", True)
+                    return payload
+                return {
+                    "supported": False,
+                    "reason": "unexpected_payload_type",
+                    "payload_type": type(payload).__name__,
+                }
+        except Exception as exc:
+            return {
+                "supported": False,
+                "error": str(exc),
+            }
 
     def _collect_logs_snapshot(self) -> dict[str, Any]:
         log_service = LogService()

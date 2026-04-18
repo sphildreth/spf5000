@@ -236,6 +236,7 @@ class TestDoctorService:
         assert "top_processes_by_rss" in snapshot["process"]
         assert "files" in snapshot["database"]
         assert "connection_check" in snapshot["database"]
+        assert "engine_storage_state" in snapshot["database"]
         assert "files" in snapshot["logs"]
 
 
