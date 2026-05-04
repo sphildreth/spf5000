@@ -35,7 +35,7 @@ DEFAULT_SETTINGS = {
     "transition_duration_ms": "700",
     "fit_mode": "contain",
     "shuffle_enabled": "1",
-    "shuffle_bag_enabled": "0",
+    "shuffle_bag_enabled": "1",
     "selected_collection_id": DEFAULT_COLLECTION_ID,
     "active_display_profile_id": DEFAULT_DISPLAY_PROFILE_ID,
     "background_fill_mode": "black",

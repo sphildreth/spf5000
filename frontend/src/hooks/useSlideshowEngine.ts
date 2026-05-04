@@ -451,8 +451,8 @@ function getTransitionFinalizeDelayMs(config: Pick<DisplayConfig, 'transition_du
   return durationMs > 0 ? durationMs + 80 : 40
 }
 
-function usesShuffleBag(config: Pick<DisplayConfig, 'shuffle_enabled' | 'shuffle_bag_enabled'>): boolean {
-  return config.shuffle_enabled && config.shuffle_bag_enabled
+function usesShuffleBag(config: Pick<DisplayConfig, 'shuffle_enabled'>): boolean {
+  return config.shuffle_enabled
 }
 
 function buildShuffleBagAssetIds(items: PlaylistItem[], recentAssetIds: string[], additionalBlockedIds: string[] = []): string[] {

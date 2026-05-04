@@ -22,7 +22,7 @@ class DisplayProfile:
     created_at: str
     updated_at: str
     background_fill_mode: str = "black"
-    shuffle_bag_enabled: bool = False
+    shuffle_bag_enabled: bool = True
 
 
 @dataclass(slots=True)

@@ -75,14 +75,10 @@ export function DisplaySettingsPage() {
 
   const shuffleRepeatSummary = useMemo(() => {
     if (!draft?.shuffle_enabled) {
-      return 'Only used when shuffle playback is enabled.'
+      return 'Photos play in collection order (newest first).'
     }
 
-    if (draft.shuffle_bag_enabled) {
-      return 'Each photo is shown once before repeats, with the next cycle avoiding the most recently shown images.'
-    }
-
-    return 'Uses the current shuffled playlist order, which can feel repetitive after a restart or refresh.'
+    return 'Each photo is shown once before repeats, with the next cycle avoiding the most recently shown images.'
   }, [draft])
 
   useEffect(() => {
@@ -413,30 +409,7 @@ export function DisplaySettingsPage() {
                   />
                   <span className="settings-toggle-card__copy">
                     <span>Shuffle playlist order</span>
-                    <span className="settings-toggle-card__note">Randomizes playback instead of following the collection order.</span>
-                  </span>
-                </label>
-                <label className={`checkbox-field settings-toggle-card${!draft.shuffle_enabled ? ' settings-toggle-card--disabled' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={draft.shuffle_bag_enabled}
-                    disabled={!draft.shuffle_enabled}
-                    onChange={(event) =>
-                      setDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              shuffle_bag_enabled: event.target.checked,
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                  <span className="settings-toggle-card__copy">
-                    <span>Show all photos before repeating</span>
-                    <span className="settings-toggle-card__note">
-                      Uses a local shuffle bag to reduce quick "I just saw that one" repeats.
-                    </span>
+                    <span className="settings-toggle-card__note">Randomizes playback — each photo is shown once before any repeat.</span>
                   </span>
                 </label>
               </div>
@@ -472,11 +445,11 @@ export function DisplaySettingsPage() {
                 <dd>{draft.shuffle_enabled ? 'Shuffle' : 'Sequential'}</dd>
               </div>
               <div>
-                <dt>Shuffle repeat handling</dt>
+                <dt>Repeat handling</dt>
                 <dd>
                   <span className="detail-list__value-block">
                     <span className="detail-list__value-heading">
-                      {draft.shuffle_enabled && draft.shuffle_bag_enabled ? 'Show all photos before repeating' : 'Standard'}
+                      {draft.shuffle_enabled ? 'Show all before repeating' : 'Sequential loop'}
                     </span>
                     <span className="detail-list__value-note">{shuffleRepeatSummary}</span>
                   </span>

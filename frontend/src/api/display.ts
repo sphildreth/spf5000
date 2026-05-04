@@ -28,7 +28,7 @@ const DEFAULT_DISPLAY_CONFIG: DisplayConfig = {
   transition_duration_ms: 700,
   fit_mode: 'contain',
   shuffle_enabled: true,
-  shuffle_bag_enabled: false,
+  shuffle_bag_enabled: true,
   idle_message: 'Add photos from the admin UI to begin playback.',
   refresh_interval_seconds: 60,
   background_fill_mode: 'black',

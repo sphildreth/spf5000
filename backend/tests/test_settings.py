@@ -27,7 +27,7 @@ _FULL_SETTINGS_PAYLOAD = {
     "transition_duration_ms": 700,
     "fit_mode": "contain",
     "shuffle_enabled": True,
-    "shuffle_bag_enabled": False,
+    "shuffle_bag_enabled": True,
     "selected_collection_id": "default-collection",
     "active_display_profile_id": "default-display-profile",
     "background_fill_mode": "black",

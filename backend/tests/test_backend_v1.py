@@ -430,7 +430,7 @@ def test_settings_background_fill_mode_default(test_client) -> None:
     body = resp.json()
     assert "background_fill_mode" in body
     assert body["background_fill_mode"] == "black"
-    assert body["shuffle_bag_enabled"] is False
+    assert body["shuffle_bag_enabled"] is True
 
 
 def test_display_config_update_shuffle_bag_enabled(test_client) -> None:

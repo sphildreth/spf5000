@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img alt="Release 1.0.0" src="https://img.shields.io/badge/release-1.0.0-2563eb?style=flat-square" />
+  <img alt="Release 1.1.0" src="https://img.shields.io/badge/release-1.1.0-2563eb?style=flat-square" />
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" />
   <img alt="React 19 + Vite" src="https://img.shields.io/badge/react-19%20%2B%20vite-61DAFB?style=flat-square&logo=react&logoColor=111827" />
   <img alt="Raspberry Pi kiosk runtime" src="https://img.shields.io/badge/raspberry%20pi-kiosk%20runtime-C51A4A?style=flat-square&logo=raspberrypi&logoColor=white" />
@@ -63,6 +63,8 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🍓 **Pi-Ready** — Includes appliance scripts for install, uninstall, and health checks on Raspberry Pi OS Desktop.
 - 🔍 **Doctor Page** — Built-in health diagnostics page that aggregates subsystem status, identifies problems, and provides actionable remediation guidance.
 - 📜 **Admin Log Viewer** — Inspect recent SPF5000 log files and rotated backups from the admin UI without dropping to SSH.
+- 🎨 **Token-Based Theme System** — Customizable admin and display appearance through validated, repository-backed theme definitions (see `docs/THEME_DEFINITION_GUIDE.md`).
+- 📁 **Auto-Scan Import** — Optionally watch the local import directory and automatically ingest new images as they appear.
 
 ## Architecture at a glance
 
@@ -77,29 +79,23 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 ### Runtime flow
 
 ```text
-Local import folder
-        │
-        ▼
-LocalFilesProvider
-        │
-        ▼
-      import service
-        │
-        ┌─────────────────┴─────────────────┐
-        ▼                                   ▼
-  DecentDB metadata/settings/bootstrap   Filesystem originals +
-            state                        display/thumbnail variants
-                                                │
-                                                ▼
-                                      /api/display/playlist
-                                                │
-                                                ▼
-                                  Chromium kiosk at /display
+Local import folder  ────►  LocalFilesProvider  ────►  import service
+                                                                     │
+                     ┌───────────────────────────────────────────────┴────────────────┐
+                     ▼                                                                ▼
+              DecentDB metadata/settings/bootstrap                           Filesystem originals +
+                        state                                                  display/thumbnail variants
+                                                                                              │
+                                                                                              ▼
+                                                                                    /api/display/playlist
+                                                                                              │
+                                                                                              ▼
+                                                                                Chromium kiosk at /display
 ```
 
 ### Display behavior
 
-The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a hidden cursor, preloads the next slide before transitioning, supports configurable `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` background presentation, keeps cached display-variant metadata as the source for color-based modes, may reuse the display variant directly for image-based modes, and can render an intentional black fullscreen sleep state during configured quiet hours evaluated in the configured display timezone or the Pi-local timezone when none is set.
+The fullscreen `/display` route is intentionally separate from the admin shell. It stays public, runs without admin chrome, uses a hidden cursor, preloads the next slide before transitioning, supports configurable `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto` background presentation, keeps cached display-variant metadata as the source for color-based modes, may reuse the display variant directly for image-based modes, and can render an intentional black fullscreen sleep state during configured quiet hours evaluated in the configured display timezone or the Pi-local timezone when none is set. The `/display` route also applies the active token-based theme to its chrome when a theme is selected.
 
 Weather and alert overlays are also display concerns, but they still follow the same appliance rules: weather and alerts are fetched and cached by the backend, `/display` consumes only cached data, and sleep mode remains the highest-precedence fullscreen state.
 
@@ -122,10 +118,7 @@ python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -e /path/to/decentdb/bindings/python
-cd /path/to/decentdb
-nimble build_lib
-export DECENTDB_NATIVE_LIB=$PWD/build/libc_api.so
-cd /path/to/spf5000/backend
+export DECENTDB_NATIVE_LIB=/path/to/decentdb/build/libc_api.so
 python -m app
 ```
 
@@ -135,10 +128,7 @@ If you cloned `decentdb` next to this repository, a typical install looks like t
 cd backend
 source .venv/bin/activate
 python -m pip install -e ../../decentdb/bindings/python
-cd ../../decentdb
-nimble build_lib
-export DECENTDB_NATIVE_LIB=$PWD/build/libc_api.so
-cd ../spf5000/backend
+export DECENTDB_NATIVE_LIB=$PWD/../../decentdb/build/libc_api.so
 python -m app
 ```
 
@@ -328,6 +318,9 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 - doctor diagnostics and admin log viewing
 - settings, display timezone, and sleep schedule
 - weather settings, cached conditions, and alert status
+- themes and appearance
+- admin logs and rotated backup inspection
+- auto-scan configuration for local import
 - collections and assets
 - backup, restore, and collection export workflows
 - sources and local import
@@ -363,6 +356,9 @@ Design and operational docs live in-repo:
 - [`docs/PI_SETUP_GUIDE.md`](docs/PI_SETUP_GUIDE.md) — end-to-end Pi setup
 - [`docs/BACKUP_AND_EXPORT_GUIDE.md`](docs/BACKUP_AND_EXPORT_GUIDE.md) — database backup/restore and collection media export workflows
 - [`docs/INSTALLER.md`](docs/INSTALLER.md) — installer, doctor, and uninstall details
+- [`docs/THEME_DEFINITION_GUIDE.md`](docs/THEME_DEFINITION_GUIDE.md) — token-based theme system for admin and display surfaces
+- [`docs/SP5000_CONFIG.md`](docs/SP5000_CONFIG.md) — runtime configuration reference for `spf5000.toml`
+- [`docs/PHOTOSYNC_RP4_GUIDE.md`](docs/PHOTOSYNC_RP4_GUIDE.md) — PhotoSync companion guide for Raspberry Pi 4 transfers
 
 ## Current limits
 
