@@ -208,7 +208,7 @@ def test_backup_archive_invalid_manifest_type_rejected(tmp_path: Path) -> None:
 
     buffer = io.BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("spf5000.ddb", settings.database_path.read_bytes())
+        zf.writestr("spf5000.ddb", b"fake-database-bytes")
         zf.writestr(
             "backup-manifest.json",
             json.dumps(
@@ -232,7 +232,7 @@ def test_backup_archive_wrong_database_filename_rejected(tmp_path: Path) -> None
 
     buffer = io.BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("spf5000.ddb", settings.database_path.read_bytes())
+        zf.writestr("spf5000.ddb", b"fake-database-bytes")
         zf.writestr(
             "backup-manifest.json",
             json.dumps(
@@ -256,7 +256,7 @@ def test_backup_archive_missing_manifest_rejected(tmp_path: Path) -> None:
 
     buffer = io.BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("spf5000.ddb", settings.database_path.read_bytes())
+        zf.writestr("spf5000.ddb", b"fake-database-bytes")
     buffer.seek(0)
 
     with pytest.raises(ValueError, match="must include backup-manifest.json"):
@@ -271,7 +271,7 @@ def test_backup_archive_manifest_must_be_object(tmp_path: Path) -> None:
 
     buffer = io.BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("spf5000.ddb", settings.database_path.read_bytes())
+        zf.writestr("spf5000.ddb", b"fake-database-bytes")
         zf.writestr("backup-manifest.json", "not json")
     buffer.seek(0)
 
@@ -287,7 +287,7 @@ def test_backup_archive_manifest_utf8_required(tmp_path: Path) -> None:
 
     buffer = io.BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("spf5000.ddb", settings.database_path.read_bytes())
+        zf.writestr("spf5000.ddb", b"fake-database-bytes")
         zf.writestr("backup-manifest.json", b"\xff\xfe invalid utf-8")
     buffer.seek(0)
 

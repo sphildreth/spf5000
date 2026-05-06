@@ -407,13 +407,13 @@ asset_name = None
 asset_url = None
 for asset in release.get("assets", []):
     name = asset.get("name", "")
-    if name.endswith(asset_suffix):
+    if name.startswith("decentdb-v") and name.endswith(asset_suffix):
         asset_name = name
         asset_url = asset.get("browser_download_url")
         break
 
 if not asset_name or not asset_url:
-    raise SystemExit(f"Missing DecentDB release asset matching *{asset_suffix} for {tag_name}")
+    raise SystemExit(f"Missing DecentDB release asset matching decentdb-v*{asset_suffix} for {tag_name}")
 
 source_url = f"https://github.com/sphildreth/decentdb/archive/refs/tags/{tag_name}.tar.gz"
 

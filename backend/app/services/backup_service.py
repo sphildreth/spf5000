@@ -309,7 +309,7 @@ class BackupService:
 
     @staticmethod
     def _remove_database_sidecars() -> None:
-        for suffix in ("-wal", "-shm"):
+        for suffix in (".wal", "-wal", ".shm", "-shm"):
             sidecar_path = Path(f"{settings.database_path}{suffix}")
             if sidecar_path.exists():
                 sidecar_path.unlink()
