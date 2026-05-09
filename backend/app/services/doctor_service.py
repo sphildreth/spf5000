@@ -337,7 +337,8 @@ class DatabaseDoctorChecks:
         )
 
         details = (
-            f"WAL size: {wal_file_size / (1024 * 1024):.1f} MiB; "
+            f"WAL logical usage: {wal_end_lsn / (1024 * 1024):.1f} MiB; "
+            f"WAL file allocation: {wal_file_size / (1024 * 1024):.1f} MiB; "
             f"wal_end_lsn: {wal_end_lsn}; "
             f"last_checkpoint_lsn: {last_checkpoint_lsn}; "
             f"active_readers: {active_readers}; "
@@ -354,13 +355,13 @@ class DatabaseDoctorChecks:
                 remediation="Let active requests complete or restart the backend if the reader count remains stuck.",
             )
 
-        if wal_file_size >= threshold:
+        if wal_end_lsn >= threshold:
             return HealthCheck(
                 id="database_wal",
                 title="Database WAL",
                 severity=HealthSeverity.WARNING,
                 summary=(
-                    "DecentDB WAL is larger than the configured checkpoint threshold."
+                    "DecentDB WAL logical usage is larger than the configured checkpoint threshold."
                 ),
                 details=details,
                 remediation="Run a DecentDB checkpoint or wait for the SPF5000 database maintenance coordinator to checkpoint it.",
@@ -370,7 +371,7 @@ class DatabaseDoctorChecks:
             id="database_wal",
             title="Database WAL",
             severity=HealthSeverity.OK,
-            summary="DecentDB WAL size is within the configured threshold.",
+            summary="DecentDB WAL logical usage is within the configured threshold.",
             details=details,
         )
 

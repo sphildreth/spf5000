@@ -342,7 +342,10 @@ class TestDatabaseDoctorChecks:
 
         assert check.id == "database_wal"
         assert check.severity == HealthSeverity.WARNING
-        assert "larger than the configured checkpoint threshold" in check.summary
+        assert (
+            "logical usage is larger than the configured checkpoint threshold"
+            in check.summary
+        )
         assert check.details is not None
         assert "192.0 MiB" in check.details
 
@@ -380,6 +383,44 @@ class TestDatabaseDoctorChecks:
 
         assert check.id == "database_wal"
         assert check.severity == HealthSeverity.OK
+
+    def test_wal_state_ok_when_file_is_preallocated_but_logical_usage_is_low(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeConn:
+            def inspect_storage_state(self) -> dict[str, object]:
+                return {
+                    "wal_file_size": 64 * 1024 * 1024,
+                    "wal_end_lsn": 648_082,
+                    "last_checkpoint_lsn": 1_662_792,
+                    "active_readers": 0,
+                    "wal_versions": 23,
+                }
+
+        @contextmanager
+        def fake_get_connection():
+            yield FakeConn()
+
+        monkeypatch.setattr("app.services.doctor_service.decentdb", object())
+        monkeypatch.setattr(
+            "app.services.doctor_service.get_connection", fake_get_connection
+        )
+        monkeypatch.setattr(
+            "app.services.doctor_service.is_null_connection", lambda _conn: False
+        )
+        monkeypatch.setattr(
+            settings,
+            "database_checkpoint_wal_threshold_bytes",
+            64 * 1024 * 1024,
+        )
+
+        check = DatabaseDoctorChecks._check_wal_state()
+
+        assert check.id == "database_wal"
+        assert check.severity == HealthSeverity.OK
+        assert check.details is not None
+        assert "WAL logical usage: 0.6 MiB" in check.details
+        assert "WAL file allocation: 64.0 MiB" in check.details
 
 
 class TestStorageDoctorChecks:

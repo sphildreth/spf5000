@@ -206,7 +206,7 @@ Important notes:
 - Set `SPF5000_CONFIG` to use a different runtime config path.
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
-- SPF5000 manages DecentDB WAL checkpointing from the backend. By default it checks WAL size every 5 minutes, starts checking 60 seconds after startup, and checkpoints once the WAL sidecar reaches 64 MiB.
+- SPF5000 manages DecentDB WAL checkpointing from the backend. By default it checks logical WAL usage every 5 minutes, starts checking 60 seconds after startup, and checkpoints once usage reaches 64 MiB. DecentDB may still allocate a 64 MiB `.ddb.wal` file after small writes; Doctor reports this separately from logical usage.
 - Sleep scheduling and the optional display timezone are managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
 - Weather settings, cached conditions, active alerts, and refresh history live in DecentDB-backed application state rather than the runtime config file.
 

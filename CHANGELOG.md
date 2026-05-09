@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Updated SPF5000's documented DecentDB baseline to `v2.0.1+` for the latest features and improvements, while keeping the Pi installer on the default `DECENTDB_RELEASE_TAG=latest` behavior.
-- Added size-aware DecentDB WAL maintenance so the backend checks WAL growth every few minutes and checkpoints once the sidecar reaches the configured threshold.
-- Added Doctor visibility for oversized DecentDB WAL files so support snapshots flag checkpoint drift instead of reporting the database as fully healthy.
+- Added size-aware DecentDB WAL maintenance so the backend checks logical WAL growth every few minutes and checkpoints once it reaches the configured threshold.
+- Added Doctor visibility for oversized DecentDB WAL usage so support snapshots flag checkpoint drift without warning on normal 64 MiB WAL preallocation.
 - Fixed DecentDB sidecar handling across recovery, restore cleanup, Doctor snapshots, and Pi installer backups to include `.ddb.wal` / `.ddb.shm` files while preserving legacy `-wal` / `-shm` compatibility.
 - Hardened the Pi installer so it refuses to touch database files if the SPF5000 backend service remains active after `systemctl stop`.
 - Reduced backend RSS spikes on Linux/Pi deployments by trimming retained glibc heap after image-heavy ingest and background-color derivation work.

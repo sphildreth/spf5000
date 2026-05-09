@@ -61,6 +61,7 @@ def test_maintenance_coordinator_skips_when_wal_below_threshold(
     assert status["total_runs"] == 0
     assert status["total_skipped"] == 1
     assert status["last_wal_size_bytes"] == 9
+    assert status["last_wal_usage_bytes"] == 9
 
 
 def test_maintenance_coordinator_checkpoints_when_wal_reaches_threshold(
@@ -90,3 +91,35 @@ def test_maintenance_coordinator_checkpoints_when_wal_reaches_threshold(
     assert status["total_runs"] == 1
     assert status["total_skipped"] == 0
     assert status["last_wal_size_bytes"] == 10
+    assert status["last_wal_usage_bytes"] == 10
+
+
+def test_maintenance_coordinator_uses_logical_wal_usage_for_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint_calls = 0
+
+    def fake_checkpoint() -> None:
+        nonlocal checkpoint_calls
+        checkpoint_calls += 1
+
+    coord = DatabaseMaintenanceCoordinator(
+        interval_seconds=60,
+        initial_delay_seconds=0,
+        wal_threshold_bytes=64 * 1024 * 1024,
+    )
+    monkeypatch.setattr(coord, "_checkpoint", fake_checkpoint)
+    monkeypatch.setattr(
+        coord,
+        "_current_wal_state_bytes",
+        lambda: (648_082, 64 * 1024 * 1024),
+    )
+
+    coord._checkpoint_if_needed()  # type: ignore[misc]
+
+    status = coord.get_status()
+    assert checkpoint_calls == 0
+    assert status["total_runs"] == 0
+    assert status["total_skipped"] == 1
+    assert status["last_wal_usage_bytes"] == 648_082
+    assert status["last_wal_size_bytes"] == 64 * 1024 * 1024

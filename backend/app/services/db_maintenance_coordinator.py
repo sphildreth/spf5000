@@ -61,6 +61,7 @@ class DatabaseMaintenanceCoordinator:
         self._last_run_at: float | None = None
         self._last_skipped_at: float | None = None
         self._last_wal_size_bytes: int | None = None
+        self._last_wal_usage_bytes: int | None = None
         self._total_runs = 0
         self._total_skipped = 0
 
@@ -93,6 +94,7 @@ class DatabaseMaintenanceCoordinator:
             "last_run_at": self._last_run_at,
             "last_skipped_at": self._last_skipped_at,
             "last_wal_size_bytes": self._last_wal_size_bytes,
+            "last_wal_usage_bytes": self._last_wal_usage_bytes,
             "total_runs": self._total_runs,
             "total_skipped": self._total_skipped,
             "interval_seconds": self._interval_seconds,
@@ -113,13 +115,15 @@ class DatabaseMaintenanceCoordinator:
                 return
 
     def _checkpoint_if_needed(self) -> None:
-        wal_size = self._current_wal_size_bytes()
+        wal_usage, wal_size = self._current_wal_state_bytes()
         self._last_wal_size_bytes = wal_size
-        if self._wal_threshold_bytes > 0 and wal_size < self._wal_threshold_bytes:
+        self._last_wal_usage_bytes = wal_usage
+        if self._wal_threshold_bytes > 0 and wal_usage < self._wal_threshold_bytes:
             self._last_skipped_at = time.monotonic()
             self._total_skipped += 1
             LOGGER.debug(
                 "db_maintenance_checkpoint_skipped",
+                wal_usage_bytes=wal_usage,
                 wal_size_bytes=wal_size,
                 wal_threshold_bytes=self._wal_threshold_bytes,
             )
@@ -130,9 +134,18 @@ class DatabaseMaintenanceCoordinator:
         self._total_runs += 1
         LOGGER.info(
             "db_maintenance_checkpoint_complete",
+            wal_usage_bytes=wal_usage,
             wal_size_bytes=wal_size,
             wal_threshold_bytes=self._wal_threshold_bytes,
         )
+
+    @staticmethod
+    def _current_wal_state_bytes() -> tuple[int, int]:
+        wal_size = DatabaseMaintenanceCoordinator._current_wal_size_bytes()
+        wal_usage = DatabaseMaintenanceCoordinator._current_wal_usage_bytes()
+        if wal_usage is None:
+            wal_usage = wal_size
+        return wal_usage, wal_size
 
     @staticmethod
     def _current_wal_size_bytes() -> int:
@@ -142,6 +155,31 @@ class DatabaseMaintenanceCoordinator:
             if path.name.endswith(("wal", ".wal")) and path.exists()
         ]
         return max(wal_sizes, default=0)
+
+    @staticmethod
+    def _current_wal_usage_bytes() -> int | None:
+        if not settings.database_path.exists():
+            return None
+
+        try:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return None
+                inspect = getattr(conn, "inspect_storage_state", None)
+                if not callable(inspect):
+                    return None
+                state = inspect()
+        except Exception as exc:
+            LOGGER.debug("db_maintenance_wal_state_unavailable", error=str(exc))
+            return None
+
+        if not isinstance(state, dict):
+            return None
+
+        try:
+            return max(0, int(state.get("wal_end_lsn") or 0))
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _checkpoint() -> None:

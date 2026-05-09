@@ -54,9 +54,9 @@ All paths support both absolute paths and relative paths (relative to the `spf50
 | `stmt_cache_size` | integer | `32` | DecentDB Python statement cache size. Keep this modest on Raspberry Pi-class devices unless profiling shows repeated prepares for a stable query set. |
 | `checkpoint_interval_seconds` | integer | `300` | How often the backend maintenance thread checks DecentDB WAL size. Values below 60 are raised to 60. |
 | `checkpoint_initial_delay_seconds` | integer | `60` | Delay after backend startup before the first WAL-size check. |
-| `checkpoint_wal_threshold_bytes` | integer | `67108864` | Run a DecentDB checkpoint when the WAL sidecar reaches this size. Set to `0` to checkpoint every interval. |
+| `checkpoint_wal_threshold_bytes` | integer | `67108864` | Run a DecentDB checkpoint when logical WAL usage reaches this size. Set to `0` to checkpoint every interval. |
 
-SPF5000 uses explicit backend-managed checkpoints because its cached DecentDB connections use shared-WAL mode. On normal Pi deployments, the defaults keep WAL growth bounded while avoiding a checkpoint after every small write.
+SPF5000 uses explicit backend-managed checkpoints because its cached DecentDB connections use shared-WAL mode. On normal Pi deployments, the defaults keep WAL growth bounded while avoiding a checkpoint after every small write. DecentDB may allocate a 64 MiB `.ddb.wal` file even when logical WAL usage is much smaller; Doctor reports both values.
 
 ---
 
