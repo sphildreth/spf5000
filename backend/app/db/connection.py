@@ -141,18 +141,24 @@ def _close_all_thread_connections() -> None:
 
 
 def _prune_thread_connections(db_path: str) -> None:
-    for thread_id, conn_info in list(_thread_conn_info.items()):
+    for thread_id in list(_thread_conn_info):
+        conn_info = _thread_conn_info.get(thread_id)
+        if conn_info is None:
+            continue
         if int(conn_info.get("depth", 0)) != 0:
             continue
 
         cached_path = conn_info.get("path")
         cached_gen = conn_info.get("gen")
         cached_thread = conn_info.get("thread")
+        thread_dead = (
+            isinstance(cached_thread, threading.Thread)
+            and not cached_thread.is_alive()
+        )
         if (
             cached_path != db_path
             or cached_gen != _connection_generation
-            or not isinstance(cached_thread, threading.Thread)
-            or not cached_thread.is_alive()
+            or thread_dead
         ):
             _close_thread_connection(thread_id)
 
@@ -265,11 +271,13 @@ def _get_thread_connection(db_path: str) -> Any:
         _close_thread_connection(thread_id)
 
     conn = _TrackedConnection(_connect_with_recovery(db_path))
+    current_thread = threading.current_thread()
     _thread_conn_info[thread_id] = {
         "conn": conn,
         "path": db_path,
         "gen": _connection_generation,
-        "thread": threading.current_thread(),
+        "thread": current_thread,
+        "thread_name": current_thread.name,
         "depth": 1,
     }
     _thread_conn_info.move_to_end(thread_id)
@@ -317,7 +325,7 @@ def get_connection_stats() -> dict[str, Any]:
             thread = conn_info.get("thread")
             active_connections.append({
                 "thread_id": thread_id,
-                "thread_name": thread.name if thread else None,
+                "thread_name": conn_info.get("thread_name") or (thread.name if thread else None),
                 "depth": conn_info.get("depth", 0),
                 "path": conn_info.get("path"),
                 "generation": conn_info.get("gen"),

@@ -340,6 +340,9 @@ INDEX_STATEMENTS = {
     "idx_provider_auth_flows_provider_status": "create index idx_provider_auth_flows_provider_status on provider_auth_flows (provider_name, status)",
     "idx_weather_alerts_provider_location": "create index idx_weather_alerts_provider_location on weather_alerts (provider_name, location_key, display_priority)",
     "idx_weather_refresh_runs_provider_started": "create index idx_weather_refresh_runs_provider_started on weather_refresh_runs (provider_name, started_at)",
+    "idx_import_jobs_started_at": "create index idx_import_jobs_started_at on import_jobs (started_at desc, id desc)",
+    "idx_assets_active_imported_at": "create index idx_assets_active_imported_at on assets (is_active, imported_at desc)",
+    "idx_display_profiles_default": "create index idx_display_profiles_default on display_profiles (is_default)",
 }
 
 

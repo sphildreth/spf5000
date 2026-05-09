@@ -423,6 +423,26 @@ class WeatherRepository:
         )
         return [self._refresh_run_from_row(row) for row in rows]
 
+    def prune_refresh_runs(self, provider_name: str, *, keep: int = 100) -> int:
+        """Delete old refresh runs for a provider, retaining the most recent *keep* rows."""
+        with get_connection() as conn:
+            if is_null_connection(conn):
+                return 0
+            cursor = conn.execute(
+                """
+                delete from weather_refresh_runs
+                where provider_name = ?
+                  and id not in (
+                      select id from weather_refresh_runs
+                      where provider_name = ?
+                      order by started_at desc, id desc
+                      limit ?
+                  )
+                """,
+                (provider_name, provider_name, max(1, keep)),
+            )
+            return cursor.rowcount
+
     def _get_refresh_run_row(self, refresh_run_id: str) -> dict[str, object] | None:
         with get_connection() as conn:
             if is_null_connection(conn):

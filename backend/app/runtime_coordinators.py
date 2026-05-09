@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from app.services.auto_scan_coordinator import AutoScanCoordinator
+from app.services.db_maintenance_coordinator import DatabaseMaintenanceCoordinator
 from app.services.weather_service import WeatherService
 from app.services.weather_sync_coordinator import WeatherSyncCoordinator
 
@@ -37,10 +38,8 @@ def start_background_coordinators(app: FastAPI) -> None:
             source_id = settings_repo.get_setting("auto_scan_source_id", "default-local-files")
             collection_id = settings_repo.get_setting("selected_collection_id", "default-collection")
             
-            # Scan for new files
             scan_result = import_service.scan_directory(source_id, max_samples=100)
             
-            # Only import if there are new files
             if scan_result.discovered_count > 0:
                 import_service.import_local_source(
                     source_id=source_id,
@@ -55,6 +54,13 @@ def start_background_coordinators(app: FastAPI) -> None:
         auto_scan.start()
         app.state.auto_scan_coordinator = auto_scan
     
+    # Database maintenance coordinator (WAL checkpoint)
+    maintenance = getattr(app.state, "db_maintenance_coordinator", None)
+    if maintenance is None:
+        maintenance = DatabaseMaintenanceCoordinator()
+        maintenance.start()
+        app.state.db_maintenance_coordinator = maintenance
+
     # Weather coordinator
     weather = getattr(app.state, "weather_sync_coordinator", None)
     if weather is None:
@@ -64,6 +70,14 @@ def start_background_coordinators(app: FastAPI) -> None:
 
 
 def stop_background_coordinators(app: FastAPI) -> None:
+    # Stop database maintenance coordinator
+    maintenance = getattr(app.state, "db_maintenance_coordinator", None)
+    if maintenance is not None:
+        stop = getattr(maintenance, "stop", None)
+        if callable(stop):
+            stop()
+        app.state.db_maintenance_coordinator = None
+
     # Stop auto-scan coordinator
     auto_scan = getattr(app.state, "auto_scan_coordinator", None)
     if auto_scan is not None:
@@ -85,8 +99,10 @@ def get_coordinator_status(app: FastAPI) -> dict[str, Any]:
     """Return status of all background coordinators for diagnostics."""
     auto_scan = getattr(app.state, "auto_scan_coordinator", None)
     weather = getattr(app.state, "weather_sync_coordinator", None)
-    
+    maintenance = getattr(app.state, "db_maintenance_coordinator", None)
+
     return {
         "auto_scan": auto_scan.get_status() if auto_scan else None,
         "weather": weather.get_status() if weather else None,
+        "db_maintenance": maintenance.get_status() if maintenance else None,
     }

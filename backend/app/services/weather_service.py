@@ -275,7 +275,9 @@ class WeatherService:
             refresh_run.status = "completed"
             refresh_run.message = "Weather conditions refreshed"
             refresh_run.completed_at = started_at
-            return self.repo.update_refresh_run(refresh_run)
+            result = self.repo.update_refresh_run(refresh_run)
+            self.repo.prune_refresh_runs(settings.weather_provider, keep=100)
+            return result
         except (WeatherError, httpx.HTTPError, ValueError) as exc:
             state.status = self._state_status(settings, current_error=str(exc))
             state.last_weather_refresh_at = started_at
@@ -286,7 +288,9 @@ class WeatherService:
             refresh_run.message = "Weather conditions refresh failed"
             refresh_run.error_message = str(exc)
             refresh_run.completed_at = started_at
-            return self.repo.update_refresh_run(refresh_run)
+            result = self.repo.update_refresh_run(refresh_run)
+            self.repo.prune_refresh_runs(settings.weather_provider, keep=100)
+            return result
 
     def _force_refresh_alerts(
         self, settings: WeatherSettings, *, trigger: str
@@ -320,7 +324,9 @@ class WeatherService:
             refresh_run.status = "completed"
             refresh_run.message = f"Weather alerts refreshed ({len(alerts)} active)"
             refresh_run.completed_at = started_at
-            return self.repo.update_refresh_run(refresh_run)
+            result = self.repo.update_refresh_run(refresh_run)
+            self.repo.prune_refresh_runs(settings.weather_provider, keep=100)
+            return result
         except (WeatherError, httpx.HTTPError, ValueError) as exc:
             state.status = self._state_status(settings, current_error=str(exc))
             state.last_alert_refresh_at = started_at
@@ -331,7 +337,9 @@ class WeatherService:
             refresh_run.message = "Weather alerts refresh failed"
             refresh_run.error_message = str(exc)
             refresh_run.completed_at = started_at
-            return self.repo.update_refresh_run(refresh_run)
+            result = self.repo.update_refresh_run(refresh_run)
+            self.repo.prune_refresh_runs(settings.weather_provider, keep=100)
+            return result
 
     def _current_conditions(
         self,

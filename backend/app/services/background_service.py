@@ -7,6 +7,7 @@ that don't visually compete with the photo.
 
 from __future__ import annotations
 
+import gc
 import logging
 from pathlib import Path
 
@@ -85,6 +86,7 @@ def derive_background_meta(image_path: Path) -> AssetBackground:
         sample.close()
         rgb_img.close()
     trim_process_heap()
+    gc.collect()
 
     # Dominant colour — overall average
     dominant = _subdue_rgb(*_avg_rgb(pixels))

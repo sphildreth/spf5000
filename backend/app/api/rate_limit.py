@@ -15,6 +15,7 @@ _request_lock = threading.Lock()
 _last_global_prune_at = 0.0
 _largest_tracked_window_seconds = 0.0
 _GLOBAL_PRUNE_INTERVAL_SECONDS = 60.0
+_MAX_TRACKED_IPS = 1024
 
 
 def is_rate_limit_enabled() -> bool:
@@ -64,7 +65,7 @@ def check_rate_limit(ip_address: str, limit: str) -> bool:
         if (
             _largest_tracked_window_seconds > 0
             and now - _last_global_prune_at >= _GLOBAL_PRUNE_INTERVAL_SECONDS
-        ):
+        ) or len(_request_counts) > _MAX_TRACKED_IPS:
             stale_cutoff = now - _largest_tracked_window_seconds
             for tracked_ip, tracked_requests in list(_request_counts.items()):
                 tracked_requests[:] = [t for t in tracked_requests if t > stale_cutoff]

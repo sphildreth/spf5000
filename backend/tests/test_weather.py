@@ -410,6 +410,48 @@ def test_refresh_run_storage_repair_recreates_history_table(test_client) -> None
     assert repo.list_refresh_runs("nws") == []
 
 
+def test_prune_refresh_runs_keeps_most_recent(test_client) -> None:
+    repo = WeatherRepository()
+    for i in range(5):
+        run = WeatherRefreshRun(
+            id=f"weather-refresh-{i}",
+            provider_name="nws",
+            refresh_kind="weather",
+            trigger="scheduled",
+            status="completed",
+            message="ok",
+            error_message="",
+            started_at=f"2026-03-16T18:00:0{i}+00:00",
+            completed_at=f"2026-03-16T18:00:0{i}+00:00",
+        )
+        repo.create_refresh_run(run)
+    assert len(repo.list_refresh_runs("nws")) == 5
+
+    deleted = repo.prune_refresh_runs("nws", keep=3)
+    assert deleted == 2
+    remaining = repo.list_refresh_runs("nws")
+    assert len(remaining) == 3
+    assert [r.id for r in remaining] == ["weather-refresh-4", "weather-refresh-3", "weather-refresh-2"]
+
+
+def test_prune_refresh_runs_noop_when_under_limit(test_client) -> None:
+    repo = WeatherRepository()
+    run = WeatherRefreshRun(
+        id="weather-refresh-only",
+        provider_name="nws",
+        refresh_kind="weather",
+        trigger="scheduled",
+        status="completed",
+        message="ok",
+        error_message="",
+        started_at="2026-03-16T18:00:00+00:00",
+        completed_at="2026-03-16T18:00:00+00:00",
+    )
+    repo.create_refresh_run(run)
+    assert repo.prune_refresh_runs("nws", keep=100) == 0
+    assert len(repo.list_refresh_runs("nws")) == 1
+
+
 def test_recoverable_database_error_detects_page_id_out_of_bounds() -> None:
     exc = decentdb.OperationalError("Page id out of bounds")
 

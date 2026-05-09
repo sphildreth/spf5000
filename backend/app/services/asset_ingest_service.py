@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import hashlib
 import structlog
 import math
@@ -146,6 +147,7 @@ class AssetIngestService:
             if original_image is not None:
                 original_image.close()
             trim_process_heap()
+            gc.collect()
 
         now = utc_now()
         original_name = Path(filename).name

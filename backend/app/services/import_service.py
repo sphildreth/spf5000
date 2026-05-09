@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import structlog
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,7 @@ from app.repositories.base import utc_now
 from app.repositories.import_repository import ImportRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.repositories.source_repository import SourceRepository
+from app.core.memory import trim_process_heap
 from app.services.asset_ingest_service import AssetIngestService
 from app.services.source_service import SourceService
 
@@ -146,6 +148,8 @@ class ImportService:
                 )
                 if ingest_result.created:
                     job.imported_count += 1
+                    gc.collect()
+                    trim_process_heap()
                 else:
                     job.duplicate_count += 1
             except Exception as exc:  # pragma: no cover

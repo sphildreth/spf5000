@@ -20,6 +20,7 @@ class WeatherSyncCoordinator:
         poll_seconds: int = _BASE_POLL_SECONDS,
     ) -> None:
         self._service_factory = service_factory
+        self._service: WeatherService | None = None
         self._poll_seconds = max(5, poll_seconds)
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -28,6 +29,12 @@ class WeatherSyncCoordinator:
         self._last_run_trigger: str | None = None
         self._total_runs = 0
         self._total_failures = 0
+
+    @property
+    def service(self) -> WeatherService:
+        if self._service is None:
+            self._service = self._service_factory()
+        return self._service
 
     def start(self) -> None:
         if self._thread is not None:
@@ -61,7 +68,7 @@ class WeatherSyncCoordinator:
         consecutive_failures = 0
         while not self._stop_event.is_set():
             try:
-                self._service_factory().refresh_due(trigger="scheduled")
+                self.service.refresh_due(trigger="scheduled")
                 self._last_run_at = time.monotonic()
                 self._last_run_trigger = "scheduled"
                 self._total_runs += 1
