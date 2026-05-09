@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         stop_background_coordinators(app)
+        from app.db.connection import reset_connection_state
+        reset_connection_state()
 
 
 def create_app() -> FastAPI:

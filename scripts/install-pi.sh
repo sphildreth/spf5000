@@ -301,6 +301,26 @@ stop_service_if_running() {
   fi
 }
 
+safely_close_database_connections() {
+  local backend_dir="${APP_ROOT}/backend"
+  local venv_python="${backend_dir}/.venv/bin/python"
+
+  if [[ ! -x "${venv_python}" ]]; then
+    return
+  fi
+
+  log "Ensuring all database connections are safely closed before backup."
+  run_as_user_shell "${RUNTIME_USER}" "
+    cd '${backend_dir}' &&
+    SPF5000_CONFIG='${CONFIG_PATH}' &&
+    DECENTDB_NATIVE_LIB='${DECENTDB_NATIVE_LIB}' &&
+    .venv/bin/python -c '
+from app.db.connection import reset_connection_state
+reset_connection_state()
+'
+  " || warn "Database connection eviction failed; continuing anyway."
+}
+
 backup_existing_database_if_present() {
   local database_backup_source=""
   local database_backup_dir=""
@@ -772,6 +792,7 @@ main() {
   ensure_required_binaries
   ensure_directories
   stop_service_if_running
+  safely_close_database_connections
   backup_existing_database_if_present
   ensure_backend_venv
   ensure_decentdb_runtime
