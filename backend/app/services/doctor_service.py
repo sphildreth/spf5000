@@ -17,6 +17,7 @@ from app.db.connection import (
     is_decentdb_available,
     is_null_connection,
 )
+from app.db.recovery import database_paths
 from app.models.weather import WeatherProviderState
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.asset_repository import AssetRepository
@@ -176,6 +177,9 @@ class DatabaseDoctorChecks:
         checks.append(
             DatabaseDoctorChecks._check_schema(),
         )
+        checks.append(
+            DatabaseDoctorChecks._check_wal_state(),
+        )
 
         return checks
 
@@ -274,6 +278,100 @@ class DatabaseDoctorChecks:
             severity=HealthSeverity.OK,
             summary="All required tables present.",
             details=f"Found: {', '.join(sorted(existing_tables))}.",
+        )
+
+    @staticmethod
+    def _check_wal_state() -> HealthCheck:
+        if decentdb is None:
+            return HealthCheck(
+                id="database_wal",
+                title="Database WAL",
+                severity=HealthSeverity.INFO,
+                summary="WAL state unavailable because DecentDB is not installed.",
+            )
+
+        try:
+            with get_connection() as conn:
+                if is_null_connection(conn):
+                    return HealthCheck(
+                        id="database_wal",
+                        title="Database WAL",
+                        severity=HealthSeverity.WARNING,
+                        summary="Cannot inspect WAL state - no database connection.",
+                    )
+                inspect = getattr(conn, "inspect_storage_state", None)
+                if not callable(inspect):
+                    return HealthCheck(
+                        id="database_wal",
+                        title="Database WAL",
+                        severity=HealthSeverity.INFO,
+                        summary="WAL state is not exposed by this DecentDB binding.",
+                    )
+                state = inspect()
+        except Exception as exc:
+            return HealthCheck(
+                id="database_wal",
+                title="Database WAL",
+                severity=HealthSeverity.WARNING,
+                summary=f"Failed to inspect WAL state: {exc}",
+            )
+
+        if not isinstance(state, dict):
+            return HealthCheck(
+                id="database_wal",
+                title="Database WAL",
+                severity=HealthSeverity.WARNING,
+                summary="DecentDB returned an unexpected WAL state payload.",
+            )
+
+        wal_file_size = int(state.get("wal_file_size") or 0)
+        wal_end_lsn = int(state.get("wal_end_lsn") or 0)
+        last_checkpoint_lsn = int(state.get("last_checkpoint_lsn") or 0)
+        active_readers = int(state.get("active_readers") or 0)
+        wal_versions = int(state.get("wal_versions") or 0)
+        configured_threshold = int(settings.database_checkpoint_wal_threshold_bytes)
+        threshold = (
+            configured_threshold
+            if configured_threshold > 0
+            else 64 * 1024 * 1024
+        )
+
+        details = (
+            f"WAL size: {wal_file_size / (1024 * 1024):.1f} MiB; "
+            f"wal_end_lsn: {wal_end_lsn}; "
+            f"last_checkpoint_lsn: {last_checkpoint_lsn}; "
+            f"active_readers: {active_readers}; "
+            f"wal_versions: {wal_versions}."
+        )
+
+        if active_readers > 0:
+            return HealthCheck(
+                id="database_wal",
+                title="Database WAL",
+                severity=HealthSeverity.WARNING,
+                summary="WAL checkpoint may be delayed by active database readers.",
+                details=details,
+                remediation="Let active requests complete or restart the backend if the reader count remains stuck.",
+            )
+
+        if wal_file_size >= threshold:
+            return HealthCheck(
+                id="database_wal",
+                title="Database WAL",
+                severity=HealthSeverity.WARNING,
+                summary=(
+                    "DecentDB WAL is larger than the configured checkpoint threshold."
+                ),
+                details=details,
+                remediation="Run a DecentDB checkpoint or wait for the SPF5000 database maintenance coordinator to checkpoint it.",
+            )
+
+        return HealthCheck(
+            id="database_wal",
+            title="Database WAL",
+            severity=HealthSeverity.OK,
+            summary="DecentDB WAL size is within the configured threshold.",
+            details=details,
         )
 
 
@@ -1069,14 +1167,9 @@ class DoctorService:
         }
 
     def _collect_database_snapshot(self) -> dict[str, Any]:
-        sidecar_paths = [
-            settings.database_path,
-            Path(f"{settings.database_path}-wal"),
-            Path(f"{settings.database_path}-shm"),
-        ]
         return {
             "decentdb_available": is_decentdb_available(),
-            "files": [self._stat_path(path) for path in sidecar_paths],
+            "files": [self._stat_path(path) for path in database_paths()],
             "connection_check": self._collect_database_connection_check(),
             "engine_storage_state": self._collect_engine_storage_state(),
             "recent_recovery_directories": self._list_recent_directories(

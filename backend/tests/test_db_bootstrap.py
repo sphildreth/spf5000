@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.db import bootstrap, connection
 from app.db.connection import get_connection, is_null_connection
+from app.db.recovery import existing_database_paths
 from app.main import create_app
 from app.runtime_coordinators import stop_background_coordinators
 
@@ -29,6 +30,27 @@ def _patch_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(settings, "session_secret", _TEST_SESSION_SECRET)
 
 
+def test_existing_database_paths_include_decentdb_and_legacy_sidecars(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_settings(monkeypatch, tmp_path)
+
+    db_path = settings.database_path
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    candidates = [
+        db_path,
+        Path(f"{db_path}.wal"),
+        Path(f"{db_path}-wal"),
+        Path(f"{db_path}.shm"),
+        Path(f"{db_path}-shm"),
+    ]
+    for candidate in candidates:
+        candidate.write_bytes(candidate.name.encode())
+
+    assert set(existing_database_paths()) == set(candidates)
+
+
 def test_startup_recovers_from_unreadable_database_bootstrap_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -38,9 +60,9 @@ def test_startup_recovers_from_unreadable_database_bootstrap_failure(
     db_path = settings.database_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     db_path.write_bytes(b"unreadable-database")
-    wal_path = Path(f"{db_path}-wal")
+    wal_path = Path(f"{db_path}.wal")
     wal_path.write_bytes(b"wal-bytes")
-    shm_path = Path(f"{db_path}-shm")
+    shm_path = Path(f"{db_path}.shm")
     shm_path.write_bytes(b"shm-bytes")
 
     original_bootstrap_database = bootstrap.bootstrap_database
@@ -118,9 +140,9 @@ def test_request_time_open_failure_recovers_by_quarantining_database(
         connection.reset_connection_state()
         original_db_bytes = db_path.read_bytes()
 
-        wal_path = Path(f"{db_path}-wal")
+        wal_path = Path(f"{db_path}.wal")
         wal_path.write_bytes(b"wal-bytes")
-        shm_path = Path(f"{db_path}-shm")
+        shm_path = Path(f"{db_path}.shm")
         shm_path.write_bytes(b"shm-bytes")
 
         original_connect = connection.decentdb.connect

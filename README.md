@@ -112,13 +112,20 @@ For local development in this repo, the expected DecentDB path is still a source
 
 ### 1. Start the backend
 
+Build the DecentDB native library first:
+
+```bash
+cd /path/to/decentdb
+cargo build -p decentdb
+```
+
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pip install -e /path/to/decentdb/bindings/python
-export DECENTDB_NATIVE_LIB=/path/to/decentdb/build/libc_api.so
+export DECENTDB_NATIVE_LIB=/path/to/decentdb/target/debug/libdecentdb.so
 python -m app
 ```
 
@@ -128,11 +135,11 @@ If you cloned `decentdb` next to this repository, a typical install looks like t
 cd backend
 source .venv/bin/activate
 python -m pip install -e ../../decentdb/bindings/python
-export DECENTDB_NATIVE_LIB=$PWD/../../decentdb/build/libc_api.so
+export DECENTDB_NATIVE_LIB=$PWD/../../decentdb/target/debug/libdecentdb.so
 python -m app
 ```
 
-When running from a DecentDB source checkout, `build/libc_api.so` is the normal Linux output. Release bundles may instead ship `libdecentdb.so`; the Python binding accepts either filename, and `DECENTDB_NATIVE_LIB` can point to either one.
+When running from a DecentDB source checkout, `target/debug/libdecentdb.so` is the normal Linux development output and `target/release/libdecentdb.so` is the optimized output. Release bundles ship `libdecentdb.so`; older local builds may expose `libc_api.so`. The Python binding accepts either filename, and `DECENTDB_NATIVE_LIB` can point to either one.
 
 The backend reads `spf5000.toml` from the repo root by default. Override the config path with `SPF5000_CONFIG=/path/to/spf5000.toml`.
 
@@ -181,6 +188,17 @@ level = "INFO"
 
 [security]
 # session_secret = "replace-with-a-long-random-string"
+
+[paths]
+data_dir = "./backend/data"
+cache_dir = "./backend/cache"
+database_path = "./backend/data/spf5000.ddb"
+
+[database]
+stmt_cache_size = 32
+checkpoint_interval_seconds = 300
+checkpoint_initial_delay_seconds = 60
+checkpoint_wal_threshold_bytes = 67108864
 ```
 
 Important notes:
@@ -188,6 +206,7 @@ Important notes:
 - Set `SPF5000_CONFIG` to use a different runtime config path.
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
+- SPF5000 manages DecentDB WAL checkpointing from the backend. By default it checks WAL size every 5 minutes, starts checking 60 seconds after startup, and checkpoints once the WAL sidecar reaches 64 MiB.
 - Sleep scheduling and the optional display timezone are managed in-app and stored in DecentDB, not in `cron`, `systemd`, Chromium flags, or `spf5000.toml`.
 - Weather settings, cached conditions, active alerts, and refresh history live in DecentDB-backed application state rather than the runtime config file.
 
@@ -196,6 +215,7 @@ Important notes:
 By default, the backend manages these paths:
 
 - `backend/data/spf5000.ddb`
+- DecentDB sidecars beside the database, such as `backend/data/spf5000.ddb.wal`
 - `backend/data/fallback/empty-display.jpg`
 - `backend/data/sources/local-files/import/`
 - `backend/data/staging/imports/`
@@ -211,7 +231,10 @@ The backend currently recognizes:
 - `.jpeg`
 - `.png`
 - `.webp`
+- `.bmp`
 - `.gif`
+- `.tif`
+- `.tiff`
 
 ## Raspberry Pi appliance deployment
 
@@ -262,6 +285,7 @@ http://<pi-hostname-or-ip>:8000/setup
 - DecentDB binding installation from the matching source archive plus native-library download from the matching release bundle
 - `frontend/dist` creation
 - runtime `spf5000.toml` generation
+- pre-install DecentDB backup archive creation, including `.ddb.wal` / `.ddb.shm` sidecars when present
 - `systemd` service installation and startup
 - Chromium autostart kiosk wiring
 
@@ -315,7 +339,7 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 
 - health and system status
 - setup and auth/session
-- doctor diagnostics and admin log viewing
+- doctor diagnostics, support snapshots, and admin log viewing
 - settings, display timezone, and sleep schedule
 - weather settings, cached conditions, and alert status
 - themes and appearance
@@ -362,7 +386,7 @@ Design and operational docs live in-repo:
 
 ## Current limits
 
-SPF5000 `1.0.0` is intentionally focused:
+SPF5000 is intentionally focused:
 
 - weather currently supports one configured location and the U.S. National Weather Service provider
 - browser uploads support batch image ingestion into local collections

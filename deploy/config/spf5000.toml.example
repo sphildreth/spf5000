@@ -21,3 +21,9 @@ data_dir = "/var/lib/spf5000"
 cache_dir = "/var/cache/spf5000"
 log_dir = "/var/cache/spf5000/logs"
 database_path = "/var/lib/spf5000/spf5000.ddb"
+
+[database]
+stmt_cache_size = 32
+checkpoint_interval_seconds = 300
+checkpoint_initial_delay_seconds = 60
+checkpoint_wal_threshold_bytes = 67108864

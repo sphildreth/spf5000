@@ -26,3 +26,8 @@ database_path = "./backend/data/spf5000.ddb"
 # Lower statement-cache memory on small devices. Increase only if profiling
 # shows the database is re-preparing a stable query set too often.
 stmt_cache_size = 32
+# SPF5000 uses explicit checkpoints because DecentDB's shared-WAL mode keeps
+# automatic checkpointing conservative across cached connections.
+checkpoint_interval_seconds = 300
+checkpoint_initial_delay_seconds = 60
+checkpoint_wal_threshold_bytes = 67108864

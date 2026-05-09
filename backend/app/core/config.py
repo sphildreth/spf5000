@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     log_dir: Path = _log_dir_default
     database_path: Path = _database_path_default
     database_stmt_cache_size: int = int(_database.get("stmt_cache_size", 32))
+    database_checkpoint_interval_seconds: int = int(
+        _database.get("checkpoint_interval_seconds", 300)
+    )
+    database_checkpoint_initial_delay_seconds: int = int(
+        _database.get("checkpoint_initial_delay_seconds", 60)
+    )
+    database_checkpoint_wal_threshold_bytes: int = int(
+        _database.get("checkpoint_wal_threshold_bytes", 64 * 1024 * 1024)
+    )
     frontend_dist_dir: Path = REPO_ROOT / "frontend" / "dist"
     legacy_frontend_dist_dir: Path = REPO_ROOT / "frontend_dist"
 

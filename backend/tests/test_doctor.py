@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
 
@@ -306,6 +307,79 @@ class TestDatabaseDoctorChecks:
         check = DatabaseDoctorChecks._check_file_exists()
         assert check.id == "database_file"
         assert check.severity in [HealthSeverity.OK, HealthSeverity.ERROR]
+
+    def test_wal_state_warns_when_wal_exceeds_threshold(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeConn:
+            def inspect_storage_state(self) -> dict[str, object]:
+                return {
+                    "wal_file_size": 192 * 1024 * 1024,
+                    "wal_end_lsn": 145968045,
+                    "last_checkpoint_lsn": 0,
+                    "active_readers": 0,
+                    "wal_versions": 51,
+                }
+
+        @contextmanager
+        def fake_get_connection():
+            yield FakeConn()
+
+        monkeypatch.setattr("app.services.doctor_service.decentdb", object())
+        monkeypatch.setattr(
+            "app.services.doctor_service.get_connection", fake_get_connection
+        )
+        monkeypatch.setattr(
+            "app.services.doctor_service.is_null_connection", lambda _conn: False
+        )
+        monkeypatch.setattr(
+            settings,
+            "database_checkpoint_wal_threshold_bytes",
+            64 * 1024 * 1024,
+        )
+
+        check = DatabaseDoctorChecks._check_wal_state()
+
+        assert check.id == "database_wal"
+        assert check.severity == HealthSeverity.WARNING
+        assert "larger than the configured checkpoint threshold" in check.summary
+        assert check.details is not None
+        assert "192.0 MiB" in check.details
+
+    def test_wal_state_ok_when_wal_below_threshold(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeConn:
+            def inspect_storage_state(self) -> dict[str, object]:
+                return {
+                    "wal_file_size": 32,
+                    "wal_end_lsn": 0,
+                    "last_checkpoint_lsn": 145968045,
+                    "active_readers": 0,
+                    "wal_versions": 0,
+                }
+
+        @contextmanager
+        def fake_get_connection():
+            yield FakeConn()
+
+        monkeypatch.setattr("app.services.doctor_service.decentdb", object())
+        monkeypatch.setattr(
+            "app.services.doctor_service.get_connection", fake_get_connection
+        )
+        monkeypatch.setattr(
+            "app.services.doctor_service.is_null_connection", lambda _conn: False
+        )
+        monkeypatch.setattr(
+            settings,
+            "database_checkpoint_wal_threshold_bytes",
+            64 * 1024 * 1024,
+        )
+
+        check = DatabaseDoctorChecks._check_wal_state()
+
+        assert check.id == "database_wal"
+        assert check.severity == HealthSeverity.OK
 
 
 class TestStorageDoctorChecks:

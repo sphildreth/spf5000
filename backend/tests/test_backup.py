@@ -158,6 +158,29 @@ def test_validate_candidate_database_uses_configured_stmt_cache_size(
     assert fake_decentdb.connections[0].closed is True
 
 
+def test_remove_database_sidecars_handles_decentdb_and_legacy_names(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "spf5000.ddb"
+    monkeypatch.setattr(settings, "database_path", database_path)
+
+    database_path.write_bytes(b"database")
+    sidecars = [
+        Path(f"{database_path}.wal"),
+        Path(f"{database_path}-wal"),
+        Path(f"{database_path}.shm"),
+        Path(f"{database_path}-shm"),
+    ]
+    for sidecar in sidecars:
+        sidecar.write_bytes(sidecar.name.encode())
+
+    BackupService._remove_database_sidecars()
+
+    assert database_path.exists()
+    assert all(not sidecar.exists() for sidecar in sidecars)
+
+
 def test_database_import_restores_database_and_clears_session(
     test_client: TestClient,
 ) -> None:

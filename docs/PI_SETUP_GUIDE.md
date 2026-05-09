@@ -271,7 +271,7 @@ To update a Pi that is already running SPF5000, update the repository checkout a
 
 When you re-run the installer from an already-active Pi desktop session, log out or reboot once afterward so the updated Chromium autostart files run in a fresh desktop login.
 
-If the installer finds an existing SPF5000 database, it first writes a timestamped backup archive under `installer-backups/` next to the active database file. That archive includes `spf5000.ddb` and also captures `-wal` / `-shm` sidecars when they exist.
+If the installer finds an existing SPF5000 database, it first writes a timestamped backup archive under `installer-backups/` next to the active database file. That archive includes `spf5000.ddb` and also captures DecentDB `.wal` / `.shm` sidecars, plus legacy `-wal` / `-shm` sidecars, when they exist.
 
 Typical update flow:
 

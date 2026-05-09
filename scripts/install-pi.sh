@@ -298,6 +298,9 @@ stop_service_if_running() {
   if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
     log "Stopping ${SERVICE_NAME}.service before refreshing install artifacts."
     systemctl stop "${SERVICE_NAME}.service"
+    if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+      fail "${SERVICE_NAME}.service is still active after systemctl stop; refusing to touch database files while the backend may be running."
+    fi
   fi
 }
 
@@ -343,8 +346,14 @@ backup_existing_database_if_present() {
   archive_path="${database_backup_dir}/spf5000-ddb-install-backup-${timestamp}.tar.gz"
   archive_members=("${source_name}")
 
+  if [[ -f "${database_backup_source}.wal" ]]; then
+    archive_members+=("${source_name}.wal")
+  fi
   if [[ -f "${database_backup_source}-wal" ]]; then
     archive_members+=("${source_name}-wal")
+  fi
+  if [[ -f "${database_backup_source}.shm" ]]; then
+    archive_members+=("${source_name}.shm")
   fi
   if [[ -f "${database_backup_source}-shm" ]]; then
     archive_members+=("${source_name}-shm")
@@ -561,6 +570,12 @@ data_dir = "${DATA_DIR}"
 cache_dir = "${CACHE_DIR}"
 log_dir = "${LOG_DIR}"
 database_path = "${DATABASE_PATH}"
+
+[database]
+stmt_cache_size = 32
+checkpoint_interval_seconds = 300
+checkpoint_initial_delay_seconds = 60
+checkpoint_wal_threshold_bytes = 67108864
 EOF
 
   chown "${RUNTIME_USER}:${RUNTIME_GROUP}" "${CONFIG_PATH}"

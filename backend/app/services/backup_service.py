@@ -14,10 +14,20 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.db.bootstrap import initialize_runtime
-from app.db.connection import decentdb, exclusive_database_access, get_connection, is_null_connection, reset_connection_state
+from app.db.connection import (
+    decentdb,
+    exclusive_database_access,
+    get_connection,
+    is_null_connection,
+    reset_connection_state,
+)
+from app.db.recovery import database_paths
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.collection_repository import CollectionRepository
-from app.runtime_coordinators import start_background_coordinators, stop_background_coordinators
+from app.runtime_coordinators import (
+    start_background_coordinators,
+    stop_background_coordinators,
+)
 
 _BACKUP_DATABASE_MEMBER = "spf5000.ddb"
 _BACKUP_MANIFEST_MEMBER = "backup-manifest.json"
@@ -309,8 +319,7 @@ class BackupService:
 
     @staticmethod
     def _remove_database_sidecars() -> None:
-        for suffix in (".wal", "-wal", ".shm", "-shm"):
-            sidecar_path = Path(f"{settings.database_path}{suffix}")
+        for sidecar_path in database_paths()[1:]:
             if sidecar_path.exists():
                 sidecar_path.unlink()
 

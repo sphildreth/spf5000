@@ -99,7 +99,7 @@ If SPF5000 cannot read the configured DecentDB file during startup, it preserves
 
 During recovery SPF5000:
 
-- moves the current `spf5000.ddb` file plus any `-wal` or `-shm` sidecars into `staging/database-recovery/<timestamp>/` under the configured data root
+- moves the current `spf5000.ddb` file plus any DecentDB `.wal` / `.shm` sidecars and legacy `-wal` / `-shm` sidecars into `staging/database-recovery/<timestamp>/` under the configured data root
 - logs the recovery location
 - creates a fresh database so the app can finish starting
 

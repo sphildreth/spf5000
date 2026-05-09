@@ -84,7 +84,7 @@ vendor/decentdb/
 
 Use `deploy/systemd/spf5000.service.template`, `deploy/autostart/spf5000-kiosk.desktop.template`, and `deploy/config/spf5000.toml.example` as the source-of-truth templates.
 
-When the installer finds an existing database, it also writes a timestamped backup archive under `installer-backups/` next to the active database file. The archive contains `spf5000.ddb` and includes `-wal` / `-shm` sidecars too when they exist so the preserved database state is more useful for recovery work.
+When the installer finds an existing database, it also writes a timestamped backup archive under `installer-backups/` next to the active database file. The archive contains `spf5000.ddb` and includes DecentDB `.wal` / `.shm` sidecars, plus legacy `-wal` / `-shm` sidecars, when they exist so the preserved database state is more useful for recovery work.
 
 ## DecentDB requirement
 

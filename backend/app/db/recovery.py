@@ -33,12 +33,27 @@ def is_recoverable_database_error(exc: Exception) -> bool:
     return any(marker in message for marker in _RECOVERABLE_DATABASE_ERROR_MARKERS)
 
 
-def existing_database_paths() -> list[Path]:
+def database_paths(database_path: Path | None = None) -> list[Path]:
+    db_path = database_path or settings.database_path
     candidates = [
-        settings.database_path,
-        Path(f'{settings.database_path}-wal'),
-        Path(f'{settings.database_path}-shm'),
+        db_path,
+        Path(f"{db_path}.wal"),
+        Path(f"{db_path}-wal"),
+        Path(f"{db_path}.shm"),
+        Path(f"{db_path}-shm"),
     ]
+    unique_candidates: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def existing_database_paths() -> list[Path]:
+    candidates = database_paths()
     return [path for path in candidates if path.exists()]
 
 
