@@ -19,13 +19,14 @@ class CollectionRepository:
                     c.source_id,
                     c.is_default,
                     c.is_active,
+                    c.storage_path,
                     c.created_at,
                     c.updated_at,
                     sum(case when ca.asset_id is not null and a.is_active = 1 then 1 else 0 end) as asset_count
                 from collections c
                 left join collection_assets ca on ca.collection_id = c.id
                 left join assets a on a.id = ca.asset_id
-                group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.created_at, c.updated_at
+                group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.storage_path, c.created_at, c.updated_at
                 order by c.is_default desc, c.name asc
                 """
             )
@@ -44,6 +45,7 @@ class CollectionRepository:
                     c.source_id,
                     c.is_default,
                     c.is_active,
+                    c.storage_path,
                     c.created_at,
                     c.updated_at,
                     sum(case when ca.asset_id is not null and a.is_active = 1 then 1 else 0 end) as asset_count
@@ -51,7 +53,7 @@ class CollectionRepository:
                 left join collection_assets ca on ca.collection_id = c.id
                 left join assets a on a.id = ca.asset_id
                 where c.id = ?
-                group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.created_at, c.updated_at
+                group by c.id, c.name, c.description, c.source_id, c.is_default, c.is_active, c.storage_path, c.created_at, c.updated_at
                 """,
                 (collection_id,),
             )
@@ -65,8 +67,8 @@ class CollectionRepository:
             conn.execute(
                 """
                 insert into collections (
-                    id, name, description, source_id, is_default, is_active, created_at, updated_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                    id, name, description, source_id, is_default, is_active, storage_path, created_at, updated_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     collection.id,
@@ -75,6 +77,7 @@ class CollectionRepository:
                     collection.source_id,
                     bool_to_int(collection.is_default),
                     bool_to_int(collection.is_active),
+                    collection.storage_path,
                     collection.created_at,
                     collection.updated_at,
                 ),
@@ -89,7 +92,7 @@ class CollectionRepository:
             conn.execute(
                 """
                 update collections
-                set name = ?, description = ?, source_id = ?, is_active = ?, updated_at = ?
+                set name = ?, description = ?, source_id = ?, is_active = ?, storage_path = ?, updated_at = ?
                 where id = ?
                 """,
                 (
@@ -97,6 +100,7 @@ class CollectionRepository:
                     collection.description,
                     collection.source_id,
                     bool_to_int(collection.is_active),
+                    collection.storage_path,
                     now,
                     collection.id,
                 ),
@@ -112,6 +116,7 @@ class CollectionRepository:
             source_id=None if row["source_id"] is None else str(row["source_id"]),
             is_default=int_to_bool(row["is_default"]),
             is_active=int_to_bool(row["is_active"]),
+            storage_path=None if row["storage_path"] is None else str(row["storage_path"]),
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
             asset_count=int(row["asset_count"] or 0),

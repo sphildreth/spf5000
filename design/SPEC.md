@@ -165,7 +165,7 @@ Configured provider sources. V1 seeds a default `local_files` source.
 
 ### `collections`
 
-Logical groupings of imported assets. V1 seeds a default collection for local media.
+Logical groupings of imported assets. V1 seeds a default collection for local media. Each collection may have an optional `storage_path` that overrides where its assets are stored under the global `storage/originals/` directory.
 
 ### `assets`
 

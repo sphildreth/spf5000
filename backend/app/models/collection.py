@@ -11,6 +11,7 @@ class Collection:
     source_id: str | None
     is_default: bool
     is_active: bool
+    storage_path: str | None
     created_at: str
     updated_at: str
     asset_count: int = 0

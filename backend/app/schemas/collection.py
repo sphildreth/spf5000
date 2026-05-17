@@ -14,6 +14,7 @@ class CollectionResponse(BaseModel):
     source_id: str | None
     is_default: bool
     is_active: bool
+    storage_path: str | None
     created_at: str
     updated_at: str
     asset_count: int
@@ -28,6 +29,7 @@ class CollectionCreateRequest(BaseModel):
     description: str = ""
     source_id: str | None = None
     is_active: bool = True
+    storage_path: str | None = None
 
 
 class CollectionUpdateRequest(BaseModel):
@@ -35,3 +37,4 @@ class CollectionUpdateRequest(BaseModel):
     description: str | None = None
     source_id: str | None = None
     is_active: bool | None = None
+    storage_path: str | None = None

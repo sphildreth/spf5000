@@ -41,6 +41,7 @@ def create_collection(
         description=request.description,
         source_id=request.source_id,
         is_active=request.is_active,
+        storage_path=request.storage_path,
     )
     return CollectionResponse.from_domain(collection)
 
@@ -57,6 +58,7 @@ def update_collection(
         request.description,
         request.source_id,
         request.is_active,
+        request.storage_path,
     )
     if updated is None:
         raise HTTPException(status_code=404, detail="Collection not found")

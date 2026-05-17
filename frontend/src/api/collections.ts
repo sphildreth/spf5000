@@ -26,6 +26,7 @@ function normalizeCollection(item: unknown, index: number): CollectionSummary {
     description: asOptionalString(record?.description),
     source_id: sourceId,
     source_ids: sourceId ? [sourceId] : asStringArray(record?.source_ids),
+    storage_path: asOptionalString(record?.storage_path) ?? null,
     asset_count: asOptionalNumber(record?.asset_count),
     updated_at: asOptionalString(record?.updated_at) ?? null,
     is_active: asBoolean(record?.is_active, true),

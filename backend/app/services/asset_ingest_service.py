@@ -34,9 +34,18 @@ class AssetIngestService:
         self,
         asset_repo: AssetRepository | None = None,
         settings_repo: SettingsRepository | None = None,
+        collection_service: "CollectionService | None" = None,
     ) -> None:
         self.asset_repo = asset_repo or AssetRepository()
         self.settings_repo = settings_repo or SettingsRepository()
+        self._collection_service = collection_service
+
+    @property
+    def collection_service(self) -> "CollectionService":
+        if self._collection_service is None:
+            from app.services.collection_service import CollectionService
+            self._collection_service = CollectionService()
+        return self._collection_service
 
     def ingest_file(
         self,
@@ -98,8 +107,9 @@ class AssetIngestService:
         extension = (
             Path(filename).suffix.lower() or source_path.suffix.lower() or ".jpg"
         )
+        base_dir = self._resolve_collection_storage_dir(collection_ids)
         original_destination = self._build_managed_path(
-            settings.originals_dir, checksum, extension
+            base_dir, checksum, extension
         )
         original_destination.parent.mkdir(parents=True, exist_ok=True)
         if source_path.resolve() != original_destination.resolve():
@@ -246,6 +256,15 @@ class AssetIngestService:
     @staticmethod
     def _build_managed_path(base_dir: Path, checksum: str, extension: str) -> Path:
         return base_dir / checksum[:2] / f"{checksum}{extension}"
+
+    def _resolve_collection_storage_dir(self, collection_ids: list[str]) -> Path:
+        if not collection_ids:
+            return settings.originals_dir
+        primary_collection_id = collection_ids[0]
+        collection = self.collection_service.get_collection(primary_collection_id)
+        if collection and collection.storage_path:
+            return Path(collection.storage_path)
+        return settings.originals_dir / primary_collection_id
 
     @staticmethod
     def _resize_display_variant(

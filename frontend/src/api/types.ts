@@ -236,6 +236,7 @@ export interface CollectionSummary {
   description?: string
   source_id?: string
   source_ids: string[]
+  storage_path?: string | null
   asset_count?: number
   updated_at?: string | null
   is_active: boolean
@@ -246,6 +247,7 @@ export interface CollectionUpsertRequest {
   description?: string
   source_id?: string | null
   is_active: boolean
+  storage_path?: string | null
 }
 
 export interface DatabaseBackupImportResponse {

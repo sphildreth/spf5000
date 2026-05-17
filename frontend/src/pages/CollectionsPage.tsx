@@ -14,6 +14,7 @@ const emptyDraft: CollectionUpsertRequest = {
   name: '',
   description: '',
   is_active: true,
+  storage_path: null,
 }
 
 export function CollectionsPage() {
@@ -36,6 +37,7 @@ export function CollectionsPage() {
             name: collection.name,
             description: collection.description ?? '',
             is_active: collection.is_active,
+            storage_path: collection.storage_path ?? null,
           },
         ]),
       ),
@@ -145,6 +147,20 @@ export function CollectionsPage() {
               />
               <span>Available for playback</span>
             </label>
+            <label>
+              <span>Storage path (optional)</span>
+              <input
+                type="text"
+                value={newCollection.storage_path ?? ''}
+                placeholder="Leave blank to use default"
+                onChange={(event) =>
+                  setNewCollection((current) => ({
+                    ...current,
+                    storage_path: event.target.value || null,
+                  }))
+                }
+              />
+            </label>
             <div className="form-actions">
               <button type="submit" className="button">
                 Add collection
@@ -232,6 +248,23 @@ export function CollectionsPage() {
                     }
                   />
                   <span>Collection is active</span>
+                </label>
+                <label>
+                  <span>Storage path</span>
+                  <input
+                    type="text"
+                    value={draft.storage_path ?? ''}
+                    placeholder="Leave blank for default"
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [collection.id]: {
+                          ...draft,
+                          storage_path: event.target.value || null,
+                        },
+                      }))
+                    }
+                  />
                 </label>
                 <dl className="detail-list detail-list--compact">
                   <div>

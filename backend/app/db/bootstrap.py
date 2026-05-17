@@ -116,6 +116,7 @@ TABLE_STATEMENTS = {
             source_id text,
             is_default integer not null default 0,
             is_active integer not null default 1,
+            storage_path text,
             created_at text not null,
             updated_at text not null
         )
@@ -424,6 +425,7 @@ def bootstrap_database() -> None:
         _ensure_column(conn, "provider_auth_flows", "next_poll_at", "text")
         _ensure_column(conn, "provider_accounts", "last_sync_requested_at", "text")
         _ensure_column(conn, "provider_accounts", "last_completed_sync_at", "text")
+        _ensure_column(conn, "collections", "storage_path", "text")
 
         now = utc_now()
         for key, value in DEFAULT_SETTINGS.items():
