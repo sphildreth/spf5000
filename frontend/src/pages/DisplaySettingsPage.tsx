@@ -77,6 +77,9 @@ export function DisplaySettingsPage() {
     if (!draft?.shuffle_enabled) {
       return 'Photos play in collection order (newest first).'
     }
+    if (!draft.shuffle_bag_enabled) {
+      return 'Photos are drawn one at a time at random, so a photo can appear again before every other photo has been shown.'
+    }
 
     return 'Each photo is shown once before any repeat. The frame tracks progress on the server, so a reload or restart resumes the same pass.'
   }, [draft])
@@ -409,7 +412,32 @@ export function DisplaySettingsPage() {
                   />
                   <span className="settings-toggle-card__copy">
                     <span>Shuffle playlist order</span>
-                    <span className="settings-toggle-card__note">Randomizes playback — each photo is shown once before any repeat.</span>
+                    <span className="settings-toggle-card__note">Plays photos in random order instead of newest first.</span>
+                  </span>
+                </label>
+                <label className="checkbox-field settings-toggle-card">
+                  <input
+                    type="checkbox"
+                    checked={draft.shuffle_bag_enabled}
+                    disabled={!draft.shuffle_enabled}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              shuffle_bag_enabled: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                  <span className="settings-toggle-card__copy">
+                    <span>Show every photo before repeating</span>
+                    <span className="settings-toggle-card__note">
+                      {draft.shuffle_enabled
+                        ? 'Deals a fresh cycle that plays each photo once per pass. Turn off to allow repeats inside a pass.'
+                        : 'Applies once shuffle is on.'}
+                    </span>
                   </span>
                 </label>
               </div>
@@ -449,7 +477,11 @@ export function DisplaySettingsPage() {
                 <dd>
                   <span className="detail-list__value-block">
                     <span className="detail-list__value-heading">
-                      {draft.shuffle_enabled ? 'Show all before repeating' : 'Sequential loop'}
+                      {draft.shuffle_enabled
+                        ? draft.shuffle_bag_enabled
+                          ? 'Show all before repeating'
+                          : 'Random with repeats'
+                        : 'Sequential loop'}
                     </span>
                     <span className="detail-list__value-note">{shuffleRepeatSummary}</span>
                   </span>

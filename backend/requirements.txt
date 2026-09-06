@@ -10,7 +10,6 @@ python-multipart==0.0.29
 Pillow==12.2.0
 httpx==0.28.1
 itsdangerous==2.2.0
-slowapi==0.1.9
 pytest==9.0.3
 structlog==25.5.0
 watchdog==6.0.0

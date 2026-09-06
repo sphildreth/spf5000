@@ -74,7 +74,8 @@ SPF5000 uses explicit backend-managed checkpoints because its cached DecentDB co
 |-----|------|---------|-------------|
 | `session_secret` | string | *(none)* | 64-character hex string used to sign session cookies. **Required for production.** Generate with: `python -c "import secrets; print(secrets.token_hex(32))"`. Without this, an ephemeral secret is used and sessions are invalidated on every server restart. |
 | `session_https_only` | boolean | `false` | When `true`, session cookies are marked `Secure` and `HttpOnly` and only sent over HTTPS. Enable this when the app runs behind a TLS-terminating reverse proxy (e.g., nginx + Let's Encrypt). **Do not enable on plain HTTP.** |
-| `rate_limit_enabled` | boolean | `true` | Enable per-endpoint rate limiting on auth endpoints. Disable for development or environments without the `slowapi` package. |
+| `rate_limit_enabled` | boolean | `true` | Enable in-memory per-caller rate limiting on the unauthenticated endpoints: setup, login, and the public display endpoints (playlist, playback progress, weather, alerts, new-asset count). Each caller gets an independent budget per endpoint. Limits are sized far above normal appliance traffic, so a 429 means something is misbehaving. Disable for development or automated testing. |
+| `trust_proxy` | boolean | `false` | When `true`, `X-Forwarded-For` is trusted to identify the caller for rate limiting. Leave `false` unless SPF5000 really runs behind a TLS-terminating reverse proxy you control: on a LAN the header is otherwise trivially spoofable. |
 
 ---
 
@@ -91,5 +92,6 @@ Environment variables take precedence over `spf5000.toml` settings for most valu
 | `SPF5000_LOG_DIR` | Override `[paths].log_dir` |
 | `SPF5000_LOG_LEVEL` | Override `[logging].level` |
 | `SPF5000_RATE_LIMIT` | Override `[security].rate_limit_enabled` (`true` / `false`) |
+| `SPF5000_TRUST_PROXY` | Override `[security].trust_proxy` (`true` / `false`) |
 | `NWS_API_KEY` | API key for the National Weather Service API (improves rate limits) |
 | `SESSION_SECRET` | Override `[security].session_secret` |

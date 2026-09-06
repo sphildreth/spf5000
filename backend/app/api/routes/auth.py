@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.api.rate_limit import check_rate_limit
+from app.api.rate_limit import check_rate_limit, client_ip
 from app.schemas.auth import (
     LoginRequest,
     SessionResponse,
@@ -62,17 +62,9 @@ def _require_auth_available() -> None:
         )
 
 
-def _get_client_ip(request: Request) -> str:
-    """Get the client IP address from the request."""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 @router.post("/setup", response_model=SessionResponse)
 def setup(request: Request, body: SetupRequest) -> SessionResponse:
-    if not check_rate_limit(_get_client_ip(request), "5/minute"):
+    if not check_rate_limit(client_ip(request), "5/minute"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
     _require_auth_available()
     if _service.is_bootstrapped():
@@ -92,7 +84,7 @@ def get_session(request: Request) -> SessionResponse:
 
 @router.post("/auth/login", response_model=SessionResponse)
 def login(request: Request, body: LoginRequest) -> SessionResponse:
-    if not check_rate_limit(_get_client_ip(request), "10/minute"):
+    if not check_rate_limit(client_ip(request), "10/minute"):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
     _require_auth_available()
     if not _service.is_bootstrapped():

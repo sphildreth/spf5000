@@ -638,11 +638,11 @@ EOF
   local wayfire_ini="${RUNTIME_HOME}/.config/wayfire.ini"
 
   mkdir -p "$(dirname "${labwc_env}")" "$(dirname "${wayfire_ini}")"
-  
+
   if [[ ! -f "${labwc_env}" ]] || ! grep -q "XCURSOR_THEME" "${labwc_env}"; then
     echo "XCURSOR_THEME=empty" >> "${labwc_env}"
   fi
-  
+
   if [[ ! -f "${wayfire_ini}" ]] || ! grep -q "cursor_theme" "${wayfire_ini}"; then
     echo -e "\n[input]\ncursor_theme = empty" >> "${wayfire_ini}"
   fi

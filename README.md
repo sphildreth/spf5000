@@ -205,6 +205,7 @@ checkpoint_wal_threshold_bytes = 67108864
 Important notes:
 
 - Set `SPF5000_CONFIG` to use a different runtime config path.
+- Rate limiting is on by default; see *API and UX surface &#8594; Rate limiting* for `SPF5000_RATE_LIMIT` and `SPF5000_TRUST_PROXY`.
 - Set `security.session_secret` if you want admin sessions to survive backend restarts.
 - If `security.session_secret` is omitted, SPF5000 generates an ephemeral secret and admin sessions are invalidated on restart.
 - SPF5000 manages DecentDB WAL checkpointing from the backend. By default it checks logical WAL usage every 5 minutes, starts checking 60 seconds after startup, and checkpoints once usage reaches 64 MiB. DecentDB may still allocate a 64 MiB `.ddb.wal` file after small writes; Doctor reports this separately from logical usage.
@@ -333,12 +334,24 @@ per-check timing summary:
 5. the backend pytest suite
 
 The script is read-only apart from normal build output; it never commits or pushes. Use
-`--list` to preview the plan, `--frontend-only` / `--backend-only` to narrow scope, and
-`--include-e2e` for Playwright (needs installed browsers and a backend on `:8000`). Ruff runs
-with `--include-lint` but is not an adopted gate yet, so its pre-existing findings currently
-fail that check. Vitest runs with one retry by default because
-`frontend/src/hooks/useAsyncData.test.ts` has a known timing-sensitive failure; pass `--strict`
-to disable retries.
+`--list` to preview the plan and `--frontend-only` / `--backend-only` to narrow scope. It also
+checks up front that the backend virtualenv can load the DecentDB native library, because every
+backend test otherwise dies inside `ctypes` with an opaque error.
+
+`--include-e2e` adds Playwright last. It needs installed browsers
+(`cd frontend && npm run playwright:install`); the Playwright config then builds the frontend,
+starts its own backend on `127.0.0.1:8000` against a throwaway state directory, and shuts it
+down — so nothing has to be listening on that port and no run ever touches `backend/data`.
+Ruff runs with `--include-lint` but is not an adopted gate yet, so its pre-existing findings
+currently fail that check.
+
+Tests must pass on the first attempt; Vitest therefore runs without retries. Pass
+`--retries 1` only while debugging a timing-sensitive test. For coverage, run
+`cd frontend && npm run test:coverage`.
+
+`.github/workflows/ci.yml` runs the same gates: whitespace/parse checks and the frontend suite
+always, with the backend and Playwright jobs activating once the repository defines
+`DECENTDB_ARTIFACT_URL` (DecentDB is not published to PyPI — see *Prerequisites*).
 
 ### Production frontend serving
 
@@ -378,6 +391,25 @@ Browse the generated OpenAPI docs at:
 ```text
 http://127.0.0.1:8000/api/docs
 ```
+
+### Rate limiting
+
+Endpoints a frame or browser calls without an admin session are rate limited per client IP:
+
+| Endpoint | Limit |
+| --- | --- |
+| `POST /api/display/playlist/progress` | 240/minute |
+| `GET /api/display/playlist`, `GET /api/display/new-assets/count` | 120/minute |
+| `GET /api/display/weather`, `GET /api/display/alerts` | 60/minute |
+| `POST /api/auth/login` | 10/minute |
+| `POST /api/setup` | 5/minute |
+
+A misconfigured device therefore cannot flood the Pi. Slideshow playback ignores a rejected
+progress report, so the only visible effect would be losing the resumed position.
+
+Limits are enabled by default. Set `SPF5000_RATE_LIMIT=false` to disable them (the backend test
+suite does this), and `SPF5000_TRUST_PROXY=true` only when a reverse proxy terminates
+connections in front of the app, so `X-Forwarded-For` is trusted instead of the peer address.
 
 ## Project structure
 

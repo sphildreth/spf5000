@@ -57,7 +57,7 @@ When working with ADRs:
 - Prefer small, surgical changes that follow existing patterns.
 - Update directly affected documentation when commands, config, API shape, or user-visible behavior change.
 - Use existing commands when validating:
-  - `./scripts/do-prechecks.py` (aggregate fail-fast gate: whitespace, `tsc -b --force`, Vitest, frontend build, backend pytest; `--list` previews, `--frontend-only`/`--backend-only` narrow scope, `--include-e2e` adds Playwright)
+  - `./scripts/do-prechecks.py` (aggregate fail-fast gate: whitespace, `tsc -b --force`, Vitest, frontend build, backend pytest; `--list` previews, `--frontend-only`/`--backend-only` narrow scope, `--include-e2e` adds Playwright on a free `127.0.0.1:8000`)
   - `make backend`
   - `make frontend`
   - `make test`

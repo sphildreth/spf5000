@@ -83,17 +83,19 @@ export async function getNewAssetsCount(since: string, collectionId?: string | n
 export async function reportPlaybackProgress(
   assetId: string,
   collectionId?: string | null,
+  playbackCycleId?: string | null,
 ): Promise<boolean> {
   try {
+    // playback_cycle_id lets the server ignore reports from a display that missed a cycle
+    // rollover, so a stale tab cannot advance the fresh pass (ADR 0024).
     const response = await apiPost<
-      { asset_id: string; collection_id?: string | null },
+      { asset_id: string; collection_id?: string | null; playback_cycle_id?: string | null },
       PlaybackProgressResponse
-    >(
-      '/api/display/playlist/progress',
-      collectionId
-        ? { asset_id: assetId, collection_id: collectionId }
-        : { asset_id: assetId },
-    )
+    >('/api/display/playlist/progress', {
+      asset_id: assetId,
+      ...(collectionId ? { collection_id: collectionId } : {}),
+      ...(playbackCycleId ? { playback_cycle_id: playbackCycleId } : {}),
+    })
     return response.accepted === true
   } catch {
     return false

@@ -23,3 +23,4 @@
 - 0022 Remove Google Photos integration
 - 0023 Per-collection storage subdirectories
 - 0024 Server-owned persisted shuffle bag for slideshow playback
+- 0025 Bound sessionless display endpoints by client IP

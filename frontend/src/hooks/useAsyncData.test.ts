@@ -55,11 +55,15 @@ describe('useAsyncData', () => {
     })
     expect(result.current.data).toEqual({ count: 1 })
 
-    await result.current.reload()
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false)
+    // act() is required: reload() is called directly here, so its state updates would
+    // otherwise land outside React's rendering cycle. Waiting on `loading` would also pass
+    // immediately, because it is already false from the first load - the original flake.
+    await act(async () => {
+      await result.current.reload()
     })
-    expect(result.current.data).toEqual({ count: 2 })
+    await waitFor(() => {
+      expect(result.current.data).toEqual({ count: 2 })
+    })
   })
 
   it('setData allows direct data update', async () => {

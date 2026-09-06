@@ -98,11 +98,15 @@ class FakeImage {
 
 async function mountEngine(server: ReturnType<typeof createCycleServer>) {
   const shown: string[] = []
-  vi.mocked(reportPlaybackProgress).mockImplementation(async (assetId: string) => {
-    shown.push(assetId)
-    server.report(assetId)
-    return true
-  })
+  const reports: Array<{ assetId: string; cycleId?: string | null }> = []
+  vi.mocked(reportPlaybackProgress).mockImplementation(
+    async (assetId: string, _collectionId?: string | null, cycleId?: string | null) => {
+      shown.push(assetId)
+      reports.push({ assetId, cycleId })
+      server.report(assetId)
+      return true
+    },
+  )
 
   const { result } = renderHook(() =>
     useSlideshowEngine({
@@ -120,7 +124,7 @@ async function mountEngine(server: ReturnType<typeof createCycleServer>) {
     await result.current.bootPlaylist(server.playlist(), CONFIG)
   })
 
-  return { shown, engine: result }
+  return { shown, reports, engine: result }
 }
 
 /** Advances one slide at a time (the engine's own timer drives it) up to the first repeat. */
@@ -162,6 +166,22 @@ describe('useSlideshowEngine', () => {
     expect(new Set(uniqueRun)).toEqual(new Set(ASSET_IDS))
     expect(server.rolls()).toBeGreaterThanOrEqual(1)
   }, 30_000)
+
+  it('reports progress against the cycle the backend served', async () => {
+    const server = createCycleServer()
+    const { shown, reports } = await mountEngine(server)
+    const servedCycleId = server.playlist().playback_cycle_id
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SLIDE_STEP_MS)
+    })
+
+    expect(reports.length).toBeGreaterThan(1)
+    expect(reports[0].assetId).toBe(shown[0])
+    // The server drops reports that name a cycle it no longer serves, so the display has to
+    // say which pass it is on.
+    expect(reports.every((report) => report.cycleId === servedCycleId)).toBe(true)
+  })
 
   it('asks for a new cycle at the end of a pass instead of wrapping locally', async () => {
     const server = createCycleServer()

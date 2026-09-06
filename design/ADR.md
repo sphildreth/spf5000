@@ -41,6 +41,7 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0022-remove-google-photos-integration.md` - removal of non-functional Google Photos integration
 - `0023-per-collection-storage-subdirectories.md` - per-collection storage subdirectories for collection media
 - `0024-server-owned-persisted-shuffle-bag.md` - backend-owned, DecentDB-persisted slideshow playback cycle that guarantees show-all-before-repeat
+- `0025-bound-sessionless-display-endpoints-by-client-ip.md` - per-client-IP rate limits on every sessionless endpoint, with proxy-supplied addresses trusted only when declared
 
 ## Proposed ADRs
 

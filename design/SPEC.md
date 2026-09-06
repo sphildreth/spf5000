@@ -430,6 +430,13 @@ Admin routing behavior:
 
 ## Implemented API surface
 
+Sessionless endpoints are rate limited per client IP (ADR 0025): the playback-progress endpoint at
+240 requests/minute, the public playlist and the new-asset count poll at 120/minute, the weather
+and alert overlays at 60/minute, sign-in at 10/minute, and first-boot setup at 5/minute. Rejected
+progress reports are tolerated by the frame because playback does not depend on their acceptance.
+Limits can be disabled with `SPF5000_RATE_LIMIT=false`, and `X-Forwarded-For` is trusted only when
+`SPF5000_TRUST_PROXY=true` because the app normally terminates HTTP itself on the Pi.
+
 ### Health and status
 
 - `GET /api/health`
@@ -594,21 +601,24 @@ curl http://localhost:8000/api/display/playlist
 ```bash
 curl -X POST http://localhost:8000/api/display/playlist/progress \
   -H 'Content-Type: application/json' \
-  -d '{"asset_id": "uuid", "collection_id": "default-collection"}'
+  -d '{"asset_id": "uuid", "collection_id": "default-collection", "playback_cycle_id": "uuid"}'
 ```
 Called after each slide is committed to the screen. Idempotent, and never moves the cursor backwards.
+`playback_cycle_id` is optional; when present and it no longer matches a cycle the server serves,
+the report is ignored so a frame that missed a rollover cannot advance the fresh pass. Reports for
+identifiers the server does not recognise are ignored, as are reports more than
+`PLAYBACK_PROGRESS_LOOKAHEAD` (currently 2) slides ahead of the cursor: a small window tolerates one
+dropped report while leaving no way for a caller to skip through a pass.
 Response:
 ```json
 {
-  "items": [
-    {
-      "id": "uuid",
-      "filename": "photo.jpg",
-      "variant_url": "/api/assets/{id}/display"
-    }
-  ]
+  "accepted": true,
+  "playback_position": 12,
+  "playback_cycle_id": "uuid"
 }
 ```
+When a report is ignored the response echoes the server's current position with
+`"accepted": false`, which lets a lagging frame resynchronize.
 
 #### Get display weather (public)
 ```bash

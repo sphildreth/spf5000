@@ -218,14 +218,15 @@ def test_new_assets_surface_within_a_few_slides(test_client: TestClient) -> None
     assert len(set(upcoming)) == len(upcoming)
 
 
-def test_progress_never_moves_backwards(test_client: TestClient) -> None:
+def test_progress_walks_the_cursor_and_never_moves_backwards(test_client: TestClient) -> None:
     _seed()
     svc = DisplayService()
     playlist = svc.get_playlist()
     order = [item.asset_id for item in playlist.items]
 
-    svc.report_playback_position(order[9], playlist.collection_id)
-    assert svc.get_playlist().playback_position == 10
+    for index in range(10):
+        assert svc.report_playback_position(order[index], playlist.collection_id) is not None
+        assert svc.get_playlist().playback_position == index + 1
 
     # A stale or replayed report for an earlier photograph is ignored.
     svc.report_playback_position(order[2], playlist.collection_id)
@@ -233,6 +234,61 @@ def test_progress_never_moves_backwards(test_client: TestClient) -> None:
 
     svc.report_playback_position(order[9], playlist.collection_id)
     assert svc.get_playlist().playback_position == 10
+
+
+def test_progress_ahead_of_the_cursor_cannot_skip_a_pass(test_client: TestClient) -> None:
+    """The endpoint is public, so naming an arbitrary photograph must not skip the pass."""
+    _seed()
+    svc = DisplayService()
+    playlist = svc.get_playlist()
+    order = [item.asset_id for item in playlist.items]
+
+    assert (
+        svc.report_playback_position(order[9], playlist.collection_id) is None
+    )  # far ahead of the cursor
+    assert svc.get_playlist().playback_position == 0
+
+    assert (
+        svc.report_playback_position(order[ASSET_COUNT - 1], playlist.collection_id) is None
+    )  # the last photograph, which would roll the cycle
+    assert svc.get_playlist().playback_position == 0
+
+
+def test_progress_tolerates_a_single_dropped_report(test_client: TestClient) -> None:
+    """One lost report must not stall the pass, so a small look-ahead is accepted."""
+    _seed()
+    svc = DisplayService()
+    playlist = svc.get_playlist()
+    order = [item.asset_id for item in playlist.items]
+
+    assert svc.report_playback_position(order[0], playlist.collection_id) is not None
+    # order[1] never reached the server; the report for order[2] still advances the cursor.
+    assert svc.report_playback_position(order[2], playlist.collection_id) is not None
+    assert svc.get_playlist().playback_position == 3
+
+
+def test_progress_with_a_stale_cycle_id_is_ignored(test_client: TestClient) -> None:
+    _seed()
+    svc = DisplayService()
+    playlist = svc.get_playlist()
+    order = [item.asset_id for item in playlist.items]
+
+    assert (
+        svc.report_playback_position(
+            order[0], playlist.collection_id, cycle_id="a-cycle-that-no-longer-exists"
+        )
+        is None
+    )
+    assert svc.get_playlist().playback_position == 0
+
+    # The same photograph is accepted when the client names the current cycle.
+    assert (
+        svc.report_playback_position(
+            order[0], playlist.collection_id, cycle_id=playlist.playback_cycle_id
+        )
+        is not None
+    )
+    assert svc.get_playlist().playback_position == 1
 
 
 def test_report_for_unknown_asset_is_a_noop(test_client: TestClient) -> None:
@@ -275,7 +331,9 @@ def test_switching_modes_redeals_rather_than_resuming_a_stale_cycle(test_client:
     _seed()
     svc = DisplayService()
     before = svc.get_playlist()
-    svc.report_playback_position(before.items[3].asset_id, before.collection_id)
+    for item in before.items[:4]:
+        svc.report_playback_position(item.asset_id, before.collection_id)
+    assert svc.get_playlist().playback_position == 4
 
     svc.update_config({"shuffle_bag_enabled": False})
     after = svc.get_playlist()
@@ -304,6 +362,50 @@ def test_progress_endpoint_is_public_and_advances_the_cursor(fresh_client: TestC
     assert body["playback_position"] == 1
     assert body["playback_cycle_id"] == playlist.playback_cycle_id
     assert svc.get_playlist().playback_position == 1
+
+
+def test_progress_endpoint_reports_the_current_position_when_rejecting(
+    fresh_client: TestClient,
+) -> None:
+    """A rejected report echoes server state so a lagging client can resynchronize."""
+    _seed()
+    svc = DisplayService()
+    playlist = svc.get_playlist()
+    order = [item.asset_id for item in playlist.items]
+
+    rejected = fresh_client.post(
+        "/api/display/playlist/progress",
+        json={
+            "asset_id": order[40],
+            "collection_id": playlist.collection_id,
+            "playback_cycle_id": playlist.playback_cycle_id,
+        },
+    )
+
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json() == {
+        "accepted": False,
+        "playback_position": 0,
+        "playback_cycle_id": playlist.playback_cycle_id,
+    }
+
+
+def test_progress_endpoint_honours_a_reported_cycle_id(fresh_client: TestClient) -> None:
+    _seed()
+    svc = DisplayService()
+    playlist = svc.get_playlist()
+
+    response = fresh_client.post(
+        "/api/display/playlist/progress",
+        json={
+            "asset_id": playlist.items[0].asset_id,
+            "collection_id": playlist.collection_id,
+            "playback_cycle_id": playlist.playback_cycle_id,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["accepted"] is True
 
 
 def test_progress_endpoint_rejects_empty_asset_id(fresh_client: TestClient) -> None:

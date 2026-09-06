@@ -20,12 +20,12 @@ LOGGER = structlog.get_logger(__name__)
 class AutoScanCoordinator:
     """
     Coordinates automatic scanning of the import directory.
-    
+
     Manages both:
     - Cron-based scheduled scans
     - File system watching for real-time change detection
     """
-    
+
     def __init__(
         self,
         scan_trigger: Callable[[], None],
@@ -33,34 +33,34 @@ class AutoScanCoordinator:
     ) -> None:
         self._scan_trigger = scan_trigger
         self._settings_repo = settings_repo or SettingsRepository()
-        
+
         self._scheduler = AutoScanScheduler(
             scan_trigger=self._scan_trigger,
             settings_repo=self._settings_repo,
         )
-        
+
         self._watcher = AutoWatchService(
             scan_trigger=self._scan_trigger,
             settings_repo=self._settings_repo,
         )
-    
+
     def start(self) -> None:
         """Start both scheduler and watcher."""
         self._scheduler.start()
         self._watcher.start()
         LOGGER.info("auto_scan_coordinator_started")
-    
+
     def stop(self) -> None:
         """Stop both scheduler and watcher."""
         self._scheduler.stop()
         self._watcher.stop()
         LOGGER.info("auto_scan_coordinator_stopped")
-    
+
     def reload_settings(self) -> None:
         """Reload settings for both scheduler and watcher."""
         self._scheduler.reload_settings()
         self._watcher.reload_settings()
-    
+
     def get_status(self) -> dict:
         """Return combined status of scheduler and watcher."""
         return {

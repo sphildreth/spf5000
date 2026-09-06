@@ -41,7 +41,7 @@ def run_local_imports(request: LocalImportRunRequest) -> ImportJobResponse:
 def get_auto_scan_status(admin: dict = Depends(require_admin)) -> dict:
     """Get auto-scan configuration and status."""
     settings_repo = SettingsRepository()
-    
+
     return {
         "auto_scan_enabled": settings_repo.get_setting("auto_scan_enabled", "0") == "1",
         "auto_scan_cron_schedule": settings_repo.get_setting("auto_scan_cron_schedule", ""),
@@ -55,11 +55,11 @@ def get_auto_scan_status(admin: dict = Depends(require_admin)) -> dict:
 def configure_auto_scan(request: dict, admin: dict = Depends(require_admin)) -> dict:
     """Configure auto-scan settings."""
     settings_repo = SettingsRepository()
-    
+
     # Validate and update settings
     if "auto_scan_enabled" in request:
         settings_repo.set_setting("auto_scan_enabled", "1" if request["auto_scan_enabled"] else "0")
-    
+
     if "auto_scan_cron_schedule" in request:
         # Validate cron expression
         cron_schedule = request["auto_scan_cron_schedule"].strip()
@@ -70,21 +70,21 @@ def configure_auto_scan(request: dict, admin: dict = Depends(require_admin)) -> 
             except Exception as exc:
                 raise HTTPException(status_code=400, detail=f"Invalid cron expression: {exc}") from exc
         settings_repo.set_setting("auto_scan_cron_schedule", cron_schedule)
-    
+
     if "auto_watch_enabled" in request:
         settings_repo.set_setting("auto_watch_enabled", "1" if request["auto_watch_enabled"] else "0")
-    
+
     if "auto_watch_debounce_seconds" in request:
         debounce = max(1, min(60, int(request["auto_watch_debounce_seconds"])))
         settings_repo.set_setting("auto_watch_debounce_seconds", str(debounce))
-    
+
     if "auto_scan_source_id" in request:
         settings_repo.set_setting("auto_scan_source_id", request["auto_scan_source_id"])
-    
+
     # Reload coordinator settings
     from app.runtime_coordinators import get_coordinator_status
     # The coordinator will reload settings on next iteration
-    
+
     return {
         "auto_scan_enabled": settings_repo.get_setting("auto_scan_enabled", "0") == "1",
         "auto_scan_cron_schedule": settings_repo.get_setting("auto_scan_cron_schedule", ""),

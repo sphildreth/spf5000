@@ -6,8 +6,10 @@ stops at the first failure. Everything here is read-only apart from the frontend
 build output; nothing in this script commits, pushes, or rewrites git history.
 
 Backend linting is opt-in because the repository does not configure Ruff yet, so
-`ruff check backend` currently reports pre-existing findings. End-to-end tests are
-opt-in because they need installed Playwright browsers and a backend on :8000.
+`ruff check backend` currently reports pre-existing findings. End-to-end tests are opt-in
+because they need installed Playwright browsers; `playwright.config.ts` builds the frontend
+and starts its own backend on 127.0.0.1:8000 against throwaway state, so nothing to stop
+should be listening on that port.
 
 Examples:
     ./scripts/do-prechecks.py
@@ -58,10 +60,9 @@ BUILD_WARNING_PATTERN = re.compile(
     r"\b(?:warn|[a-z0-9_]*warnings?)\b|\bdeprecat(?:ed|ion)\b|(?:^|\s)⚠(?:\s|$)",
     re.IGNORECASE,
 )
-# Vitest retries default to 1 because src/hooks/useAsyncData.test.ts contains a known
-# timing-sensitive failure ("reload calls the loader again") that is unrelated to any
-# change under review. Use --strict to surface single-attempt failures instead.
-DEFAULT_VITEST_RETRIES = 1
+# Vitest runs without retries by default: every assertion has to pass on the first attempt.
+# `--retries 1` is available when investigating a genuinely timing-sensitive test.
+DEFAULT_VITEST_RETRIES = 0
 
 console = Console(highlight=False)
 
@@ -104,8 +105,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Run Playwright last. Requires installed Playwright browsers "
-            "(`cd frontend && npm run playwright:install`) and a backend serving "
-            "http://localhost:8000 (`make backend`)."
+            "(`cd frontend && npm run playwright:install`) and the backend virtualenv; "
+            "the Playwright config starts and stops its own backend on 127.0.0.1:8000, "
+            "so that port must be free."
         ),
     )
     parser.add_argument(
@@ -127,9 +129,15 @@ def parse_args() -> argparse.Namespace:
         help="Skip frontend checks.",
     )
     parser.add_argument(
-        "--strict",
-        action="store_true",
-        help=f"Do not retry Vitest (default: {DEFAULT_VITEST_RETRIES} retry).",
+        "--retries",
+        type=int,
+        default=DEFAULT_VITEST_RETRIES,
+        metavar="N",
+        help=(
+            f"Retry failing Vitest tests up to N times (default: "
+            f"{DEFAULT_VITEST_RETRIES}). Use this only while debugging a timing-sensitive "
+            "test; committed tests must pass on the first attempt."
+        ),
     )
     parser.add_argument(
         "--list",
@@ -200,7 +208,10 @@ def checks_for(
             Check(
                 name="End-to-end tests",
                 command=("npm", "run", "test:e2e"),
-                detail="Run Playwright against the running backend on :8000.",
+                detail=(
+                    "Run Playwright against a freshly built frontend served by a "
+                    "throwaway backend on 127.0.0.1:8000."
+                ),
                 cwd=FRONTEND_DIR,
                 tags=("frontend",),
             )
@@ -221,7 +232,9 @@ def validate_environment(options: argparse.Namespace) -> None:
     """Fail before doing work when the checkout cannot run project commands."""
     problems: list[str] = []
     needs_frontend = not options.backend_only
-    needs_backend = not options.frontend_only or options.include_lint
+    needs_backend = (
+        not options.frontend_only or options.include_lint or options.include_e2e
+    )
 
     if shutil.which("git") is None:
         problems.append("git is not available on PATH")
@@ -240,6 +253,13 @@ def validate_environment(options: argparse.Namespace) -> None:
         )
     if needs_backend and options.include_lint and shutil.which("ruff") is None:
         problems.append("ruff is not available on PATH (requested via --include-lint)")
+    if needs_backend and VENV_PYTHON.is_file() and not decentdb_importable():
+        problems.append(
+            f"{VENV_PYTHON.relative_to(REPO_ROOT)} cannot import the DecentDB Python "
+            "binding, so backend tests cannot run. Install it with "
+            "`backend/.venv/bin/python -m pip install -e /path/to/decentdb/bindings/python` "
+            "and point DECENTDB_NATIVE_LIB at libdecentdb.so (README 'Prerequisites')."
+        )
 
     if needs_frontend:
         if shutil.which("npm") is None:
@@ -261,6 +281,27 @@ def validate_environment(options: argparse.Namespace) -> None:
             Panel(message, title="[red]Cannot run prechecks[/red]", border_style="red")
         )
         raise SystemExit(2)
+
+
+def decentdb_importable() -> bool:
+    """Whether the backend virtualenv can load the DecentDB native library.
+
+    DecentDB is not published to PyPI, so a fresh checkout has a virtualenv whose backend tests
+    all die inside ctypes. Probing once here turns that into an actionable message.
+    """
+    try:
+        return (
+            subprocess.run(
+                (str(VENV_PYTHON), "-c", "import decentdb"),
+                cwd=BACKEND_DIR,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def render_command(command: Sequence[str]) -> str:
@@ -409,7 +450,7 @@ def main() -> int:
         checks_for(
             include_e2e=options.include_e2e,
             include_lint=options.include_lint,
-            vitest_retries=0 if options.strict else DEFAULT_VITEST_RETRIES,
+            vitest_retries=options.retries,
         ),
         options,
     )

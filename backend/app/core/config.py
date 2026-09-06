@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     session_secret: str | None = _security.get("session_secret", None)
     session_https_only: bool = bool(_security.get("session_https_only", False))
     rate_limit_enabled: bool = _security.get("rate_limit_enabled", True)
+    trust_proxy: bool = bool(_security.get("trust_proxy", False))
 
     data_dir: Path = _data_dir_default
     cache_dir: Path = _cache_dir_default

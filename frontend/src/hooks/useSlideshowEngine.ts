@@ -173,8 +173,13 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         currentIndexRef.current = nextIndex
         transitionRef.current = false
         // Commit first, then report: the server cursor only advances past photographs that made it
-        // on screen (ADR 0024).
-        void reportPlaybackProgress(nextItem.asset_id, playlistRef.current.collection_id)
+        // on screen (ADR 0024). The cycle id lets the server drop this report if it has already
+        // rolled over to a fresh pass while we were animating.
+        void reportPlaybackProgress(
+          nextItem.asset_id,
+          playlistRef.current.collection_id,
+          playlistRef.current.playback_cycle_id,
+        )
 
         setLayers((current) =>
           current.map((layer, index) => {
@@ -269,7 +274,11 @@ export function useSlideshowEngine(callbacks: SlideshowCallbacks) {
         currentIndexRef.current = firstIndex
         startedRef.current = true
         transitionRef.current = false
-        void reportPlaybackProgress(firstItem.asset_id, nextPlaylist.collection_id)
+        void reportPlaybackProgress(
+          firstItem.asset_id,
+          nextPlaylist.collection_id,
+          nextPlaylist.playback_cycle_id,
+        )
         setLayers([
           { item: firstItem, stage: 'visible' },
           { item: null, stage: 'hidden' },

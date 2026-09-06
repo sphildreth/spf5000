@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_admin
+from app.api.rate_limit import rate_limited
 from app.schemas.display import (
     DisplayConfigUpdateRequest,
     DisplayPlaylistResponse,
@@ -51,7 +52,9 @@ def refresh_display_cache(
 
 
 @router.get(
-    "/playlist", response_model=PublicDisplayPlaylistResponse
+    "/playlist",
+    response_model=PublicDisplayPlaylistResponse,
+    dependencies=[rate_limited("120/minute")],
 )  # intentionally public
 def get_display_playlist(
     collection_id: str | None = None,
@@ -63,7 +66,9 @@ def get_display_playlist(
 
 
 @router.post(
-    "/playlist/progress", response_model=PlaybackProgressResponse
+    "/playlist/progress",
+    response_model=PlaybackProgressResponse,
+    dependencies=[rate_limited("240/minute")],
 )  # intentionally public, matches the public playlist
 def report_display_playlist_progress(
     request: PlaybackProgressRequest,
@@ -71,14 +76,22 @@ def report_display_playlist_progress(
 ) -> PlaybackProgressResponse:
     """Advance the server-owned playback cursor past a photograph the display just showed.
 
-    Only accepts identifiers that belong to the current cycle, so it cannot grow state.
+    The endpoint is public, so it only accepts reports that sit at the cursor: identifiers
+    that are unknown, already reported, ahead of the cursor, or from a stale cycle are
+    ignored. A caller therefore cannot skip ahead through a pass, and state cannot grow.
+    Rejections echo the server's current position so a lagging client can resynchronize.
     """
     cycle = svc.report_playback_position(
-        asset_id=request.asset_id, collection_id=request.collection_id
+        asset_id=request.asset_id,
+        collection_id=request.collection_id,
+        cycle_id=request.playback_cycle_id,
     )
     if cycle is None:
+        current = svc.current_playback_cycle(collection_id=request.collection_id)
         return PlaybackProgressResponse(
-            accepted=False, playback_position=0, playback_cycle_id=""
+            accepted=False,
+            playback_position=current.position if current else 0,
+            playback_cycle_id=current.cycle_id if current else "",
         )
     return PlaybackProgressResponse(
         accepted=True,
@@ -87,7 +100,7 @@ def report_display_playlist_progress(
     )
 
 
-@router.get("/new-assets/count")
+@router.get("/new-assets/count", dependencies=[rate_limited("120/minute")])
 def get_new_assets_count(
     since: str,
     collection_id: str | None = None,
@@ -98,14 +111,22 @@ def get_new_assets_count(
     return {"new_assets_count": count, "since": since}
 
 
-@router.get("/weather", response_model=DisplayWeatherResponse)  # intentionally public
+@router.get(
+    "/weather",
+    response_model=DisplayWeatherResponse,
+    dependencies=[rate_limited("60/minute")],
+)  # intentionally public
 def get_display_weather(
     svc: WeatherService = Depends(get_weather_service),
 ) -> DisplayWeatherResponse:
     return DisplayWeatherResponse.model_validate(svc.get_display_weather_payload())
 
 
-@router.get("/alerts", response_model=DisplayAlertsResponse)  # intentionally public
+@router.get(
+    "/alerts",
+    response_model=DisplayAlertsResponse,
+    dependencies=[rate_limited("60/minute")],
+)  # intentionally public
 def get_display_alerts(
     svc: WeatherService = Depends(get_weather_service),
 ) -> DisplayAlertsResponse:

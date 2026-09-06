@@ -26,3 +26,13 @@ dist/
 cache/
 data/
 logs/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Vitest coverage output
+coverage/
+
+# Playwright output
+playwright-report/
+test-results/

@@ -5,10 +5,7 @@ import threading
 import time
 from collections import defaultdict
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
+from fastapi import Depends, HTTPException, Request
 
 _request_counts: dict[str, list[float]] = defaultdict(list)
 _request_lock = threading.Lock()
@@ -18,15 +15,88 @@ _GLOBAL_PRUNE_INTERVAL_SECONDS = 60.0
 _MAX_TRACKED_IPS = 1024
 
 
+_TRUTHY = {"true", "1", "yes", "on"}
+_FALSY = {"false", "0", "no", "off"}
+
+
+def _env_override(name: str) -> bool | None:
+    """Return a boolean when an environment variable explicitly overrides a config key."""
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in _TRUTHY:
+        return True
+    if normalized in _FALSY:
+        return False
+    return None
+
+
 def is_rate_limit_enabled() -> bool:
-    """Check if rate limiting is enabled. Reads env var at call time."""
-    return os.environ.get("SPF5000_RATE_LIMIT", "true").lower() != "false"
+    """Whether rate limiting is active, resolved per call.
+
+    ``SPF5000_RATE_LIMIT`` overrides the ``[security] rate_limit_enabled`` config key so
+    tests and development can toggle limiting without editing the config file. Before this
+    the config key existed but nothing read it, so disabling it had no effect.
+    """
+    override = _env_override("SPF5000_RATE_LIMIT")
+    if override is not None:
+        return override
+    from app.core.config import settings
+
+    return bool(settings.rate_limit_enabled)
+
+
+def trust_proxy_enabled() -> bool:
+    """Whether ``X-Forwarded-For`` may be trusted to identify callers."""
+    override = _env_override("SPF5000_TRUST_PROXY")
+    if override is not None:
+        return override
+    from app.core.config import settings
+
+    return bool(settings.trust_proxy)
+
+
+def client_ip(request: Request) -> str:
+    """Resolve the caller identity used as a rate-limit bucket.
+
+    ``X-Forwarded-For`` is only honoured when the deployment declares a trusted proxy
+    (``[security] trust_proxy``), because SPF5000 normally terminates HTTP itself: trusting
+    the header by default would let any LAN client rename its way past a limit.
+    """
+    if trust_proxy_enabled():
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def enforce_rate_limit(request: Request, limit: str) -> None:
+    """Raise HTTP 429 when ``limit`` (for example ``"120/minute"``) is exceeded."""
+    if not check_rate_limit(client_ip(request), limit):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+
+def rate_limited(limit: str):
+    """Build a route dependency that applies ``limit`` to every request.
+
+    Limits are sized well above legitimate appliance traffic (a kiosk refreshes the
+    playlist at most every 15s and reports playback once per slide, with the fastest
+    permitted slide interval of 1s) so the limit is a backstop against runaway clients
+    rather than a source of visible glitches.
+    """
+
+    def dependency(request: Request) -> None:
+        enforce_rate_limit(request, limit)
+
+    return Depends(dependency)
 
 
 def check_rate_limit(ip_address: str, limit: str) -> bool:
     """Check if the request from ip_address exceeds the rate limit.
 
-    Returns True if the request is allowed, False if rate limited.
+    Each caller has an independent budget per limit string. Returns True if the request is
+    allowed, False if rate limited.
     """
     if not is_rate_limit_enabled():
         return True
@@ -73,14 +143,19 @@ def check_rate_limit(ip_address: str, limit: str) -> bool:
                     del _request_counts[tracked_ip]
             _last_global_prune_at = now
 
-        requests = _request_counts[ip_address]
+        # Bucket per caller *and* limit: keying by caller alone would let one endpoint's
+        # budget consume another's (six setup attempts plus five login attempts would have
+        # blocked login even though neither endpoint exceeded its own limit).
+        bucket = _bucket_key(ip_address, limit)
+        requests = _request_counts[bucket]
         requests[:] = [t for t in requests if t > cutoff]
-        if not requests and ip_address in _request_counts:
-            del _request_counts[ip_address]
-            requests = _request_counts[ip_address]
 
         if len(requests) >= limit_count:
             return False
 
         requests.append(now)
         return True
+
+
+def _bucket_key(ip_address: str, limit: str) -> str:
+    return f"{ip_address}|{limit}"

@@ -1,0 +1,150 @@
+# Continuous integration for SPF5000.
+#
+# Everything in the "always" jobs runs on any push or pull request. The backend and e2e jobs
+# additionally need the DecentDB native library, which is not published to PyPI (see README
+# "Prerequisites"): `pip install decentdb` fails, and the binding resolves libdecentdb.so through
+# DECENTDB_NATIVE_LIB. Those jobs therefore stay skipped until the repository defines
+# DECENTDB_ARTIFACT_URL (Settings -> Secrets and variables -> Actions -> Variables) pointing at an
+# archive of a DecentDB checkout that contains `bindings/python` and
+# `target/release/libdecentdb.so`. Nothing else changes when you set it.
+#
+# The checks themselves live in scripts/do-prechecks.py so CI and a local run agree on what
+# "green" means.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  hygiene:
+    name: Whitespace and syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: No trailing whitespace
+        # Markdown is excluded because a trailing double space there is a hard line break.
+        run: |
+          ! git grep -nI '[[:space:]]$' -- \
+            ':!*.png' ':!*.jpg' ':!*.svg' ':!*.md' ':!package-lock.json' \
+            || (echo '::error::Trailing whitespace found (see above)'; false)
+      - name: Python sources parse
+        run: python -m compileall -q backend/app scripts
+
+  frontend:
+    name: Frontend (types, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Typecheck, unit tests, production build
+        # The same script developers run, so CI and a local run agree on what green means.
+        run: python scripts/do-prechecks.py --frontend-only
+
+  decentdb:
+    name: DecentDB availability
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.detect.outputs.ready }}
+    steps:
+      - id: detect
+        env:
+          DECENTDB_ARTIFACT_URL: ${{ vars.DECENTDB_ARTIFACT_URL }}
+        run: |
+          if [ -n "$DECENTDB_ARTIFACT_URL" ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::DECENTDB_ARTIFACT_URL is not configured, so backend and e2e jobs are skipped. Backend tests cannot run without the DecentDB native library.'
+          fi
+
+  backend:
+    name: Backend (pytest)
+    needs: decentdb
+    if: needs.decentdb.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install --upgrade pip
+          backend/.venv/bin/python -m pip install -r backend/requirements.txt
+      - name: Install the DecentDB binding and native library
+        env:
+          DECENTDB_ARTIFACT_URL: ${{ vars.DECENTDB_ARTIFACT_URL }}
+        run: |
+          curl -fsSL --retry 3 "$DECENTDB_ARTIFACT_URL" -o /tmp/decentdb.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/.decentdb"
+          tar -xzf /tmp/decentdb.tar.gz -C "$GITHUB_WORKSPACE/.decentdb" --strip-components=1
+          backend/.venv/bin/python -m pip install -e "$GITHUB_WORKSPACE/.decentdb/bindings/python"
+          echo "DECENTDB_NATIVE_LIB=$GITHUB_WORKSPACE/.decentdb/target/release/libdecentdb.so" >> "$GITHUB_ENV"
+      - name: Backend tests
+        run: backend/.venv/bin/python scripts/do-prechecks.py --backend-only
+
+  e2e:
+    name: End-to-end (Chromium)
+    needs: [decentdb, backend]
+    if: needs.decentdb.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install --upgrade pip
+          backend/.venv/bin/python -m pip install -r backend/requirements.txt
+          npm ci --prefix frontend
+          npm --prefix frontend exec -- playwright install --with-deps chromium
+      - name: Install the DecentDB binding and native library
+        env:
+          DECENTDB_ARTIFACT_URL: ${{ vars.DECENTDB_ARTIFACT_URL }}
+        run: |
+          curl -fsSL --retry 3 "$DECENTDB_ARTIFACT_URL" -o /tmp/decentdb.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/.decentdb"
+          tar -xzf /tmp/decentdb.tar.gz -C "$GITHUB_WORKSPACE/.decentdb" --strip-components=1
+          backend/.venv/bin/python -m pip install -e "$GITHUB_WORKSPACE/.decentdb/bindings/python"
+          echo "DECENTDB_NATIVE_LIB=$GITHUB_WORKSPACE/.decentdb/target/release/libdecentdb.so" >> "$GITHUB_ENV"
+      # playwright.config.ts builds the frontend, starts the app on 127.0.0.1:8000 against a
+      # throwaway state directory, and tears it down; nothing here has to touch real data.
+      - name: Playwright
+        working-directory: frontend
+        run: npm run test:e2e

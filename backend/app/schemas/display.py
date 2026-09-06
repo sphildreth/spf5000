@@ -80,6 +80,9 @@ class PlaybackProgressRequest(BaseModel):
 
     asset_id: str = Field(min_length=1)
     collection_id: str | None = None
+    # Optional cycle guard: a report naming a cycle the server no longer serves is ignored,
+    # so a display that missed a rollover cannot advance the fresh pass.
+    playback_cycle_id: str | None = None
 
 
 class PlaybackProgressResponse(BaseModel):

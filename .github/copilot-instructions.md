@@ -24,8 +24,10 @@
 - Frontend setup + dev run: `cd frontend && npm install && npm run dev`
 - Frontend production build: `cd frontend && npm run build`
 - Frontend production preview: `cd frontend && npm run preview`
+- Frontend coverage: `cd frontend && npm run test:coverage` (V8 provider; covers `src/api`, `components`, `context`, `hooks`)
 - Convenience scripts: `scripts/dev-backend.sh`, `scripts/dev-frontend.sh`, `scripts/build-frontend.sh`
-- Pre-commit quality gates: `./scripts/do-prechecks.py` (fail-fast aggregate gate; `--list` previews, `--frontend-only`/`--backend-only` narrow scope, `--include-e2e` adds Playwright, `--strict` disables Vitest retries)
+- Pre-commit quality gates: `./scripts/do-prechecks.py` (fail-fast aggregate gate; `--list` previews, `--frontend-only`/`--backend-only` narrow scope, `--include-e2e` adds Playwright — which needs installed browsers and a free `127.0.0.1:8000` because the Playwright config starts its own backend — and `--retries N` only for debugging a timing-sensitive test)
+- CI: `.github/workflows/ci.yml` runs the same script; the backend and e2e jobs stay skipped until the repository defines the `DECENTDB_ARTIFACT_URL` variable, because DecentDB is not on PyPI
 - Browser testing: use the Playwright MCP server from `.vscode/mcp.json` together with `.github/skills/webapp-testing/`
 - Linting: no repo-defined lint command is currently present in `backend/pyproject.toml` or `frontend/package.json`; the precheck script exposes Ruff as an opt-in `--include-lint` gate only
 

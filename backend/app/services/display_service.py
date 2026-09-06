@@ -44,6 +44,11 @@ PLAYBACK_MODE_SHUFFLE_RANDOM = "shuffle_random"
 NEW_ASSET_HEAD_FRACTION = 10
 NEW_ASSET_HEAD_MIN_SLOTS = 10
 
+# How far past the cursor a playback report may be and still advance it. Legitimate reports land
+# exactly on the cursor; a small window tolerates a dropped or reordered HTTP report without
+# handing a caller the ability to skip through a pass on a public endpoint.
+PLAYBACK_PROGRESS_LOOKAHEAD = 2
+
 
 class DisplayService:
     def __init__(
@@ -222,12 +227,19 @@ class DisplayService:
         return playlist
 
     def report_playback_position(
-        self, asset_id: str, collection_id: str | None = None
+        self,
+        asset_id: str,
+        collection_id: str | None = None,
+        cycle_id: str | None = None,
     ) -> PlaybackCycle | None:
         """Advance the persisted cursor past ``asset_id`` after the display has shown it.
 
-        Idempotent and forward-only within a cycle. Returns ``None`` when there is nothing to
-        track, which the display treats as a no-op rather than an error.
+        Backs a public endpoint, so a report is honoured only when it names the photograph at
+        the cursor, or at most ``PLAYBACK_PROGRESS_LOOKAHEAD`` slides past it. That tolerates a
+        dropped report while leaving no way for a caller to skip ahead through a pass. Reports
+        for a photograph already shown are idempotent no-ops, and a report naming a cycle other
+        than the persisted one is ignored so a client that missed a rollover cannot advance the
+        fresh pass. Returns ``None`` when the cursor did not move.
         """
         profile = self.get_config()
         mode = self._playback_mode(profile)
@@ -239,18 +251,47 @@ class DisplayService:
         cycle = self.playback_repo.get_cycle(playback_key)
         if cycle is None or not cycle.order or cycle.mode != mode:
             return None
+        if cycle_id is not None and cycle_id != cycle.cycle_id:
+            LOGGER.debug(
+                "playback_progress_ignored_stale_cycle",
+                collection_key=playback_key,
+                reported_cycle_id=cycle_id,
+                current_cycle_id=cycle.cycle_id,
+            )
+            return None
         try:
             index = cycle.order.index(asset_id)
         except ValueError:
+            LOGGER.debug(
+                "playback_progress_ignored_unknown_asset",
+                collection_key=playback_key,
+                asset_id=asset_id,
+            )
             return None
+        if index < cycle.position:
+            return None  # Duplicate or replayed report; the cursor already moved past it.
+        if index - cycle.position > PLAYBACK_PROGRESS_LOOKAHEAD:
+            LOGGER.debug(
+                "playback_progress_ignored_ahead_of_cursor",
+                collection_key=playback_key,
+                asset_id=asset_id,
+                reported_index=index,
+                position=cycle.position,
+            )
+            return None
+
         self.playback_repo.advance_to(playback_key, cycle.cycle_id, index + 1)
-        return PlaybackCycle(
-            collection_key=playback_key,
-            mode=mode,
-            cycle_id=cycle.cycle_id,
-            order=cycle.order,
-            position=max(cycle.position, index + 1),
-        )
+        return replace(cycle, position=index + 1)
+
+    def current_playback_cycle(
+        self, collection_id: str | None = None
+    ) -> PlaybackCycle | None:
+        """Return the persisted cycle for a playable scope without dealing or rolling it."""
+        profile = self.get_config()
+        if self._playback_mode(profile) == PLAYBACK_MODE_SEQUENTIAL:
+            return None
+        resolved_collection_id = collection_id or profile.selected_collection_id
+        return self.playback_repo.get_cycle(resolved_collection_id or GLOBAL_PLAYBACK_KEY)
 
     @staticmethod
     def _playback_mode(profile: DisplayProfile) -> str:
@@ -416,12 +457,12 @@ class DisplayService:
             metadata = json.loads(metadata_json)
         except (json.JSONDecodeError, TypeError):
             return None
-        
+
         # Check for stored background metadata first
         stored_background = metadata.get("background")
         if isinstance(stored_background, dict):
             return background_meta_from_dict(stored_background)
-        
+
         # Fallback to palette-based background
         palette = metadata.get("palette")
         if not isinstance(palette, list) or not palette:
