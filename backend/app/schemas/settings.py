@@ -51,7 +51,7 @@ class SettingsUpdateRequest(BaseModel):
     transition_duration_ms: int = Field(ge=0, le=30000)
     fit_mode: str
     shuffle_enabled: bool
-    shuffle_bag_enabled: bool = False
+    shuffle_bag_enabled: bool = True
     selected_collection_id: str
     active_display_profile_id: str
     background_fill_mode: str = "black"

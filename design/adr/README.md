@@ -21,3 +21,5 @@
 - 0020 Use admin-protected ZIP backup, restore, and media export
 - 0021 Use Doctor page as a first-class admin health feature
 - 0022 Remove Google Photos integration
+- 0023 Per-collection storage subdirectories
+- 0024 Server-owned persisted shuffle bag for slideshow playback

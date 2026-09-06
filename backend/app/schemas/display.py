@@ -75,6 +75,19 @@ class DisplayRefreshResponse(BaseModel):
     invalidated_at: str
 
 
+class PlaybackProgressRequest(BaseModel):
+    """Reports the photograph the display just committed, advancing the server-owned cursor."""
+
+    asset_id: str = Field(min_length=1)
+    collection_id: str | None = None
+
+
+class PlaybackProgressResponse(BaseModel):
+    accepted: bool
+    playback_position: int
+    playback_cycle_id: str
+
+
 class PlaylistItemBackgroundResponse(BaseModel):
     """Subdued background fill colours derived from the display variant."""
 
@@ -156,6 +169,9 @@ class PublicDisplayPlaylistResponse(BaseModel):
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    playback_mode: str
+    playback_cycle_id: str
+    playback_position: int
     background_fill_mode: str
     sleep_schedule: SleepScheduleResponse
     profile: DisplayProfileResponse
@@ -168,6 +184,9 @@ class PublicDisplayPlaylistResponse(BaseModel):
             collection_name=playlist.collection_name,
             shuffle_enabled=playlist.shuffle_enabled,
             playlist_revision=playlist.playlist_revision,
+            playback_mode=playlist.playback_mode,
+            playback_cycle_id=playlist.playback_cycle_id,
+            playback_position=playlist.playback_position,
             background_fill_mode=playlist.background_fill_mode,
             sleep_schedule=SleepScheduleResponse.from_domain(playlist.sleep_schedule),
             profile=DisplayProfileResponse.from_domain(playlist.profile),
@@ -182,6 +201,9 @@ class DisplayPlaylistResponse(BaseModel):
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    playback_mode: str
+    playback_cycle_id: str
+    playback_position: int
     background_fill_mode: str
     sleep_schedule: SleepScheduleResponse
     profile: DisplayProfileResponse
@@ -194,6 +216,9 @@ class DisplayPlaylistResponse(BaseModel):
             collection_name=playlist.collection_name,
             shuffle_enabled=playlist.shuffle_enabled,
             playlist_revision=playlist.playlist_revision,
+            playback_mode=playlist.playback_mode,
+            playback_cycle_id=playlist.playback_cycle_id,
+            playback_position=playlist.playback_position,
             background_fill_mode=playlist.background_fill_mode,
             sleep_schedule=SleepScheduleResponse.from_domain(playlist.sleep_schedule),
             profile=DisplayProfileResponse.from_domain(playlist.profile),

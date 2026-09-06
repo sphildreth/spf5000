@@ -53,6 +53,7 @@ SPF5000 exists to make a digital picture frame feel like a dependable home appli
 - 🔌 **Offline-First by Design** — Playback stays local and cached instead of depending on live cloud responses.
 - 🖼️ **Appliance-Oriented UX** — The Pi boots directly into a dedicated, gorgeous fullscreen slideshow at `/display`.
 - 🚀 **Smooth Transitions** — Say goodbye to jarring black flashes! The display route uses a dual-layer renderer that preloads the next image before animating.
+- 🔀 **Show All Before Repeating** — Shuffle playback is a server-owned cycle persisted in **DecentDB**, so every photo in a collection appears once before any repeat, surviving browser reloads, kiosk restarts, and library changes.
 - 🎨 **Expanded Background Presentation** — Portrait and mixed-aspect slides support `black`, `dominant_color`, `gradient`, `soft_vignette`, `palette_wash`, `blurred_backdrop`, `mirrored_edges`, and `adaptive_auto`; cached display-variant metadata drives color-based modes while image-based treatments can reuse the display variant at render time.
 - 📱 **LAN-Managed Admin** — Setup, login, settings, import, and diagnostics are seamlessly available from a browser on your local network.
 - 🧳 **Backup & Export Ready** — Download ZIP backups of the DecentDB state, restore validated database backups, and export original collection media without dropping to SSH.
@@ -309,6 +310,9 @@ Backend commands assume `backend/.venv` exists; activate it or use `.venv/bin/py
 | --- | --- |
 | Start backend | `make backend` |
 | Start frontend dev server | `make frontend` |
+| Run every quality gate before a commit or PR | `./scripts/do-prechecks.py` |
+| Run prechecks with Playwright and/or Ruff | `./scripts/do-prechecks.py --include-e2e --include-lint` |
+| Run prechecks for one side of the stack | `./scripts/do-prechecks.py --frontend-only` |
 | Run backend tests | `make test` |
 | Run one backend test | `cd backend && .venv/bin/python -m pytest tests/test_health.py::test_health` |
 | Build the frontend | `cd frontend && npm run build` |
@@ -316,6 +320,25 @@ Backend commands assume `backend/.venv` exists; activate it or use `.venv/bin/py
 | Start backend via helper script | `./scripts/dev-backend.sh` |
 | Start frontend via helper script | `./scripts/dev-frontend.sh` |
 | Build frontend via helper script | `./scripts/build-frontend.sh` |
+
+### Pre-commit quality gates
+
+`./scripts/do-prechecks.py` runs the repository gates in fail-fast order and prints a
+per-check timing summary:
+
+1. `git diff --check HEAD` for trailing whitespace and leftover conflict markers
+2. `tsc -b --force` — forced so a stale `frontend/tsconfig.app.tsbuildinfo` cannot hide type errors
+3. Vitest
+4. `npm run build`, rejecting warning output
+5. the backend pytest suite
+
+The script is read-only apart from normal build output; it never commits or pushes. Use
+`--list` to preview the plan, `--frontend-only` / `--backend-only` to narrow scope, and
+`--include-e2e` for Playwright (needs installed browsers and a backend on `:8000`). Ruff runs
+with `--include-lint` but is not an adopted gate yet, so its pre-existing findings currently
+fail that check. Vitest runs with one retry by default because
+`frontend/src/hooks/useAsyncData.test.ts` has a known timing-sensitive failure; pass `--strict`
+to disable retries.
 
 ### Production frontend serving
 
@@ -348,7 +371,7 @@ When `frontend/dist` exists, FastAPI serves the built frontend directly. That le
 - collections and assets
 - backup, restore, and collection export workflows
 - sources and local import
-- display config, public playlist, and public weather/alert overlays
+- display config, public playlist with server-owned playback order, playback progress reporting, and public weather/alert overlays
 
 Browse the generated OpenAPI docs at:
 

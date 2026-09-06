@@ -1,4 +1,4 @@
-import { apiGet, apiPostEmpty, apiPut } from './http'
+import { apiGet, apiPost, apiPostEmpty, apiPut } from './http'
 import {
   asArray,
   asBackgroundFillMode,
@@ -14,6 +14,7 @@ import {
   type DisplayConfig,
   type DisplayConfigUpdateRequest,
   type DisplayPlaylist,
+  type PlaybackProgressResponse,
   type PlaylistItem,
   type PlaylistItemBackground,
 } from './types'
@@ -56,6 +57,9 @@ export async function getDisplayPlaylist(): Promise<DisplayPlaylist> {
     collection_name: asOptionalString(record?.collection_name) ?? null,
     shuffle_enabled: asBoolean(record?.shuffle_enabled, DEFAULT_DISPLAY_CONFIG.shuffle_enabled),
     playlist_revision: asString(record?.playlist_revision, 'empty'),
+    playback_mode: asString(record?.playback_mode, ''),
+    playback_cycle_id: asString(record?.playback_cycle_id, ''),
+    playback_position: asNumber(record?.playback_position, 0),
     profile: record?.profile ? normalizeDisplayConfig(record.profile) : DEFAULT_DISPLAY_CONFIG,
     items: asArray(record?.items, normalizePlaylistItem).filter((item) => item.display_url.length > 0),
     sleep_schedule: record?.sleep_schedule ? normalizeSleepSchedule(record.sleep_schedule) : null,
@@ -68,6 +72,32 @@ export async function getNewAssetsCount(since: string, collectionId?: string | n
     params.set('collection_id', collectionId)
   }
   return apiGet(`/api/display/new-assets/count?${params.toString()}`)
+}
+
+/**
+ * Advance the server-owned playback cursor past a photograph the display has just shown (ADR 0024).
+ *
+ * Best effort by design: a failed report can cost at most one repeated photograph on the next
+ * resume, so it must never surface an error into slideshow playback.
+ */
+export async function reportPlaybackProgress(
+  assetId: string,
+  collectionId?: string | null,
+): Promise<boolean> {
+  try {
+    const response = await apiPost<
+      { asset_id: string; collection_id?: string | null },
+      PlaybackProgressResponse
+    >(
+      '/api/display/playlist/progress',
+      collectionId
+        ? { asset_id: assetId, collection_id: collectionId }
+        : { asset_id: assetId },
+    )
+    return response.accepted === true
+  } catch {
+    return false
+  }
 }
 
 export async function refreshDisplayCache(): Promise<void> {

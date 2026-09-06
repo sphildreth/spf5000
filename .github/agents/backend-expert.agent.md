@@ -29,5 +29,6 @@ You are the SPF5000 backend specialist.
 ## Validation
 
 - Prefer `make test` or `cd backend && pytest`
+- Run `./scripts/do-prechecks.py --backend-only` as the aggregate gate before hand-off
 - Use `cd backend && pytest tests/test_health.py::test_health` for single-test verification when appropriate
 - If dependencies are missing, report that clearly instead of claiming validation passed

@@ -58,7 +58,18 @@ export function DisplayPage() {
   const fullscreenAlertTimerRef = useRef<number | null>(null)
   const nextFullscreenRepeatAtRef = useRef<number | null>(null)
   const activeRepeatAlertIdRef = useRef<string | null>(null)
-  const slideshowCallbacks = useMemo(() => ({ onBootMessage: setBootMessage }), [])
+  // Declared before the engine so the engine can drive a playlist refresh when a playback cycle
+  // is exhausted; assigned below once syncDisplayData exists.
+  const onCycleCompleteRef = useRef<(() => Promise<void>) | null>(null)
+  const slideshowCallbacks = useMemo(
+    () => ({
+      onBootMessage: setBootMessage,
+      onCycleComplete: async () => {
+        await onCycleCompleteRef.current?.()
+      },
+    }),
+    [],
+  )
 
   const {
     playlist,
@@ -79,7 +90,6 @@ export function DisplayPage() {
     clearTimers,
     scheduleAdvance,
     bootPlaylist,
-    queuePriorityAssetIds,
   } = useSlideshowEngine(slideshowCallbacks)
   const {
     weather,
@@ -212,22 +222,14 @@ export function DisplayPage() {
         }
 
         const nextPlaylist = playlistResult.value
-        const previousPlaylist = playlistRef.current
-        const previousAssetIds = new Set(previousPlaylist.items.map((item) => item.asset_id))
         const nextWeather = weatherResult.status === 'fulfilled' ? weatherResult.value : EMPTY_DISPLAY_WEATHER
         const nextAlerts = alertsResult.status === 'fulfilled' ? alertsResult.value : EMPTY_DISPLAY_ALERTS
         const nextConfig = nextPlaylist.profile
         const currentItemId = layersRef.current[activeLayerRef.current]?.item?.asset_id ?? null
-        const newAssetIds = startedRef.current
-          ? nextPlaylist.items
-              .map((item) => item.asset_id)
-              .filter((assetId) => !previousAssetIds.has(assetId))
-          : []
 
         configRef.current = nextConfig
         playlistRef.current = nextPlaylist
         setPlaylist(nextPlaylist)
-        queuePriorityAssetIds(newAssetIds, currentItemId)
         setConfig(nextConfig)
         setWeather(nextWeather)
         setAlerts(nextAlerts)
@@ -279,7 +281,6 @@ export function DisplayPage() {
       currentIndexRef,
       layersRef,
       playlistRef,
-      queuePriorityAssetIds,
       scheduleAdvance,
       setAlerts,
       setError,
@@ -290,6 +291,12 @@ export function DisplayPage() {
       updateSleepState,
     ],
   )
+
+  // The backend deals a new cycle once the current one is exhausted, so the engine asks for a fresh
+  // playlist at that boundary rather than wrapping locally.
+  onCycleCompleteRef.current = async () => {
+    await syncDisplayData(false)
+  }
 
   useEffect(() => {
     document.body.classList.add('display-body')

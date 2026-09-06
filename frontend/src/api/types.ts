@@ -376,9 +376,21 @@ export interface DisplayPlaylist {
   collection_name: string | null
   shuffle_enabled: boolean
   playlist_revision: string
+  /** Ordering policy chosen by the backend: `sequential`, `shuffle_bag`, or `shuffle_random`. */
+  playback_mode: string
+  /** Identifier of the server-owned cycle the items are ordered for. */
+  playback_cycle_id: string
+  /** Index within `items` of the next photograph to show. */
+  playback_position: number
   profile: DisplayConfig
   items: PlaylistItem[]
   sleep_schedule: SleepSchedule | null
+}
+
+export interface PlaybackProgressResponse {
+  accepted: boolean
+  playback_position: number
+  playback_cycle_id: string
 }
 
 export interface WeatherLocation {

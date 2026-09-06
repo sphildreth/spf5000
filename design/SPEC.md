@@ -216,6 +216,19 @@ Persisted slideshow behavior, including:
 
 This split is historical rather than logical; consolidating all display fields into `display_profiles` would simplify the service code but requires careful migration planning. See ADR 0013 for tracking.
 
+### `display_playback_state`
+
+Server-owned slideshow playback position, one row per playable scope (ADR 0024):
+
+- `collection_key` — collection id, or `*global*` when no collection is selected
+- `mode` — the ordering policy the cycle was dealt for (`sequential`, `shuffle_bag`, `shuffle_random`)
+- `cycle_id` — changes whenever a new cycle is dealt
+- `order_json` — the permutation of eligible asset identifiers for the current cycle
+- `position` — index into `order_json` of the next photograph to show
+- `updated_at`
+
+This is what lets "show all before repeating" survive the browser reloads, kiosk restarts, and library changes that a household appliance actually experiences, since the kiosk browser runs incognito and cannot retain ordering state (see ADR 0024 and ADR 0007).
+
 ### `admin_users`
 
 The single local admin record, including:
@@ -337,11 +350,29 @@ Scheduled sleep is the only intentional full-black display state. Entering or le
 - the sleep schedule is stored in DecentDB-backed application settings, not in `spf5000.toml`, `systemd`, cron, or Chromium flags
 - authenticated administrators manage the schedule and optional display timezone from the admin UI through dedicated sleep-schedule settings APIs
 - `/api/display/playlist` includes the effective sleep schedule plus the configured display timezone so the public `/display` route can enforce it without requiring admin auth
+- pausing and resuming for sleep does not touch playback cycle state; the frame resumes where the server cursor left off
 - the display evaluates the schedule against the configured display timezone and falls back to the Pi-local timezone when no explicit display timezone is set
 - sleep start time is inclusive and sleep end time is exclusive, so the frame wakes at the configured end time
 - overnight windows are supported
 - when sleep is active, the display renders a solid black fullscreen overlay, pauses slideshow timers and transitions, and resumes playback automatically after the sleep window ends
 - when the schedule is enabled, identical start and end times are rejected as invalid
+
+### Slideshow playback cycle
+
+Ordering is owned by the backend and persisted in `display_playback_state`; the `/display` client walks the served order and never shuffles locally (ADR 0024).
+
+- `GET /api/display/playlist` returns `items` already in playback order, plus `playback_mode`, `playback_cycle_id`, and `playback_position` (the index within `items` of the next photograph to show)
+- `shuffle_enabled` with `shuffle_bag_enabled`: a dealt permutation that shows every eligible photograph once before the cycle rolls over
+- `shuffle_enabled` without `shuffle_bag_enabled`: random selection with replacement, so repeats within a cycle are permitted
+- not `shuffle_enabled`: `imported_at desc`, wrapped at the end
+- a cycle rolls over when `position` reaches the end of `order`; reads perform the rollover and persist it, so the client never decides when a cycle ends
+- changes to the eligible set are reconciled into the persisted cycle instead of dealing a new one: ineligible identifiers are dropped, already-shown identifiers stay behind the cursor, and newly eligible identifiers are inserted within the first tenth of the remaining queue (floor of ten slots) so new photographs surface within minutes rather than after a full cycle
+- `POST /api/display/playlist/progress` advances `position` past a reported `asset_id`; it is idempotent and never moves the cursor backwards within a cycle
+- the display reports progress after a transition commits, so a photograph that failed to load or a superseded transition consumes no position; a failed report costs at most one repeated photograph on the next resume
+- `cycle_id` participates in the playlist cache key and in the playlist revision, and `playback_position` is read live and overlaid on a cache hit, so a rollover cannot be served from a stale entry
+- switching ordering policy deals a new cycle instead of resuming one dealt for a different mode
+- both endpoints are public, consistent with the public `/display` runtime and ADR 0009
+- `shuffle_bag_enabled` defaults to enabled consistently across settings storage, backend schemas, and API clients
 
 ### Display settings
 
@@ -459,6 +490,7 @@ Admin routing behavior:
 - `GET /api/display/config` (authenticated admin)
 - `PUT /api/display/config` (authenticated admin)
 - `GET /api/display/playlist`
+- `POST /api/display/playlist/progress`
 - `GET /api/display/weather`
 - `GET /api/display/alerts`
 
@@ -557,6 +589,14 @@ curl -X POST http://localhost:8000/api/assets/upload \
 ```bash
 curl http://localhost:8000/api/display/playlist
 ```
+
+#### Report playback progress (public)
+```bash
+curl -X POST http://localhost:8000/api/display/playlist/progress \
+  -H 'Content-Type: application/json' \
+  -d '{"asset_id": "uuid", "collection_id": "default-collection"}'
+```
+Called after each slide is committed to the screen. Idempotent, and never moves the cursor backwards.
 Response:
 ```json
 {

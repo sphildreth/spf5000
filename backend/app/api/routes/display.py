@@ -6,6 +6,8 @@ from app.schemas.display import (
     DisplayPlaylistResponse,
     DisplayProfileResponse,
     DisplayRefreshResponse,
+    PlaybackProgressRequest,
+    PlaybackProgressResponse,
     PublicDisplayPlaylistResponse,
 )
 from app.schemas.weather import DisplayAlertsResponse, DisplayWeatherResponse
@@ -57,6 +59,31 @@ def get_display_playlist(
 ) -> PublicDisplayPlaylistResponse:
     return PublicDisplayPlaylistResponse.from_domain(
         svc.get_playlist(collection_id=collection_id)
+    )
+
+
+@router.post(
+    "/playlist/progress", response_model=PlaybackProgressResponse
+)  # intentionally public, matches the public playlist
+def report_display_playlist_progress(
+    request: PlaybackProgressRequest,
+    svc: DisplayService = Depends(get_display_service),
+) -> PlaybackProgressResponse:
+    """Advance the server-owned playback cursor past a photograph the display just showed.
+
+    Only accepts identifiers that belong to the current cycle, so it cannot grow state.
+    """
+    cycle = svc.report_playback_position(
+        asset_id=request.asset_id, collection_id=request.collection_id
+    )
+    if cycle is None:
+        return PlaybackProgressResponse(
+            accepted=False, playback_position=0, playback_cycle_id=""
+        )
+    return PlaybackProgressResponse(
+        accepted=True,
+        playback_position=cycle.position,
+        playback_cycle_id=cycle.cycle_id,
     )
 
 

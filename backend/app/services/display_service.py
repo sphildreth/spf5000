@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 import hashlib
 import json
+import random
 import threading
+from uuid import uuid4
+
 import structlog
 
 from app.models.asset import AssetBackground
@@ -14,6 +17,11 @@ from app.models.sleep_schedule import SleepSchedule
 from app.repositories.asset_repository import AssetRepository
 from app.repositories.collection_repository import CollectionRepository
 from app.repositories.display_repository import DisplayRepository
+from app.repositories.playback_state_repository import (
+    GLOBAL_PLAYBACK_KEY,
+    PlaybackCycle,
+    PlaybackStateRepository,
+)
 from app.repositories.settings_repository import SettingsRepository
 from app.services.background_service import (
     VALID_BACKGROUND_FILL_MODES,
@@ -26,6 +34,16 @@ _PLAYLIST_CACHE: OrderedDict[tuple[str, str], DisplayPlaylist] = OrderedDict()
 _PLAYLIST_CACHE_INVALIDATED_AT: datetime | None = None
 _PLAYLIST_CACHE_LOCK = threading.Lock()
 
+# Slideshow ordering modes (ADR 0024).
+PLAYBACK_MODE_SEQUENTIAL = "sequential"
+PLAYBACK_MODE_SHUFFLE_BAG = "shuffle_bag"
+PLAYBACK_MODE_SHUFFLE_RANDOM = "shuffle_random"
+
+# Newly eligible photographs are inserted within this fraction of the remaining queue, with a slot
+# floor, so fresh imports surface within a few minutes instead of waiting out a full cycle.
+NEW_ASSET_HEAD_FRACTION = 10
+NEW_ASSET_HEAD_MIN_SLOTS = 10
+
 
 class DisplayService:
     def __init__(
@@ -34,11 +52,13 @@ class DisplayService:
         asset_repo: AssetRepository | None = None,
         collection_repo: CollectionRepository | None = None,
         settings_repo: SettingsRepository | None = None,
+        playback_repo: PlaybackStateRepository | None = None,
     ) -> None:
         self.display_repo = display_repo or DisplayRepository()
         self.asset_repo = asset_repo or AssetRepository()
         self.collection_repo = collection_repo or CollectionRepository()
         self.settings_repo = settings_repo or SettingsRepository()
+        self.playback_repo = playback_repo or PlaybackStateRepository()
 
     def get_config(self) -> DisplayProfile:
         settings = self.settings_repo.get_settings()
@@ -139,41 +159,38 @@ class DisplayService:
             else None
         )
         sleep_schedule = self.settings_repo.get_sleep_schedule()
+        assets = self.asset_repo.list_playlist_assets(collection_id=resolved_collection_id)
+
+        # The backend owns what plays next (ADR 0024). Sequential mode walks the newest-first
+        # listing; shuffle modes walk a persisted cycle so a pass survives reloads and restarts.
+        mode = self._playback_mode(profile)
+        playback_key = resolved_collection_id or GLOBAL_PLAYBACK_KEY
+        cycle = self._resolve_playback_cycle(
+            mode=mode,
+            playback_key=playback_key,
+            asset_ids=[asset.id for asset in assets],
+        )
+
         playlist_revision = self._compute_playlist_revision(
             profile=profile,
             collection_id=resolved_collection_id,
             collection=collection,
             sleep_schedule=sleep_schedule,
+            cycle=cycle,
         )
-        cache_key = (resolved_collection_id or "", playlist_revision)
+        cache_key = (playback_key, playlist_revision)
         cached = self._get_cached_playlist(cache_key)
         if cached is not None:
-            return cached
+            # The revision pins the cycle and the eligible id set, so a cache hit has the same item
+            # order; only the cursor moves between reads.
+            return replace(cached, playback_position=cycle.position)
 
-        assets = self.asset_repo.list_playlist_assets(collection_id=resolved_collection_id)
-
-        # Assets are already ordered by imported_at desc (newest first)
-        # When shuffle is enabled, we still want new assets to appear sooner
-        # Strategy: Put assets imported in the last 24 hours at the front, then shuffle the rest
-        if profile.shuffle_enabled:
-            from datetime import datetime, timezone, timedelta
-            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-            new_assets = [a for a in assets if a.imported_at > cutoff]
-            older_assets = [a for a in assets if a.imported_at <= cutoff]
-            
-            # Shuffle older assets
-            import random
-            random.shuffle(older_assets)
-            
-            # New assets first (also shuffled among themselves), then older shuffled assets
-            random.shuffle(new_assets)
-            assets = new_assets + older_assets
-        else:
-            # Non-shuffle: newest first (already sorted by imported_at desc)
-            pass
-
+        assets_by_id = {asset.id: asset for asset in assets}
         items = []
-        for asset in assets:
+        for asset_id in cycle.order:
+            asset = assets_by_id.get(asset_id)
+            if asset is None:
+                continue
             background = self._background_from_metadata(asset.metadata_json)
             items.append(
                 PlaylistItem(
@@ -194,12 +211,128 @@ class DisplayService:
             collection_name=None if collection is None else collection.name,
             shuffle_enabled=profile.shuffle_enabled,
             playlist_revision=playlist_revision,
+            playback_mode=mode,
+            playback_cycle_id=cycle.cycle_id,
+            playback_position=cycle.position,
             background_fill_mode=profile.background_fill_mode,
             sleep_schedule=sleep_schedule,
             items=items,
         )
         self._store_cached_playlist(cache_key, playlist)
         return playlist
+
+    def report_playback_position(
+        self, asset_id: str, collection_id: str | None = None
+    ) -> PlaybackCycle | None:
+        """Advance the persisted cursor past ``asset_id`` after the display has shown it.
+
+        Idempotent and forward-only within a cycle. Returns ``None`` when there is nothing to
+        track, which the display treats as a no-op rather than an error.
+        """
+        profile = self.get_config()
+        mode = self._playback_mode(profile)
+        if mode == PLAYBACK_MODE_SEQUENTIAL:
+            return None
+
+        resolved_collection_id = collection_id or profile.selected_collection_id
+        playback_key = resolved_collection_id or GLOBAL_PLAYBACK_KEY
+        cycle = self.playback_repo.get_cycle(playback_key)
+        if cycle is None or not cycle.order or cycle.mode != mode:
+            return None
+        try:
+            index = cycle.order.index(asset_id)
+        except ValueError:
+            return None
+        self.playback_repo.advance_to(playback_key, cycle.cycle_id, index + 1)
+        return PlaybackCycle(
+            collection_key=playback_key,
+            mode=mode,
+            cycle_id=cycle.cycle_id,
+            order=cycle.order,
+            position=max(cycle.position, index + 1),
+        )
+
+    @staticmethod
+    def _playback_mode(profile: DisplayProfile) -> str:
+        if not profile.shuffle_enabled:
+            return PLAYBACK_MODE_SEQUENTIAL
+        if profile.shuffle_bag_enabled:
+            return PLAYBACK_MODE_SHUFFLE_BAG
+        return PLAYBACK_MODE_SHUFFLE_RANDOM
+
+    def _resolve_playback_cycle(
+        self, *, mode: str, playback_key: str, asset_ids: list[str]
+    ) -> PlaybackCycle:
+        """Return the cycle to serve, reconciling it against the currently eligible assets.
+
+        A partially completed pass is never discarded: removed photographs drop out and newly
+        eligible ones are inserted near the head of the remaining queue.
+        """
+        if mode == PLAYBACK_MODE_SEQUENTIAL:
+            return PlaybackCycle(
+                collection_key=playback_key,
+                mode=mode,
+                cycle_id=PLAYBACK_MODE_SEQUENTIAL,
+                order=list(asset_ids),
+                position=0,
+            )
+        if not asset_ids:
+            return PlaybackCycle(
+                collection_key=playback_key, mode=mode, cycle_id="empty", order=[], position=0
+            )
+
+        eligible = list(dict.fromkeys(asset_ids))
+        existing = self.playback_repo.get_cycle(playback_key)
+        if existing is None or existing.mode != mode or not existing.order:
+            return self._deal_cycle(playback_key, mode, eligible)
+
+        eligible_set = set(eligible)
+        position = min(existing.position, len(existing.order))
+        shown = [asset_id for asset_id in existing.order[:position] if asset_id in eligible_set]
+        remaining = [
+            asset_id for asset_id in existing.order[position:] if asset_id in eligible_set
+        ]
+        known = set(existing.order)
+        fresh = [asset_id for asset_id in eligible if asset_id not in known]
+
+        if not remaining and not fresh:
+            # The whole pass has been shown: deal the next one.
+            return self._deal_cycle(playback_key, mode, eligible)
+
+        if fresh:
+            head = max(NEW_ASSET_HEAD_MIN_SLOTS, len(remaining) // NEW_ASSET_HEAD_FRACTION)
+            for asset_id in fresh:
+                remaining.insert(random.randint(0, min(head, len(remaining))), asset_id)
+
+        order = shown + remaining
+        if order == existing.order and position == existing.position:
+            return existing
+        return self.playback_repo.save_cycle(
+            PlaybackCycle(
+                collection_key=playback_key,
+                mode=mode,
+                cycle_id=existing.cycle_id,
+                order=order,
+                position=len(shown),
+            )
+        )
+
+    def _deal_cycle(self, playback_key: str, mode: str, asset_ids: list[str]) -> PlaybackCycle:
+        if mode == PLAYBACK_MODE_SHUFFLE_RANDOM:
+            # Bag disabled by the administrator: sample with replacement so repeats within a pass
+            # are expected, which is the behaviour the setting's off state promises.
+            order = random.choices(asset_ids, k=len(asset_ids))
+        else:
+            order = random.sample(asset_ids, k=len(asset_ids))
+        return self.playback_repo.save_cycle(
+            PlaybackCycle(
+                collection_key=playback_key,
+                mode=mode,
+                cycle_id=uuid4().hex,
+                order=order,
+                position=0,
+            )
+        )
 
     def refresh_playlist_cache(self) -> str:
         global _PLAYLIST_CACHE_INVALIDATED_AT
@@ -220,6 +353,7 @@ class DisplayService:
         collection_id: str | None,
         collection: object | None,
         sleep_schedule: SleepSchedule,
+        cycle: PlaybackCycle | None = None,
     ) -> str:
         stats = self.asset_repo.get_playlist_asset_stats(collection_id=collection_id)
         revision_input = "|".join(
@@ -242,6 +376,11 @@ class DisplayService:
                 "" if collection is None else str(getattr(collection, "updated_at", "")),
                 str(stats.asset_count),
                 stats.latest_updated_at or "",
+                # Pin the served item order to the cycle it was dealt for, so a rollover or a
+                # reconcile cannot be answered from a stale cached ordering.
+                "" if cycle is None else cycle.mode,
+                "" if cycle is None else cycle.cycle_id,
+                "" if cycle is None else hashlib.sha256(",".join(cycle.order).encode()).hexdigest(),
                 json.dumps(asdict(sleep_schedule), sort_keys=True),
             ]
         )

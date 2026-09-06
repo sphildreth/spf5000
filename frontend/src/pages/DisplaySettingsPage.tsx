@@ -78,7 +78,7 @@ export function DisplaySettingsPage() {
       return 'Photos play in collection order (newest first).'
     }
 
-    return 'Each photo is shown once before repeats, with the next cycle avoiding the most recently shown images.'
+    return 'Each photo is shown once before any repeat. The frame tracks progress on the server, so a reload or restart resumes the same pass.'
   }, [draft])
 
   useEffect(() => {

@@ -26,6 +26,7 @@ You are the SPF5000 frontend specialist.
 
 ## Validation
 
-- Prefer `cd frontend && npm run build` for compile-time validation
+- Prefer `cd frontend && npm run build` for compile-time validation, and `cd frontend && npm test` for Vitest
+- Run `./scripts/do-prechecks.py --frontend-only` as the aggregate gate before hand-off
 - Use the Playwright MCP server configured in `.vscode/mcp.json` when browser validation will materially help
 - Use the `webapp-testing` skill when testing or debugging UI behavior

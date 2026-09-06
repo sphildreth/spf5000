@@ -45,6 +45,9 @@ class DisplayPlaylist:
     collection_name: str | None
     shuffle_enabled: bool
     playlist_revision: str
+    playback_mode: str = ""
+    playback_cycle_id: str = ""
+    playback_position: int = 0
     background_fill_mode: str = "black"
     sleep_schedule: SleepSchedule = field(default_factory=SleepSchedule)
     items: list[PlaylistItem] = field(default_factory=list)

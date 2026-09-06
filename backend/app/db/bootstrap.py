@@ -201,6 +201,18 @@ TABLE_STATEMENTS = {
             updated_at text not null
         )
     """,
+    # Server-owned slideshow playback cycle (ADR 0024). One row per playable scope; order_json holds
+    # the permutation of eligible asset ids for the current show-all-before-repeat cycle.
+    "display_playback_state": """
+        create table display_playback_state (
+            collection_key text primary key,
+            mode text not null,
+            cycle_id text not null,
+            order_json text not null,
+            position integer not null default 0,
+            updated_at text not null
+        )
+    """,
     "provider_auth_flows": """
         create table provider_auth_flows (
             id text primary key,

@@ -39,6 +39,8 @@ That history is especially important for SPF5000 because runtime, persistence, a
 - `0018-use-app-selected-display-timezone-for-sleep-schedule-evaluation.md` - sleep schedule evaluation uses an app-selected display timezone with Pi-local fallback
 - `0021-use-doctor-page-as-a-first-class-admin-health-feature.md` - doctor page as a first-class admin health/troubleshooting surface
 - `0022-remove-google-photos-integration.md` - removal of non-functional Google Photos integration
+- `0023-per-collection-storage-subdirectories.md` - per-collection storage subdirectories for collection media
+- `0024-server-owned-persisted-shuffle-bag.md` - backend-owned, DecentDB-persisted slideshow playback cycle that guarantees show-all-before-repeat
 
 ## Proposed ADRs
 
