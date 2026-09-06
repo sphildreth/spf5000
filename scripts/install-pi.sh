@@ -532,7 +532,7 @@ build_frontend() {
   fi
 
   log "Installing frontend dependencies."
-  run_as_user_shell "${RUNTIME_USER}" "cd '${frontend_dir}' && npm install --package-lock=false"
+  run_as_user_shell "${RUNTIME_USER}" "cd '${frontend_dir}' && npm ci"
 
   log "Building frontend/dist for production serving."
   run_as_user_shell "${RUNTIME_USER}" "cd '${frontend_dir}' && npm run build"

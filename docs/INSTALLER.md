@@ -20,7 +20,7 @@ These scripts are intentionally Pi-specific and opinionated. They automate the s
 6. creates or refreshes `backend/.venv`
 7. installs backend dependencies
 8. downloads the matching DecentDB release bundle, installs the Python binding, and stages the native library
-9. builds `frontend/dist`
+9. installs frontend dependencies with `npm ci` from the checked-in `frontend/package-lock.json`, then builds `frontend/dist`
 10. creates a runtime `spf5000.toml` if needed
 11. installs the `systemd` unit
 12. installs the Chromium kiosk autostart entry, including automatic cursor hiding and a password-store setting that avoids desktop keyring prompts
